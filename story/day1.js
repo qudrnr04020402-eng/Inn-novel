@@ -1,274 +1,432 @@
 // ============================================================
-//  1일차 스크립트 — 은빛 여우관
-//  씬 id: [ 명령, 명령, ... ]  형태. 자세한 명령어는 README.md 참고.
-//  2일차를 추가하려면 story/day2.js 를 만들고
-//    Object.assign(STORY.scenes, { d2_open: [ ... ] });
-//  처럼 씬을 덧붙인 뒤 index.html 에 <script> 한 줄을 추가하세요.
+//  1일차 — 손님들이 몰려온 날
+//  구성: 아침(고정: 등장인물 소개) -> 낮(common.js 의 pick 메뉴 -> 히로인 이벤트 1) -> 저녁(전원) -> 밤
+//  히로인 이벤트 "N" 은 그 히로인을 N번째로 골랐을 때 열립니다. (매일 같은 사람을 고르면 일차 = N)
 // ============================================================
-window.STORY = {
-  title: '은빛 여우관',
-  subtitle: '변두리 마을 여관 이야기',
-  start: 'd1_open',                        // 새 게임 시작 씬
-  init: { gold: 50, rep: 0, aff: { kael: 0, erion: 0 }, flag: {} }, // 시작 변수
-  scenes: {}
-};
-
 Object.assign(STORY.scenes, {
 
-  // ---------- 아침: 오프닝 ----------
+  // ================= 아침 =================
   d1_open: [
+    { day: 1, time: '아침', tip: '낮에는 한 사람과 시간을 보내고, 저녁에는 모두가 모입니다.\n5일째 밤, 하트 6칸을 가득 채운 가장 가까운 사람이 마음을 전해 와요.' },
     { bg: 'inn_front' },
-    { narr: '변두리 마을 라이펜. 그 끝자락, 낡은 간판 아래에 여관 \'은빛 여우관\'이 있다.' },
-    { narr: '아버지에게 물려받은 이 여관의 주인이 된 지 이제 일주일. 손님은… 아직 한 손에 꼽을 정도다.' },
+    { narr: '변두리 마을 라이펜. 그 끝자락, 삐걱거리는 간판 아래에 우리 여관 \'은빛 여우관\'이 있다.' },
+    { narr: '아버지에게 물려받아 주인이 된 지 일주일. 손님은 손에 꼽을 정도고, 세금 낼 날은 다가온다.' },
     { bg: 'inn_day' },
-    { narr: '장부를 펼쳐 보니 금고에는 {gold} 골드. 이번 달 세금을 낼 수 있을지 아슬아슬하다.' },
-    { narr: '그때, 문이 쾅 하고 열렸다.' },
-    { goto: 'd1_kael_enter' }
+    { narr: '장부를 펼쳐 보니 금고에는 {gold} 골드. 이번 달 세금을 낼 수 있을지 아슬아슬하다. 숫자를 노려보다가, 나는 그만 장부 위에 엎드렸다.' },
+    { narr: '…얼마나 지났을까. 코끝에 고소한 빵 냄새가 스쳤다.' },
+    { goto: 'd1_lia' }
   ],
 
-  // ---------- 손님 1: 카엘 ----------
-  d1_kael_enter: [
-    { show: 'kael', face: 'smile', pos: 'center' },
-    { say: 'kael', text: '하하하! 이 마을에서 가장 좋은 여관이 여기라고 들었다! 아, 두 번째로 좋은 곳일 수도 있겠군. 첫 번째는 당연히 내가 묵는 곳이니까!' },
-    { narr: '등에 커다란 대검을 멘 사내가 문틀에 머리를 찧을 뻔하며 들어섰다. 갑옷이 번쩍번쩍하다. 너무 새것처럼.' },
-    { say: 'kael', face: 'normal', text: '나는 붉은 사자 카엘! 오우거 세 마리를 혼자 베었고, 드래곤과 눈이 마주친 적도 있는 몸이지. 이름을 기억해 둬라, 주인장.' },
+  // ----- 리아 (소꿉친구) -----
+  d1_lia: [
+    { show: 'lia', face: 'smile', pos: 'center' },
+    { say: 'lia', text: '일어났어? 장부 위에서 자는 사람이 어디 있어. 볼에 숫자 자국 났잖아.' },
+    { narr: '문을 열고 들어온 건 소꿉친구 리아였다. 마을 신전의 수습 성직자인 그녀는 어릴 적부터 우리 여관을 제집처럼 드나들었다.' },
+    { say: 'lia', text: '자, 신전에서 갓 구운 빵. 아침은 먹고 일해야지. …아버님 계실 때처럼 말이야.' },
     { choice: [
-      { text: '대단하시네요! 영광입니다, 카엘 님.',        set: { 'aff.kael': 1 },                     goto: 'd1_kael_praise' },
-      { text: '…갑옷에 흠집이 하나도 없네요?',              set: { 'aff.kael': -1, 'flag.kael_doubt': true }, goto: 'd1_kael_doubt' },
-      { text: '숙박비는 하룻밤에 20골드, 선불입니다.',        set: { gold: 20 },                          goto: 'd1_kael_pay' }
+      { text: '고마워. 네가 없었으면 벌써 굶었을 거야.', set: { 'aff.lia': 1 }, goto: 'd1_lia_thanks' },
+      { text: '볼에 진짜 자국이 있어?', set: { 'aff.lia': 1 }, goto: 'd1_lia_tease' },
+      { text: '이거 신전에 바치는 공양 빵 아니야?', set: { 'aff.lia': -1 }, goto: 'd1_lia_offer' }
     ] }
   ],
+  d1_lia_thanks: [
+    { say: 'lia', face: 'shy', text: '그, 그렇게 정색하고 말하면 부끄럽잖아… 그냥 내가 하고 싶어서 오는 건데.' },
+    { say: 'lia', face: 'smile', text: '오늘부터 손님이 더 온다는 소문이야. 나도 틈나는 대로 도울 테니까, 혼자 끙끙대지 마. 알았지?' },
+    { goto: 'd1_kaela' }
+  ],
+  d1_lia_tease: [
+    { say: 'lia', face: 'shy', text: '진짜지! 여기, 여기! 3이랑 7 모양으로!' },
+    { narr: '리아가 내 볼을 손가락으로 쿡쿡 찔렀다. 가까워서 심장에 안 좋다.' },
+    { say: 'lia', face: 'smile', text: '…풋. 거짓말이야. 표정이 너무 진지해서 놀려 봤어.' },
+    { goto: 'd1_kaela' }
+  ],
+  d1_lia_offer: [
+    { say: 'lia', face: 'angry', text: '공양 빵은 따로 있거든! 이건 내 몫에서 떼어 온 거란 말이야. 안 먹을 거면 줘!' },
+    { narr: '리아가 빵을 도로 가져가려 했다. 나는 서둘러 입에 쑤셔 넣었다. 맛있다. 미안하다.' },
+    { goto: 'd1_kaela' }
+  ],
 
-  d1_kael_praise: [
-    { say: 'kael', face: 'smile', text: '오오, 보는 눈이 있군! 마음에 들었다. 이 마을 여관 주인치고는 말이야!' },
+  // ----- 카엘라 (여기사) -----
+  d1_kaela: [
+    { hide: 'lia' },
+    { narr: '그때, 문이 쾅 하고 열렸다. …정확히는 열리다 말고 누군가의 이마에 걸려서 멈췄다.' },
+    { show: 'kaela', face: 'smile', pos: 'center' },
+    { say: 'kaela', text: '하하하! 이 마을에서 가장 훌륭한 여관이 여기라고 들었다! 아, 두 번째일 수도 있겠군. 첫 번째는 당연히 내가 묵는 곳이니까!' },
+    { narr: '문틀에 이마를 부딪히고도 웃는 붉은 머리의 여자. 등에는 대검, 몸에는 번쩍번쩍한 갑옷. 너무 새것처럼 번쩍인다.' },
+    { say: 'kaela', face: 'normal', text: '나는 붉은 사자 카엘라! 오우거 세 마리를 혼자 베었고, 드래곤과 눈이 마주친 적도 있는 몸이다. 이름을 기억해 두도록, 여관 주인!' },
+    { narr: '…갑옷 옆구리에 가격표가 달랑거린다. 「24개월 할부 가능」이라고 쓰여 있다.' },
+    { choice: [
+      { text: '대단하세요! 영광입니다, 카엘라 님.', set: { 'aff.kaela': 1 }, goto: 'd1_kaela_praise' },
+      { text: '…갑옷에 가격표가 달려 있는데요?', set: { 'aff.kaela': -1 }, goto: 'd1_kaela_tag' },
+      { text: '(모른 척 다가가 슬쩍 가격표를 떼어 준다)', set: { 'aff.kaela': 2 }, goto: 'd1_kaela_hide' }
+    ] }
+  ],
+  d1_kaela_praise: [
+    { say: 'kaela', face: 'smile', text: '오오, 보는 눈이 있군! 마음에 들었다! 이 마을 여관 주인치고는 말이야!' },
     { narr: '칭찬이 칭찬 같지 않지만, 기분 좋은 건 기분 좋은 거니까.' },
-    { goto: 'd1_kael_room' }
+    { goto: 'd1_kaela_room' }
   ],
-  d1_kael_doubt: [
-    { say: 'kael', face: 'troubled', text: '이, 이건… 그, 전투가 끝나면 매번 정성껏 닦기 때문이다! 흠집은 닦으면 사라지는 법이지!' },
-    { narr: '그럴 리가 없다. 게다가 갑옷 옆구리에 가격표가 달랑거리고 있었다.' },
-    { say: 'kael', face: 'angry', text: '…보지 마라.' },
-    { goto: 'd1_kael_room' }
+  d1_kaela_tag: [
+    { say: 'kaela', face: 'surprised', text: '이, 이건 신품 보증 표시다! 전투가 끝나면 매번 닦아서 새것 같은 것뿐이고!' },
+    { say: 'kaela', face: 'angry', text: '…더 보면 베겠다.' },
+    { narr: '진심이 아닌 건 알겠는데, 귀까지 새빨개져서 대검 손잡이를 잡는 바람에 조금 무서웠다.' },
+    { goto: 'd1_kaela_room' }
   ],
-  d1_kael_pay: [
-    { say: 'kael', face: 'normal', text: '선불? 영웅에게 선불을 요구하다니 담이 큰 주인장이군. 좋다, 여기 있다!' },
-    { narr: '금화 20닢이 카운터 위로 쨍그랑 쏟아졌다. 허세는 심해도 돈은 확실한 손님이다.' },
-    { goto: 'd1_kael_room' }
+  d1_kaela_hide: [
+    { say: 'kaela', face: 'surprised', text: '…!' },
+    { say: 'kaela', face: 'shy', text: '고, 고맙다. 본 건… 아니, 못 본 걸로 해 주면 더 고맙겠다. 이건 전투 중에 찢어진 거다. 그렇지?' },
+    { narr: '작은 목소리로 속삭이는 모습이 의외로 귀여웠다.' },
+    { goto: 'd1_kaela_room' }
   ],
-
-  d1_kael_room: [
-    { say: 'kael', face: 'normal', text: '그런데 말이다, 주인장. 영웅에게는 \'영웅 할인\'이라는 게 있다고 들었다. 숙박비는 반값이겠지?' },
+  d1_kaela_room: [
+    { say: 'kaela', face: 'normal', text: '그런데 여관 주인. 영웅에게는 \'영웅 할인\'이라는 게 있다고 들었다. 숙박비는 반값이겠지?' },
     { choice: [
-      { text: '물론이죠. 영웅이 묵는 여관이라고 소문나면 저희도 영광이니까요.', set: { 'aff.kael': 2, gold: -10, rep: 1 }, goto: 'd1_kael_deal_yes' },
-      { text: '죄송하지만 영웅 할인은 저희 여관에 없어요.',                     set: { 'aff.kael': -1, gold: 10 },         goto: 'd1_kael_deal_no' },
-      { text: '할인은 없지만, 오우거 이야기를 들려주시면 저녁을 서비스로 드릴게요.', set: { 'aff.kael': 1, gold: -3 },          goto: 'd1_kael_deal_story' }
+      { text: '물론이죠. 영웅이 묵는 여관이라고 소문나면 저희도 영광이니까요.', set: { 'aff.kaela': 1, gold: -10, rep: 1 }, goto: 'd1_kaela_deal_yes' },
+      { text: '죄송하지만 영웅 할인은 저희 여관에 없어요. 하룻밤 20골드, 선불입니다.', set: { gold: 20 }, goto: 'd1_kaela_deal_no' }
     ] }
   ],
-  d1_kael_deal_yes: [
-    { say: 'kael', face: 'smile', text: '하하! 역시 말이 통하는군! 소문을 내 주지. 은빛 여우관은 사자의 쉼터라고!' },
-    { goto: 'd1_kael_rumor' }
+  d1_kaela_deal_yes: [
+    { say: 'kaela', face: 'smile', text: '하하! 역시 말이 통하는군! 소문을 내 주지. 은빛 여우관은 사자의 쉼터라고!' },
+    { hide: 'kaela' },
+    { narr: '카엘라는 쿵쾅쿵쾅 계단을 올라갔다. …올라가다 한 번 넘어지는 소리가 났다.' },
+    { goto: 'd1_erion' }
   ],
-  d1_kael_deal_no: [
-    { say: 'kael', face: 'troubled', text: '으, 으음. 그렇다면 어쩔 수 없지. 영웅은 이런 사소한 일에 연연하지 않는 법이다.' },
-    { narr: '손가락으로 지갑 속을 슬쩍 확인하는 모습이 보였다. 꽤 가벼워 보인다.' },
-    { goto: 'd1_kael_rumor' }
-  ],
-  d1_kael_deal_story: [
-    { say: 'kael', face: 'smile', text: '저녁 서비스라니! 좋다, 오우거 이야기 말이지? 그건 어느 비 오는 밤이었다…' },
-    { narr: '이야기는 이십 분 동안 이어졌고, 그사이 오우거의 키는 두 배로 자랐다.' },
-    { goto: 'd1_kael_rumor' }
+  d1_kaela_deal_no: [
+    { say: 'kaela', face: 'sad', text: '으, 으음. 선불… 좋다! 영웅은 이런 사소한 일에 연연하지 않는 법이지!' },
+    { narr: '손가락으로 지갑 속을 슬쩍 확인하는 모습이 보였다. 꽤 가벼워 보인다. 그래도 금화 20닢은 쨍그랑 소리를 내며 카운터에 놓였다.' },
+    { hide: 'kaela' },
+    { goto: 'd1_erion' }
   ],
 
-  d1_kael_rumor: [
-    { say: 'kael', face: 'normal', text: '그건 그렇고, 요즘 마을 밖 고블린 동굴에서 이상한 일이 벌어진다는 소문, 들었나? 내가 그걸 해결하러 왔다.' },
-    { say: 'kael', text: '밤마다 동굴에서 푸른 빛이 새어 나온다더군. 고블린이 그런 마법을 쓸 리가 없어. 분명 뭔가 있다!' },
-    { narr: '이번 말만큼은 허세가 아니라 진심으로 들렸다.' },
-    { say: 'kael', face: 'smile', text: '자, 방 열쇠를 다오! 영웅은 먼저 한숨 자고 나서 일하는 법이니까!' },
-    { hide: 'kael' },
-    { narr: '카엘은 2층으로 쿵쿵 올라갔다. 계단이 비명을 지른다. 벌써부터 수리비가 걱정이다.' },
-    { goto: 'd1_erion_enter' }
-  ],
-
-  // ---------- 손님 2: 에리온 ----------
-  d1_erion_enter: [
-    { narr: '해가 기울 무렵, 이번에는 소리 없이 문이 열렸다. 바람이 한 번 스쳤을 뿐인데, 어느새 카운터 앞에 누군가 서 있었다.' },
+  // ----- 에리온 (엘프 마법사) -----
+  d1_erion: [
+    { narr: '카엘라가 방으로 올라가고 얼마 지나지 않아, 문 위의 종이 조용히 울렸다.' },
+    { narr: '기척이 없었다. 어느새 후드를 깊이 눌러쓴 사람이 카운터 앞에 서 있다.' },
     { show: 'erion', face: 'normal', pos: 'center' },
-    { say: 'erion', text: '…방이 있나.' },
-    { narr: '깊이 눌러쓴 후드 아래로 뾰족한 귀가 보인다. 엘프다. 로브에서는 오래된 종이와 약초 냄새가 났다.' },
-    { say: 'erion', text: '가장 안쪽, 창이 작은 방. 이름은 에리온. 직업과 목적은 적지 않겠다. 대가는 충분히 치르지.' },
-    { narr: '카운터에 금화 주머니가 놓였다. 묵직하다. 평소 숙박비의 서너 배는 되어 보인다.' },
+    { say: 'erion', as: '???', text: '방 하나. 동쪽 창이 있는 방으로.' },
+    { narr: '후드 아래로 은빛 머리카락과 뾰족한 귀 끝이 보였다. 엘프다. 이 마을에서 엘프를 보는 건 처음이다.' },
+    { say: 'erion', text: '며칠 묵을 거야. 선불로 낸다. 거스름돈은 필요 없어.' },
+    { narr: '카운터에 놓인 건 아주 오래된 은화 세 닢. 오래돼서 오히려 값이 더 나갈 것 같다.' },
     { choice: [
-      { text: '알겠습니다. 손님 사정은 묻지 않는 게 저희 여관 방침이에요.', set: { gold: 30, 'aff.erion': 1, rep: -1 }, goto: 'd1_erion_accept' },
-      { text: '죄송하지만 용건 정도는 알아야 방을 드릴 수 있어요.',          set: { 'aff.erion': -1, rep: 1 },            goto: 'd1_erion_ask' },
-      { text: '주머니는 넣어 두세요. 대신 방에서 위험한 마법은 쓰지 않겠다고 약속해 주세요.', set: { gold: 15, 'aff.erion': 1, rep: 1 }, goto: 'd1_erion_promise' }
+      { text: '동쪽 방이면 뒷산 동굴 쪽이 보이는 방이에요. 괜찮으시겠어요?', set: { 'aff.erion': 1 }, goto: 'd1_erion_cave' },
+      { text: '환영합니다. 따뜻한 차를 방에 올려 드릴까요?', set: { 'aff.erion': 1 }, goto: 'd1_erion_tea' },
+      { text: '이 은화, 꽤 오래된 건데 어디서 나셨어요?', set: { 'aff.erion': -1 }, goto: 'd1_erion_coin' }
     ] }
   ],
-  d1_erion_accept: [
-    { say: 'erion', face: 'smile', text: '…현명하군. 이런 변두리 여관에 이런 주인이라니, 의외다.' },
-    { narr: '그가 처음으로 입꼬리를 올렸다. 아주 살짝. 하지만 수상한 손님을 받았다는 사실이 마음 한구석에 걸린다.' },
-    { goto: 'd1_erion_after' }
-  ],
-  d1_erion_ask: [
-    { say: 'erion', face: 'angry', text: '…이름은 이미 말했다. 용건은 이 마을 근처의 오래된 동굴. 그 이상은 알 필요 없다.' },
-    { narr: '목소리가 차갑게 가라앉았지만, 그는 순순히 금화 몇 닢을 더 내려놓았다.' },
-    { set: { gold: 20 } },
-    { goto: 'd1_erion_after' }
-  ],
-  d1_erion_promise: [
-    { say: 'erion', face: 'surprised', text: '…약속? 마법사에게 약속을 요구한 사람은 네가 처음이다.' },
-    { say: 'erion', face: 'smile', text: '좋다. 건물을 태우지 않겠다고 약속하지. 그 정도는 어렵지 않다.' },
-    { narr: '진지하게 안심해도 되는 말인지는 잘 모르겠다.' },
-    { goto: 'd1_erion_after' }
-  ],
-  d1_erion_after: [
-    { say: 'erion', face: 'normal', text: '식사는 방으로 가져다 달라. 조용한 것이 좋다.' },
-    { hide: 'erion' },
-    { narr: '에리온은 역시 소리 없이 계단을 올랐다.' },
-    { narr: '동굴이라고 했다. 카엘이 말한 그 동굴일까. 두 손님의 목적지가 같다는 사실에 불안한 예감이 스친다.' },
-    { goto: 'd1_evening' }
-  ],
-
-  // ---------- 저녁: 충돌 ----------
-  d1_evening: [
-    { bg: 'inn_evening' },
-    { narr: '저녁이 되자 마을 사람들이 술을 마시러 하나둘 모여들었고, 은빛 여우관은 오랜만에 시끌벅적해졌다.' },
-    { set: { gold: 15 } },
-    { show: 'kael', face: 'smile', pos: 'left' },
-    { say: 'kael', text: '자, 모두 들어라! 내일이면 이 몸이 고블린 동굴의 수수께끼를 풀 것이다! 오늘은 내가 한턱 쏘지!' },
-    { narr: '마을 사람들이 환호했다. 계산서를 누가 낼지는 아직 아무도 모른다.' },
-    { show: 'erion', face: 'normal', pos: 'right' },
-    { narr: '그때 계단에서 에리온이 내려왔다. 그의 손에는 푸른빛이 은은하게 일렁이는 책이 들려 있다.' },
-    { say: 'kael', face: 'angry', text: '어이, 거기 귀 뾰족한 친구! 그 푸른빛… 동굴에서 새어 나온다던 빛과 똑같지 않나!' },
+  d1_erion_cave: [
     { say: 'erion', face: 'surprised', text: '…!' },
-    { say: 'erion', face: 'angry', text: '눈이 좋군. 어리석게도.' },
-    { say: 'kael', face: 'angry', text: '역시 수상하다! 동굴 사건의 범인은 네놈이지!' },
-    { narr: '술집이 순식간에 조용해졌다. 대검의 손잡이와 책 위의 푸른빛이 동시에 번쩍인다. 이대로면 가게가 부서진다.' },
-    { choice: [
-      { text: '두 분 다 진정하세요! 여관 안에서는 검도 마법도 금지입니다!', set: { rep: 1 },                          goto: 'd1_mediate' },
-      { text: '카엘 님 말에도 일리가 있어요. 그 책, 보여 주실 수 있나요?',    set: { 'aff.kael': 1, 'aff.erion': -1 }, goto: 'd1_side_kael' },
-      { text: '에리온 님은 제 손님입니다. 증거 없이 의심하지 마세요.',        set: { 'aff.erion': 2, 'aff.kael': -1 }, goto: 'd1_side_erion' },
-      { if: 'aff.kael>=2', text: '카엘 님, 영웅이라면 먼저 이야기를 들어 보는 게 멋지지 않을까요?', set: { 'aff.kael': 1, rep: 1 }, goto: 'd1_hero' }
-    ] }
+    { say: 'erion', face: 'normal', text: '…그래서 고른 거야. 눈치가 없는 줄 알았더니, 아니네.' },
+    { goto: 'd1_erion_end' }
   ],
-  d1_mediate: [
-    { narr: '카운터를 두 손으로 쾅 쳤다. 일순간 모두가 조용해졌다.' },
-    { say: 'kael', face: 'troubled', text: '…주인장?' },
-    { narr: '"싸우시려면 밖에서요! 그리고 수리비는 먼저 내시고요!"' },
-    { say: 'kael', face: 'troubled', text: '…수리비.' },
-    { say: 'erion', face: 'normal', text: '…합리적인 규칙이군.' },
-    { narr: '두 사람은 마지못해 물러섰고, 마을 사람들이 박수를 쳤다. 평판이 조금 오른 것 같다.' },
-    { goto: 'd1_night' }
+  d1_erion_tea: [
+    { say: 'erion', face: 'normal', text: '…마음대로 해. 단, 달지 않은 걸로.' },
+    { narr: '후드 끝이 아주 조금 움직였다. 고개를 끄덕인 것 같기도 하다.' },
+    { goto: 'd1_erion_end' }
   ],
-  d1_side_kael: [
-    { say: 'erion', face: 'angry', text: '…너도 같은 생각이군.' },
-    { narr: '에리온은 책을 로브 속에 감추고 차갑게 말했다. "보여 줄 이유가 없다."' },
-    { say: 'kael', face: 'smile', text: '봤나! 숨기는 게 있다는 증거다!' },
-    { narr: '분위기가 싸늘하게 식었다. 에리온은 아무 말 없이 계단을 올라갔다.' },
+  d1_erion_coin: [
+    { say: 'erion', face: 'angry', text: '묻지 마. 받을 건지 말 건지만 말해.' },
+    { narr: '한기가 돌 만큼 싸늘한 시선이었다. 은화는 일단 받아 두기로 했다.' },
+    { goto: 'd1_erion_end' }
+  ],
+  d1_erion_end: [
+    { say: 'erion', face: 'normal', text: '방해하지 마. 내가 부탁하는 건 그것뿐이야.' },
     { hide: 'erion' },
-    { goto: 'd1_night' }
-  ],
-  d1_side_erion: [
-    { say: 'kael', face: 'angry', text: '이 몸의 의심을 무시하겠다고?!' },
-    { say: 'erion', face: 'surprised', text: '…나를 감싸는 건가.' },
-    { say: 'kael', face: 'troubled', text: '칫… 영웅은 증거 없이 칼을 뽑지 않는다. 오늘은 넘어가 주지.' },
-    { narr: '카엘은 입을 삐죽거리며 맥주잔을 들었다. 에리온은 말없이 나를 한 번 바라보았다.' },
-    { goto: 'd1_night' }
-  ],
-  d1_hero: [
-    { say: 'kael', face: 'troubled', text: '…오! 그렇군. 영웅은 먼저 이야기를 듣는다! 물론 알고 있었다!' },
-    { say: 'kael', face: 'normal', text: '에리온이라고 했나? 설명해 봐라, 설명을!' },
-    { say: 'erion', face: 'surprised', text: '…이 단순한 인간이 스스로 칼을 거두다니.' },
-    { say: 'erion', face: 'normal', text: '동굴의 푸른빛은 내 책과 같은 종류의 마력이다. 나는 그것을 쫓아왔을 뿐, 만든 쪽이 아니다.' },
-    { set: { 'flag.truth_shared': true } },
-    { say: 'kael', face: 'smile', text: '그럼 같은 편이라는 거군!' },
-    { narr: '이렇게 쉽게 풀리다니. 허세와 단순함도 때로는 쓸모가 있다.' },
-    { goto: 'd1_night' }
+    { narr: '조용히 계단을 오르는 발소리. 그리고 그녀가 지나간 자리에서 희미하게 푸른 빛이 번졌다 사라졌다.' },
+    { goto: 'd1_miho' }
   ],
 
-  // ---------- 밤 ----------
-  d1_night: [
-    { bg: 'inn_night' },
-    { hide: 'all' },
-    { narr: '밤이 깊었다. 손님들은 각자 방으로 올라갔고, 나는 장부를 정리하고 있었다.' },
-    { narr: '똑똑. 누군가 카운터 쪽으로 다가오는 기척이 났다.' },
-    { if: 'aff.erion>=1', goto: 'd1_night_erion' },
-    { goto: 'd1_night_erion_cold' }
+  // ----- 미호 (여우 수인 도적) -----
+  d1_miho: [
+    { narr: '모두 방에 올라간 사이, 카운터 쪽에서 쨍그랑 소리가 났다. 팁 항아리 앞에서 폭신한 꼬리 하나가 살랑이고 있다.' },
+    { show: 'miho', face: 'surprised', pos: 'center' },
+    { say: 'miho', text: '우앗! …아, 아니, 이건 그, 정리 정돈! 항아리 균형이 안 맞아 보여서 말이죠, 사장님!' },
+    { narr: '금빛 머리카락 사이로 쫑긋 선 여우 귀. 항아리를 안은 두 손은 어느새 동전 몇 닢을 소매 속으로 옮기는 중이다.' },
+    { say: 'miho', face: 'smile', text: '헤헤… 수인 도적 미호라고 합니다. 직업 정보는 가볍게 넘어가 주시면 감사하겠는데요오.' },
+    { choice: [
+      { text: '소매 속의 동전, 돌려주세요.', set: { rep: 1, gold: 3 }, goto: 'd1_miho_return' },
+      { text: '못 본 걸로 해 줄 테니, 오늘 일 좀 거들어 줘요.', set: { 'aff.miho': 2 }, goto: 'd1_miho_job' },
+      { text: '도둑이야! 하고 소리를 지른다.', set: { 'aff.miho': -1 }, goto: 'd1_miho_shout' }
+    ] }
   ],
-  d1_night_erion: [
+  d1_miho_return: [
+    { say: 'miho', face: 'angry', text: '쳇, 눈썰미 좋네요. 여우를 속이려면 수련이 더 필요하다니까.' },
+    { narr: '미호는 투덜대면서도 소매 속 동전을 순순히 쏟아냈다. …세어 보니 한 닢 모자란다. 그걸 짚자 입을 삐죽이며 마저 내놓았다.' },
+    { goto: 'd1_miho_end' }
+  ],
+  d1_miho_job: [
+    { say: 'miho', face: 'surprised', text: '어? 안 혼내요? 보통은 막 소리 지르고, 경비대 부르고, 꼬리 밟고 그러는데…' },
+    { say: 'miho', face: 'smile', text: '…좋아요, 사장님. 일 거들면 숙박비 깎아 주는 거죠? 그럼 계약 성립! 도둑질은 당분간 휴업이에요.' },
+    { narr: '웃는 얼굴이 장난스러운데, 아주 잠깐 눈빛이 놀란 아이 같았다.' },
+    { goto: 'd1_miho_end' }
+  ],
+  d1_miho_shout: [
+    { say: 'miho', face: 'surprised', text: '잠깐, 잠깐만요! 너무하잖아요 사장님! 아직 안 훔쳤…는데 이미 훔친 거나 다름없긴 하지만!' },
+    { narr: '위층에서 우당탕 소리가 났다. 카엘라가 대검을 들고 계단을 구르듯 내려왔다가 마지막 계단에서 미끄러졌다.' },
+    { say: 'miho', face: 'angry', text: '…이 여관, 분위기 이상해요.' },
+    { goto: 'd1_miho_end' }
+  ],
+  d1_miho_end: [
+    { hide: 'all' },
+    { narr: '그렇게 은빛 여우관은 일주일 만에 가득 찼다. 손님 셋, 그리고 소꿉친구 하나.' },
+    { narr: '평범한 하루가 아닐 것 같은 예감이 든다.' },
+    { goto: 'd1_pick' }
+  ],
+
+  // ================= 낮 =================
+  d1_pick: [
+    { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
+    { narr: '점심시간이 지나고 여관이 한가해졌다. 오늘 오후는 누구와 시간을 보낼까?' },
+    { goto: 'pick' }
+  ],
+
+  // ----- 에리온 1: 푸른 책 -----
+  erion_1: [
+    { set: { 'ev.erion': 1 } }, { bg: 'inn_front' }, { hide: 'all' },
+    { narr: '마당 구석 벤치. 에리온이 푸른 표지의 책을 무릎에 펼쳐 둔 채 먼 산을 보고 있었다.' },
     { show: 'erion', face: 'normal', pos: 'center' },
-    { say: 'erion', text: '…아직 안 잤나.' },
-    { say: 'erion', text: '오늘 일에 대한 빚을 갚지. 동굴 안에는 봉인이 있다. 오래전 엘프 마법사들이 걸어 둔 것이다. 푸른빛은 그 봉인이 약해지고 있다는 신호지.' },
-    { say: 'erion', text: '내 책은 그 봉인의 열쇠 중 하나다. 그리고 누군가 나머지 열쇠를 모으고 있다.' },
-    { narr: '알고 싶지 않았던 종류의 이야기다. 하지만 이 사람은 나를 믿고 말해 주는 것이다.' },
-    { say: 'erion', face: 'smile', text: '여관에는 피해가 가지 않게 하겠다. …그리고, 차 한 잔 얻을 수 있겠나.' },
+    { say: 'erion', text: '…뭐야. 용건 없으면 가.' },
+    { narr: '말은 차갑지만 쫓아내지는 않는다. 쟁반 위의 찻잔에서는 김이 모락모락 올라온다.' },
     { choice: [
-      { text: '물론이죠. 따뜻한 약초차를 내올게요.',       set: { 'aff.erion': 1, 'flag.erion_trust': true }, goto: 'd1_night_tea' },
-      { text: '…내일 이야기하면 안 될까요? 너무 졸려서요.', set: { gold: 0 },                                  goto: 'd1_night_sleepy' }
+      { text: '차를 건넨다. "독 안 탔어요."', set: { 'aff.erion': 1 }, goto: 'erion_1_tea' },
+      { text: '(조용히 옆에 앉아 책 읽는 모습을 지켜본다)', set: { 'aff.erion': 2 }, goto: 'erion_1_sit' },
+      { text: '"그 책, 뭐가 적혀 있어요?"', set: { 'aff.erion': -1, 'flag.asked_book': true }, goto: 'erion_1_book' },
+      { text: '숲 향이 나는 고급 찻잎으로 새로 우려 낸다', cost: 8, set: { 'aff.erion': 2 }, goto: 'erion_1_leaf' }
     ] }
   ],
-  d1_night_tea: [
-    { narr: '김이 오르는 찻잔을 건네자, 에리온은 두 손으로 조심스럽게 받았다.' },
-    { say: 'erion', face: 'smile', text: '…따뜻하군. 이렇게 차를 마셔 본 지가 오래되었다.' },
-    { hide: 'erion' },
-    { goto: 'd1_night_kael' }
+  erion_1_tea: [
+    { say: 'erion', face: 'normal', text: '…독이 들었다면 네 손부터 떨렸겠지. 두고 가.' },
+    { narr: '찻잔을 건네받는 손끝이 아주 잠깐 닿았다. 에리온은 재빨리 고개를 돌렸다.' },
+    { say: 'erion', face: 'shy', text: '…따뜻하네. 그뿐이야. 딱히 고마워서 마시는 건 아니니까.' },
+    { goto: 'after_pick' }
   ],
-  d1_night_sleepy: [
-    { say: 'erion', face: 'smile', text: '…인간은 정말 잘 자는군. 좋다, 내일 하지.' },
-    { hide: 'erion' },
-    { goto: 'd1_night_kael' }
+  erion_1_sit: [
+    { narr: '아무 말 없이 곁에 앉았다. 바람이 불고, 나뭇잎이 책 위로 한 장 내려앉았다. 에리온은 그것을 치우지 않았다.' },
+    { say: 'erion', face: 'normal', text: '…앉아 있는 건 허락하지. 떠들지만 않는다면.' },
+    { narr: '한 시간쯤 지났을까. 책장 넘기는 소리와 숨소리만이 오갔다. 그런데 이상하게 불편하지 않았다.' },
+    { say: 'erion', face: 'shy', text: '…이상한 사람이네, 너. 보통은 뭐라도 묻는데.' },
+    { goto: 'after_pick' }
   ],
-  d1_night_erion_cold: [
-    { narr: '돌아보니 아무도 없었다. 카운터 위에는 쪽지 한 장만 놓여 있다.' },
-    { narr: '\'내일 새벽에 떠난다. 방값은 이미 충분히 냈다. — E\'' },
-    { narr: '아무 설명도 없다. 그는 나에게 아무것도 알려 줄 마음이 없는 모양이다.' },
-    { set: { 'flag.erion_left': true } },
-    { goto: 'd1_night_kael' }
+  erion_1_book: [
+    { say: 'erion', face: 'angry', text: '그건 건드리지 마.' },
+    { narr: '책 표지의 문양이 번쩍 하고 푸르게 빛났다. 에리온은 황급히 책을 덮어 가슴에 끌어안았다.' },
+    { say: 'erion', face: 'normal', text: '…미안. 아무것도 아냐. 하지만 다시 묻지는 마.' },
+    { goto: 'after_pick' }
+  ],
+  erion_1_leaf: [
+    { say: 'erion', face: 'surprised', text: '이 향… 엘더 숲 찻잎이잖아. 어디서 구했어? 이런 변두리에서?' },
+    { narr: '비싼 값을 치른 보람이 있었다. 에리온의 눈이 아이처럼 반짝였다.' },
+    { say: 'erion', face: 'shy', text: '…고맙다는 말은 안 할 거야. 하지만 마시겠어. 한 방울도 남기지 않고.' },
+    { goto: 'after_pick' }
   ],
 
-  d1_night_kael: [
-    { narr: '2층에서 쿵 하는 소리가 났다. 올라가 보니 카엘이 복도에 앉아 대검을 닦고 있었다.' },
-    { show: 'kael', face: 'normal', pos: 'center' },
-    { if: 'aff.kael>=2', goto: 'd1_kael_honest' },
-    { goto: 'd1_kael_loud' }
-  ],
-  d1_kael_honest: [
-    { say: 'kael', face: 'troubled', text: '…주인장. 사실 말이다. 오우거 세 마리라는 건… 아직 한 마리밖에 못 잡았다. 그것도 어린 놈으로.' },
-    { narr: '그는 머리를 긁적이며 쓴웃음을 지었다. 허세 뒤에 숨은 건 의외로 솔직한 사람이었다.' },
+  // ----- 카엘라 1: 빨랫줄 -----
+  kaela_1: [
+    { set: { 'ev.kaela': 1 } }, { bg: 'inn_front' }, { hide: 'all' },
+    { narr: '마당에서 쉬익, 쉬익 하는 소리가 들린다. 카엘라가 대검을 신나게 휘두르는 중이다. 빨랫줄이 아슬아슬하다.' },
+    { show: 'kaela', face: 'smile', pos: 'center' },
+    { say: 'kaela', text: '하하! 주인장, 마침 잘 왔다! 내 필살 검술 \'붉은 사자의 포효\'를 보여 주지!' },
+    { narr: '카엘라가 검을 높이 치켜든 순간, 칼끝에 빨랫줄이 걸렸다. 널려 있던 시트가 우수수 그녀를 덮쳤다.' },
+    { show: 'kaela', face: 'surprised' },
+    { say: 'kaela', text: '으앗! 앞이 안 보인다! 적의 기습인가!' },
     { choice: [
-      { text: '한 마리도 대단한 거예요. 내일은 진짜 영웅이 되실 거예요.', set: { 'aff.kael': 1, rep: 1 }, goto: 'd1_kael_end_a' },
-      { text: '그럼 영웅 할인은 취소해도 될까요?',                          set: { gold: 10 },                goto: 'd1_kael_end_b' }
+      { text: '재빨리 시트를 벗겨 주며 일으켜 세운다', set: { 'aff.kaela': 1 }, goto: 'kaela_1_help' },
+      { text: '"…방금 그게 포효예요?" 하며 웃음을 참지 못한다', set: { 'aff.kaela': -1 }, goto: 'kaela_1_laugh' },
+      { text: '"자세만 조금 고치면 훨씬 멋질 거예요." 하고 손을 잡아 준다', set: { 'aff.kaela': 2 }, goto: 'kaela_1_form' },
+      { text: '연습용 목검을 선물한다 (빨랫줄이 안전해진다)', cost: 10, set: { 'aff.kaela': 2, rep: 0 }, goto: 'kaela_1_gift' }
     ] }
   ],
-  d1_kael_end_a: [
-    { say: 'kael', face: 'smile', text: '…하하. 그렇게 말해 주는 건 네가 처음이다. 고맙다, 주인장.' },
-    { goto: 'd1_end' }
+  kaela_1_help: [
+    { show: 'kaela', face: 'smile' },
+    { say: 'kaela', text: '고맙다, 주인장! 적의 기습을 이겨 냈군. 역시 나는 강하다!' },
+    { narr: '시트를 뒤집어쓴 건 본인인데. 그래도 즐거워 보여서 뭐라 하지 않기로 했다.' },
+    { goto: 'after_pick' }
   ],
-  d1_kael_end_b: [
-    { say: 'kael', face: 'angry', text: '그건 안 된다! 그것만은 안 돼!' },
-    { narr: '웃음이 터졌다. 카엘도 투덜거리다가 결국 따라 웃었다.' },
-    { goto: 'd1_end' }
+  kaela_1_laugh: [
+    { show: 'kaela', face: 'angry' },
+    { say: 'kaela', text: '웃지 마라! 방금 건 연습이었다! 실전에서는 훨씬… 훨씬 더 대단하다!' },
+    { narr: '카엘라가 볼을 부풀리며 토라졌다. 시트 빨래는 결국 내가 다시 하게 생겼다.' },
+    { goto: 'after_pick' }
   ],
-  d1_kael_loud: [
-    { say: 'kael', face: 'normal', text: '아직 안 잤나, 주인장? 영웅의 곁에서 밤을 지새우겠다는 건가? 좋은 마음가짐이다!' },
-    { narr: '그냥 장부를 정리하던 중이었는데. 하지만 굳이 정정하지는 않았다.' },
-    { say: 'kael', face: 'smile', text: '내일 동굴에서 돌아오면 모두에게 이 여관을 자랑해 주지!' },
-    { goto: 'd1_end' }
+  kaela_1_form: [
+    { show: 'kaela', face: 'surprised' },
+    { say: 'kaela', text: '…자세? 내 자세가 이상했나?' },
+    { narr: '팔꿈치 각도와 발 위치를 살짝 바로잡아 주자 칼날이 휙 하고 시원한 소리를 냈다. 카엘라의 눈이 휘둥그레졌다.' },
+    { show: 'kaela', face: 'shy' },
+    { say: 'kaela', text: '…주인장, 의외로 보는 눈이 있군. 처음이다. 나한테 그렇게 정확히 말해 준 사람은.' },
+    { goto: 'after_pick' }
+  ],
+  kaela_1_gift: [
+    { show: 'kaela', face: 'surprised' },
+    { say: 'kaela', text: '이, 이건… 연습용 목검! 나를 위해서 사 온 건가!?' },
+    { show: 'kaela', face: 'smile' },
+    { say: 'kaela', text: '좋다! 이 검으로 마당을 지키는 임무를 맡기겠다. …빨랫줄은 건드리지 않도록 노력하지!' },
+    { goto: 'after_pick' }
   ],
 
-  // ---------- 1일차 마무리 ----------
-  d1_end: [
+  // ----- 미호 1: 거래 -----
+  miho_1: [
+    { set: { 'ev.miho': 1 } }, { bg: 'inn_day' }, { hide: 'all' },
+    { narr: '미호가 카운터에 턱을 괴고 나를 올려다본다. 눈이 반달 모양이다. 위험하다.' },
+    { show: 'miho', face: 'smile', pos: 'center' },
+    { say: 'miho', text: '사장님~ 비밀 정보 하나 사실래요? 오늘의 특가예요! 마을 소문 한 건에 딱 5골드!' },
+    { choice: [
+      { text: '5골드를 내고 정보를 산다', cost: 5, set: { 'aff.miho': 1, 'flag.miho_tip': true }, goto: 'miho_1_buy' },
+      { text: '"3골드로 깎아 줘요."', set: { 'aff.miho': 1 }, goto: 'miho_1_haggle' },
+      { text: '"정보 말고 팁 항아리 앞에서 떨어져 줘요."', set: { 'aff.miho': -1 }, goto: 'miho_1_shoo' },
+      { text: '"그 정보, 내가 사면 얼마 벌어요?" 하고 되묻는다', set: { 'aff.miho': 2 }, goto: 'miho_1_ask' }
+    ] }
+  ],
+  miho_1_buy: [
+    { say: 'miho', face: 'smile', text: '감사합니다~ 사장님은 역시 큰손! 자, 귀 좀 대 봐요. 요즘 뒷산 동굴 근처에서 밤마다 푸르스름한 빛이 보인대요.' },
+    { say: 'miho', face: 'normal', text: '그리고 양치기 영감님네 양이 세 마리 사라졌고요. 이 정보값, 사실 7골드짜리인데 오늘만 5골드. 이득이죠?' },
+    { narr: '진짜 정보인지는 모르겠지만, 아까 에리온이 동굴 쪽을 보던 모습이 떠올라 마음에 걸렸다.' },
+    { goto: 'after_pick' }
+  ],
+  miho_1_haggle: [
+    { say: 'miho', face: 'surprised', text: '3골드? 그건 원가 이하라고요, 사장님! …4골드. 더는 못 깎아요.' },
+    { say: 'miho', face: 'smile', text: '아, 안 사시는구나. 그럼 무료 정보 하나만. 여기 팁 항아리, 벌써 반은 제가… 아니, 농담이에요, 농담!' },
+    { narr: '흥정하는 동안 미호의 꼬리가 신나게 살랑거렸다. 돈 얘기를 할 때 제일 즐거워 보인다.' },
+    { goto: 'after_pick' }
+  ],
+  miho_1_shoo: [
+    { say: 'miho', face: 'angry', text: '치사해요. 저를 도둑 취급하다니… 사실이긴 하지만요!' },
+    { narr: '미호는 꼬리를 홱 돌리고 사라졌다. 그런데 몇 걸음 못 가 다시 돌아보며 혀를 쏙 내밀었다.' },
+    { goto: 'after_pick' }
+  ],
+  miho_1_ask: [
+    { say: 'miho', face: 'surprised', text: '어…?' },
+    { say: 'miho', face: 'smile', text: '아하하, 사장님 지금 저한테 사업 아이템을 물어보는 거예요? 대박이다, 이런 사람 처음이야!' },
+    { narr: '미호가 신나서 귀를 팔랑거렸다. 한참 마을 시세와 소문의 값어치에 대해 열변을 토했다. 의외로 꽤 쓸모 있는 얘기였다.' },
+    { say: 'miho', face: 'shy', text: '…으, 이런 얘기를 진지하게 들어 준 건 처음이라 좀… 간지럽네요. 헤헤.' },
+    { goto: 'after_pick' }
+  ],
+
+  // ----- 리아 1: 복도 청소 -----
+  lia_1: [
+    { set: { 'ev.lia': 1 } }, { bg: 'inn_day' }, { hide: 'all' },
+    { narr: '복도에서 리아가 콧노래를 부르며 걸레질을 하고 있다. 어릴 때 자주 부르던 신전 동요다.' },
+    { show: 'lia', face: 'smile', pos: 'center' },
+    { say: 'lia', text: '어, 왔어? 마침 잘됐다. 이 구석 좀 같이 닦자. 어릴 때 여기서 숨바꼭질하다가 네가 항아리에 끼었던 거 기억나?' },
+    { choice: [
+      { text: '"그 얘기는 하지 마… 아직 흉터가 있다고."', set: { 'aff.lia': 1 }, goto: 'lia_1_memory' },
+      { text: '"그때 약속한 거 기억나?" 하고 슬쩍 떠본다', set: { 'aff.lia': 2, 'flag.promise': true }, goto: 'lia_1_promise' },
+      { text: '"청소는 내가 할게. 너는 쉬어."', set: { 'aff.lia': 1 }, goto: 'lia_1_rest' },
+      { text: '말없이 걸레를 받아 같이 닦는다', set: { 'aff.lia': 1, rep: 1 }, goto: 'lia_1_clean' }
+    ] }
+  ],
+  lia_1_memory: [
+    { say: 'lia', face: 'smile', text: '푸하하! 맞아, 그때 내가 얼마나 울었는지 몰라. 네가 안 나올까 봐. 결국 아버님이 기름을 발라서 빼 주셨잖아.' },
+    { say: 'lia', face: 'normal', text: '…그때도 지금도, 이 여관은 따뜻하다. 이상하게 돌아오면 안심이 돼.' },
+    { goto: 'after_pick' }
+  ],
+  lia_1_promise: [
+    { say: 'lia', face: 'surprised', text: '약속…? 아, 그, 그거?' },
+    { say: 'lia', face: 'shy', text: '"여관이 망하지 않게 내가 평생 도와줄게" 그거 말하는 거지? 어, 어릴 때 한 말을 아직도 기억해?' },
+    { say: 'lia', face: 'smile', text: '…잊을 리 없잖아. 그, 그러니까, 약속은 지킬 거야. 신전 일이 끝나는 대로… 쭉.' },
+    { goto: 'after_pick' }
+  ],
+  lia_1_rest: [
+    { say: 'lia', face: 'normal', text: '괜찮아, 나 이런 거 좋아해. 몸을 움직여야 마음이 개운하거든.' },
+    { say: 'lia', face: 'smile', text: '그래도 걱정해 줘서 고마워. 넌 어릴 때부터 그렇게 말이 먼저 다정했어.' },
+    { goto: 'after_pick' }
+  ],
+  lia_1_clean: [
+    { narr: '둘이 말없이 걸레질을 했다. 바닥에 나란히 비친 그림자가 어릴 때와 똑같이 키 차이가 나서 웃음이 났다.' },
+    { say: 'lia', face: 'smile', text: '…이렇게 하니까 금방 끝났다. 역시 둘이 하면 빨라.' },
+    { narr: '복도가 반짝반짝해졌다. 지나가던 손님이 \'깨끗하네\'라고 중얼거렸다.' },
+    { goto: 'after_pick' }
+  ],
+
+  // ================= 저녁: 첫 만찬 =================
+  d1_evening: [
+    { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
+    { narr: '해가 기울자 식당에 불이 들어왔다. 오늘은 우리 여관이 이렇게 북적이는 첫날이다.' },
+    { show: 'kaela', face: 'smile', pos: 'left' },
+    { show: 'erion', face: 'normal', pos: 'center' },
+    { show: 'miho', face: 'smile', pos: 'right' },
+    { say: 'kaela', text: '주인장! 영웅의 첫 만찬이다! 고기를 산처럼 쌓아 와라!' },
+    { say: 'miho', text: '사장님, 저는 제일 비싼 거요! 어차피 내일 공짜로 먹을 거지만요!' },
+    { say: 'erion', text: '…시끄럽네.' },
+    { narr: '부엌 문이 열리고 리아가 쟁반을 든 채 들어왔다. 앞치마 차림이 꽤 익숙해 보인다.' },
+    { hide: 'miho' },
+    { show: 'lia', face: 'smile', pos: 'right' },
+    { say: 'lia', text: '자, 저녁 메뉴를 정해 줘. 오늘은 사장님이 쏘는 거야, 맞지?' },
+    { choice: [
+      { text: '든든한 고기 스튜 (12G)', cost: 12, set: { 'aff.kaela': 1, 'aff.miho': 1, rep: 1 }, goto: 'd1_ev_stew' },
+      { text: '허브 샐러드와 따뜻한 차 (12G)', cost: 12, set: { 'aff.erion': 1, 'aff.lia': 1, rep: 1 }, goto: 'd1_ev_salad' },
+      { text: '빵과 수프 (무료)', goto: 'd1_ev_plain' }
+    ] }
+  ],
+  d1_ev_stew: [
+    { say: 'kaela', face: 'smile', text: '이 맛이다! 영웅의 몸은 고기로 만들어지는 법이지!' },
+    { say: 'miho', text: '우와, 진짜 고기가 들었어! 이런 여관은 처음이야. 사장님 부자예요? 아니군요. 그래도 맛있어요!' },
+    { goto: 'd1_ev_quake' }
+  ],
+  d1_ev_salad: [
+    { say: 'erion', face: 'surprised', text: '…이 허브, 엘프 쪽 품종이잖아. 어떻게…' },
+    { say: 'lia', face: 'smile', text: '신전 텃밭에서 키운 거야. 내가 사장님한테 몰래 알려 줬어. 너 향 진한 거 싫어한다고 했잖아.' },
+    { narr: '리아가 눈을 찡긋했다. 에리온이 슬쩍 시선을 피하며 샐러드를 한 입 먹었다. 포크가 멈추지 않는다.' },
+    { goto: 'd1_ev_quake' }
+  ],
+  d1_ev_plain: [
+    { say: 'kaela', face: 'sad', text: '빵과… 수프… 영웅의 만찬치고는 소박하군.' },
+    { say: 'miho', text: '사장님, 세금 걱정이 그렇게 심해요? 제가 좀 도와 드릴 수도 있는데… 수수료 7할에.' },
+    { narr: '분위기가 조금 가라앉았다. 다음에는 신경 써서 차려야겠다.' },
+    { goto: 'd1_ev_quake' }
+  ],
+  d1_ev_quake: [
+    { narr: '그때였다. 식탁 위의 컵이 달그락달그락 떨리기 시작했다.' },
+    { fx: 'shake' },
+    { narr: '쿠르르릉— 낮고 깊은 울림이 발밑에서부터 올라왔다. 천장에서 먼지가 떨어지고, 등불이 흔들렸다.' },
+    { show: 'erion', face: 'surprised' },
+    { say: 'erion', text: '…벌써?' },
+    { show: 'kaela', face: 'surprised' },
+    { say: 'kaela', text: '지진인가! 걱정 마라, 모두 이 몸에게 맡겨라! …일단 식탁 밑으로!' },
+    { say: 'miho', text: '사장님, 벽 갈라지면 수리비 누가 내요? 저 아니에요!' },
+    { show: 'lia', face: 'surprised' },
+    { say: 'lia', text: '다, 다들 진정해! 일단 불부터…!' },
+    { narr: '울림은 십 초쯤 이어지다가 거짓말처럼 멎었다. 창밖, 먼 뒷산 쪽 하늘에 푸른 빛이 희미하게 번졌다가 사라졌다.' },
+    { say: 'erion', face: 'normal', text: '…시간이 없네.' },
+    { narr: '에리온이 중얼거리는 소리를 나는 분명히 들었다. 모두의 시선이 일제히 내게 모였다. 이럴 땐 주인이 나서야 한다.' },
+    { choice: [
+      { text: '"모두 진정하세요. 우선 불부터 끄고 다친 사람이 없는지 확인해요."', set: { rep: 1, 'aff.lia': 1 }, goto: 'd1_ev_calm' },
+      { text: '"에리온, 뭔가 알고 있는 거죠?"', set: { 'aff.erion': 1, 'flag.asked_erion': true }, goto: 'd1_ev_ask' },
+      { text: '"카엘라, 문 앞을 좀 지켜봐 줄래요? 당신이 제일 든든하니까."', set: { 'aff.kaela': 1 }, goto: 'd1_ev_guard' },
+      { text: '"미호, 금고부터 지켜 줘요. 도둑이 제일 눈이 밝으니까."', set: { 'aff.miho': 1, rep: -1 }, goto: 'd1_ev_safe' }
+    ] }
+  ],
+  d1_ev_calm: [
+    { say: 'lia', face: 'smile', text: '…역시 주인답네. 나, 그 말에 안심했어.' },
+    { narr: '다행히 다친 사람은 없었다. 손님들의 불안한 표정이 조금 풀렸다.' },
+    { goto: 'd1_ev_end' }
+  ],
+  d1_ev_ask: [
+    { say: 'erion', face: 'angry', text: '…내일 얘기해. 오늘은 아무것도 말하지 않을 거야.' },
+    { say: 'erion', face: 'normal', text: '하지만 눈치는 있네. 그건 인정해.' },
+    { goto: 'd1_ev_end' }
+  ],
+  d1_ev_guard: [
+    { say: 'kaela', face: 'smile', text: '하하! 역시 보는 눈이 있군! 이 몸이 문 앞을 지키는 이상 그림자 하나 못 들어온다!' },
+    { narr: '카엘라가 의기양양하게 문 앞으로 갔다가 문턱에 걸려 넘어졌다. …그래도 믿음직한 마음만은 확실했다.' },
+    { goto: 'd1_ev_end' }
+  ],
+  d1_ev_safe: [
+    { say: 'miho', text: '맡겨 주세요! 금고는 목숨을 걸고 지키겠습니다. 열쇠는… 어, 사장님 허리춤에 있었네?' },
+    { narr: '손님을 도둑 취급했다는 소문이 조금 돌 것 같다. 미호만 신나게 웃고 있다.' },
+    { goto: 'd1_ev_end' }
+  ],
+  d1_ev_end: [
     { hide: 'all' },
-    { narr: '창밖으로 달이 높이 떴다. 오늘 하루 은빛 여우관에는 두 명의 손님이 왔고, 금고는 조금 무거워졌다.' },
-    { if: 'rep>=2', goto: 'd1_end_good' },
-    { narr: '아직 마을 사람들은 이 여관에 큰 기대는 없는 모양이다. 내일은 조금 더 잘해 봐야지.' },
-    { goto: 'd1_summary' }
+    { narr: '그날 저녁 식사는 어수선하게 끝났다. 모두 방으로 돌아간 뒤에도 여관은 오랫동안 웅성거렸다.' },
+    { goto: 'd1_night' }
   ],
-  d1_end_good: [
-    { narr: '술집에서 들은 이야기가 벌써 마을에 퍼진 것 같다. \'은빛 여우관 주인, 믿을 만하더라\'는 소문과 함께.' },
-    { goto: 'd1_summary' }
-  ],
-  d1_summary: [
-    { narr: '내일 두 사람은 동굴로 떠나겠지. 그곳에서 무슨 일이 기다리고 있을까.' },
-    { summary: { title: '1일차 결과', note: '2일차는 다음 업데이트에서 만나요!' } }
+
+  // ================= 밤 =================
+  d1_night: [
+    { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
+    { narr: '손님들이 모두 잠든 밤. 금고를 정리하고 불을 끄러 나서는데, 위층에서 희미한 소리가 들렸다.' },
+    { narr: '동쪽 창가에서, 에리온이 가만히 뒷산을 바라보고 있었다. 그 손에서 푸른 책이 빛나고 있었다.' },
+    { narr: '나는 조용히 발길을 돌렸다. 오늘은 더 묻지 않기로 했다. 내일부터, 이 여관에서 무슨 일이 시작될 것 같다.' },
+    { goto: 'd2_open' }
   ]
 });

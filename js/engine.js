@@ -50,6 +50,11 @@
       r = !!left;
     } else {
       var right = parseLiteral(m[3]);
+      // 오른쪽이 변수 이름이면 그 값과 비교 (호감도 비교용: aff.erion>=aff.kaela)
+      if (typeof right === 'string' && /^[A-Za-z_][\w.]*$/.test(right)) {
+        var rv = getPath(vars, right);
+        if (typeof rv === 'number' || typeof rv === 'boolean') right = rv;
+      }
       if (left === undefined) left = typeof right === 'number' ? 0 : (typeof right === 'boolean' ? false : '');
       switch (m[2]) {
         case '>=': r = left >= right; break;
@@ -76,7 +81,9 @@
   if (typeof document === 'undefined') return;
 
   // ---------- 저장소 (localStorage 가 막혀도 게임은 동작하도록 try/catch) ----------
-  var KEY = 'inn_vn_v1_';
+  // 세이브 형식을 바꾸면 SAVE_VER 와 KEY 의 숫자를 함께 올린다 (옛 세이브는 읽지 않고 무시)
+  var SAVE_VER = 2;
+  var KEY = 'inn_vn_v2_';
   var store = {
     get: function (k) { try { return localStorage.getItem(KEY + k); } catch (e) { return null; } },
     set: function (k, v) { try { localStorage.setItem(KEY + k, v); return true; } catch (e) { return false; } }
@@ -84,13 +91,25 @@
   function readSlot(k) {
     var raw = store.get(k);
     if (!raw) return null;
-    try { return JSON.parse(raw); } catch (e) { return null; }
+    try {
+      var d = JSON.parse(raw);
+      // 형식이 다르거나 없는 씬을 가리키는 세이브는 없는 것으로 취급
+      if (!d || d.v !== SAVE_VER || !d.snap || !STORY.scenes[d.snap.scene]) return null;
+      return d;
+    } catch (e) { return null; }
   }
+  function writeSlot(k, sn) { return store.set(k, JSON.stringify({ v: SAVE_VER, t: Date.now(), snap: sn })); }
+  // 엔딩 기록 { 엔딩id: 달성 시각 }
+  function readEndings() {
+    try { var o = JSON.parse(store.get('endings') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
+  }
+  function endingDefs() { return globalThis.ENDINGS || []; }
 
   // ---------- 상태 ----------
   var S = null;        // 현재 진행 상태 {scene, pc, vars, bg, sprites, log}
   var snap = null;     // 지금 화면에 떠 있는 줄(대기 지점) 직전의 상태 스냅샷 (세이브 대상)
-  var mode = 'title';  // title | text | choice | summary
+  var mode = 'title';  // title | text | choice | card | summary | ending
+  var curOpts = [];    // 지금 화면에 떠 있는 선택지 (테스트용 접근자)
   var modal = 0;       // 열려 있는 오버레이 수 (>0 이면 탭 진행 안 됨)
   var typing = null;   // 타이핑 진행 정보
   var POS = ['left', 'center', 'right'];
@@ -127,7 +146,7 @@
   function openOverlay(el) { if (el.classList.contains('hidden')) { el.classList.remove('hidden'); modal++; } }
   function closeOverlay(el) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); modal--; } }
   function closeAllOverlays() {
-    [E.menu, E.slots, E.backlog, E.confirm].forEach(closeOverlay);
+    [E.menu, E.slots, E.backlog, E.confirm, E.endingList].forEach(closeOverlay);
     modal = 0;
   }
 
@@ -135,6 +154,8 @@
     stopTyping();
     closeAllOverlays();
     E.summary.classList.add('hidden');
+    E.ending.classList.add('hidden');
+    E.card.classList.add('hidden');
     mode = 'title';
     refreshTitle();
     showScreen('title');
@@ -143,6 +164,7 @@
     E.btnContinue.disabled = !readSlot('auto');
     var any = [1, 2, 3].some(function (i) { return readSlot('s' + i); }) || !!readSlot('auto');
     E.btnTitleLoad.disabled = !any;
+    E.btnEndings.textContent = '엔딩 목록 (' + Object.keys(readEndings()).length + '/' + endingDefs().length + ')';
   }
 
   // ---------- 배경 / 스프라이트 ----------
@@ -183,6 +205,7 @@
   function updateHud() {
     E.hudGold.textContent = S.vars.gold || 0;
     E.hudRep.textContent = S.vars.rep || 0;
+    E.hudDay.textContent = (S.vars.day || 1) + '일차 ' + (S.vars.time || '');
   }
   function toast(msg, cls) {
     var d = document.createElement('div');
@@ -198,6 +221,30 @@
     if (m) return ((CHARACTERS[m[1]] || {}).name || m[1]) + ' 호감도';
     return null;
   }
+  // 호감도가 오르면 하트가 떠오르는 연출 (캐릭터 이름색 사용)
+  function heartBurst(id) {
+    var col = (CHARACTERS[id] || {}).color || '#ff6f8e';
+    for (var i = 0; i < 8; i++) {
+      var h = document.createElement('i');
+      h.className = 'fx-heart';
+      h.textContent = '♥';
+      h.style.left = (14 + Math.random() * 72) + '%';
+      h.style.fontSize = (18 + Math.random() * 20) + 'px';
+      h.style.animationDelay = (i * 70) + 'ms';
+      h.style.color = i % 2 ? '#ff7a9c' : col;
+      E.fx.appendChild(h);
+      (function (el) { setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2200); })(h);
+    }
+  }
+  // 호감도 하트 칸 (6칸이 고백 엔딩 기준선)
+  // 하트 6칸이 STORY.loveLine(고백 기준 호감도)에 해당 — 6칸이 꽉 차면 개별 엔딩 조건 충족
+  var HEART_MAX = 6;
+  function heartsHtml(v) {
+    var line = STORY.loveLine || HEART_MAX;
+    var n = Math.max(0, Math.min(HEART_MAX, Math.floor((v || 0) * HEART_MAX / line))), out = '';
+    for (var i = 0; i < HEART_MAX; i++) out += '<i class="' + (i < n ? 'on' : '') + '">♥</i>';
+    return out;
+  }
   // set 적용: 숫자는 더하고, 그 외(true/false/문자열)는 대입
   function applySet(set) {
     Object.keys(set || {}).forEach(function (k) {
@@ -205,7 +252,9 @@
       if (typeof v === 'number') {
         setPath(S.vars, k, v, true);
         var lb = labelOf(k);
-        if (lb && v !== 0) toast(lb + ' ' + (v > 0 ? '+' : '') + v, v > 0 ? 'up' : 'down');
+        var isAff = /^aff\./.test(k);
+        if (lb && v !== 0) toast((isAff && v > 0 ? '♥ ' : '') + lb + ' ' + (v > 0 ? '+' : '') + v, (v > 0 ? 'up' : 'down') + (isAff && v > 0 ? ' heart' : ''));
+        if (isAff && v > 0) heartBurst(k.slice(4));
       } else {
         setPath(S.vars, k, v, false);
       }
@@ -242,7 +291,7 @@
   function takeSnap(label) {
     snap = clone(S);
     snap.label = label;
-    store.set('auto', JSON.stringify({ t: Date.now(), snap: snap }));
+    writeSlot('auto', snap);
   }
   function pushLog(entry) {
     S.log.push(entry);
@@ -299,18 +348,34 @@
       var opts = c.choice.filter(function (o) { return !o.if || evalCond(o.if, S.vars); });
       takeSnap('선택지');
       mode = 'choice';
+      curOpts = opts;
       stopTyping();
       E.nextMark.classList.remove('on');
       E.choices.innerHTML = '';
-      opts.forEach(function (o) {
-        var b = document.createElement('button');
-        b.className = 'choice-btn';
-        b.type = 'button';
-        b.textContent = interp(o.text);
-        b.addEventListener('click', function (ev) { ev.stopPropagation(); pick(o); });
-        E.choices.appendChild(b);
-      });
+      opts.forEach(function (o) { E.choices.appendChild(makeChoiceBtn(o)); });
       E.choices.classList.remove('hidden');
+      E.choices.scrollTop = 0;
+      return true;
+    }
+    if ('day' in c) { // 일차 전환 화면: {day:2, time:'아침', tip:'...'}
+      S.vars.day = c.day; S.vars.time = c.time || '아침';
+      updateHud();
+      var dl = c.day + '일차 ' + S.vars.time;
+      takeSnap(dl);
+      pushLog({ name: '', color: '', text: '— ' + dl + ' —' });
+      showCard(c.day + '일차', S.vars.time, c.tip);
+      return true;
+    }
+    if ('time' in c) { // 시간대 표시만 바꿈: {time:'낮'}
+      S.vars.time = c.time; updateHud(); next(); return false;
+    }
+    if ('fx' in c) { // 화면 효과: {fx:'shake'} | {fx:'flash'}
+      fxPlay(c.fx); next(); return false;
+    }
+    if ('ending' in c) { // 엔딩 도달: {ending:'erion'} (endings.js 의 ENDINGS 에 정의된 id)
+      var isNew = markEnding(c.ending);
+      takeSnap('엔딩');
+      showEnding(c.ending, isNew);
       return true;
     }
     if ('summary' in c) {
@@ -328,8 +393,8 @@
     }
     if ('goto' in c) { return !gotoScene(c.goto); }
     if ('show' in c) {
-      var pos = c.pos || 'center';
       var old = slotOf(c.show);
+      var pos = c.pos || old || 'center'; // pos 를 생략하면 이미 화면에 있을 땐 제자리 유지, 새로 등장하면 가운데
       var face = c.face || (old ? S.sprites[old].face : Object.keys((CHARACTERS[c.show] || { faces: { normal: 1 } }).faces)[0]);
       if (old && old !== pos) S.sprites[old] = null;
       S.sprites[pos] = { id: c.show, face: face };
@@ -367,8 +432,11 @@
   // 선택지 클릭
   function pick(o) {
     if (mode !== 'choice') return;
+    if (o.cost && (S.vars.gold || 0) < o.cost) return; // 골드 부족
     pushLog({ name: '', color: '', text: '▶ ' + interp(o.text), choice: true });
     E.choices.classList.add('hidden');
+    curOpts = [];
+    if (o.cost) applySet({ gold: -o.cost });
     applySet(o.set);
     if (o.goto) { if (!gotoScene(o.goto)) return; } else { next(); }
     run();
@@ -376,10 +444,147 @@
 
   // 화면 탭: 타이핑 중이면 즉시 완성, 아니면 다음 줄
   function advance() {
+    if (mode === 'card' && modal === 0) { E.card.classList.add('hidden'); next(); run(); return; }
     if (mode !== 'text' || modal > 0) return;
     if (typing) { finishTyping(); return; }
     next();
     run();
+  }
+
+  // ---------- 선택지 버튼 ----------
+  // 옵션: text, set, goto, if, cost(골드 소모), who(히로인 id: 얼굴+호감도 표시), tag(작은 라벨)
+  function makeChoiceBtn(o) {
+    var b = document.createElement('button');
+    b.className = 'choice-btn';
+    b.type = 'button';
+    var locked = !!o.cost && (S.vars.gold || 0) < o.cost;
+    var body = document.createElement('span');
+    body.className = 'ch-text';
+    body.textContent = interp(o.text);
+    if (o.who && CHARACTERS[o.who]) {
+      var ch = CHARACTERS[o.who], v = (S.vars.aff && S.vars.aff[o.who]) || 0;
+      b.classList.add('who');
+      b.dataset.who = o.who;
+      var pic = document.createElement('span');
+      pic.className = 'who-pic';
+      pic.style.borderColor = ch.color;
+      var im = document.createElement('img');
+      im.alt = ''; im.src = ch.faces.normal || ch.faces[Object.keys(ch.faces)[0]];
+      pic.appendChild(im);
+      var head = document.createElement('span');
+      head.className = 'who-head';
+      var nm = document.createElement('b');
+      nm.textContent = ch.name; nm.style.color = ch.color;
+      var hh = document.createElement('em');
+      hh.className = 'hearts'; hh.innerHTML = heartsHtml(v);
+      head.appendChild(nm); head.appendChild(hh);
+      var wrap = document.createElement('span');
+      wrap.className = 'who-body';
+      wrap.appendChild(head); wrap.appendChild(body);
+      b.appendChild(pic); b.appendChild(wrap);
+    } else {
+      b.appendChild(body);
+    }
+    if (o.cost || o.tag) {
+      var tg = document.createElement('span');
+      tg.className = 'ch-tag' + (o.cost ? ' cost' : '');
+      tg.textContent = o.cost ? (locked ? '골드 부족 (' + o.cost + 'G)' : '-' + o.cost + 'G') : o.tag;
+      b.appendChild(tg);
+    }
+    if (locked) { b.disabled = true; b.classList.add('locked'); }
+    b.addEventListener('click', function (ev) { ev.stopPropagation(); pick(o); });
+    return b;
+  }
+
+  // ---------- 일차 전환 카드 ----------
+  function showCard(title, sub, tip) {
+    stopTyping();
+    E.dialog.classList.add('hidden');
+    E.choices.classList.add('hidden');
+    E.cardTitle.textContent = title;
+    E.cardSub.textContent = sub;
+    E.cardTip.textContent = tip || '';
+    var h = '<div class="card-stat"><span><i class="coin"></i>' + (S.vars.gold || 0) + ' G</span><span><i class="star">★</i> ' + (S.vars.rep || 0) + '</span></div>';
+    Object.keys(CHARACTERS).forEach(function (id) {
+      var c = CHARACTERS[id];
+      if (!c.affinity) return;
+      var v = (S.vars.aff && S.vars.aff[id]) || 0;
+      h += '<div class="card-aff"><span style="color:' + c.color + '">' + c.name + '</span><em class="hearts">' + heartsHtml(v) + '</em></div>';
+    });
+    E.cardBody.innerHTML = h;
+    E.card.classList.remove('hidden');
+    E.card.classList.remove('in'); void E.card.offsetWidth; E.card.classList.add('in');
+    mode = 'card';
+  }
+
+  // 화면 효과
+  function fxPlay(kind) {
+    var el = kind === 'flash' ? E.flash : E.game;
+    var cls = kind === 'flash' ? 'on' : 'shake';
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    setTimeout(function () { el.classList.remove(cls); }, 800);
+  }
+
+  // ---------- 엔딩 ----------
+  function endingDef(id) {
+    var l = endingDefs();
+    for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+    return null;
+  }
+  function markEnding(id) {
+    var rec = readEndings(), isNew = !rec[id];
+    if (isNew) { rec[id] = Date.now(); store.set('endings', JSON.stringify(rec)); }
+    return isNew;
+  }
+  function showEnding(id, isNew) {
+    stopTyping();
+    E.dialog.classList.add('hidden');
+    E.choices.classList.add('hidden');
+    var def = endingDef(id) || { id: id, title: id, desc: '' };
+    var rec = readEndings(), total = endingDefs().length, got = Object.keys(rec).length;
+    E.endLabel.textContent = 'ENDING ' + (endingDefs().indexOf(def) + 1) + ' / ' + total;
+    E.endTitle.textContent = def.title;
+    E.endDesc.textContent = def.desc || '';
+    E.endNew.classList.toggle('hidden', !isNew);
+    E.endCount.textContent = '획득한 엔딩 ' + got + ' / ' + total;
+    var ch = CHARACTERS[def.heroine];
+    E.endPic.classList.toggle('hidden', !ch);
+    if (ch) E.endPic.src = ch.faces[def.face] || ch.faces.smile || ch.faces[Object.keys(ch.faces)[0]];
+    var h = '';
+    h += '<div class="sum-row"><span>골드 / 평판</span><b>' + (S.vars.gold || 0) + ' G / ' + (S.vars.rep || 0) + '</b></div>';
+    Object.keys(CHARACTERS).forEach(function (cid) {
+      var c = CHARACTERS[cid];
+      if (!c.affinity) return;
+      var v = (S.vars.aff && S.vars.aff[cid]) || 0;
+      h += '<div class="sum-row"><span style="color:' + c.color + '">' + c.name + '</span><b>' + v + ' <em class="hearts">' + heartsHtml(v) + '</em></b></div>';
+    });
+    E.endBody.innerHTML = h;
+    E.ending.classList.remove('hidden');
+    mode = 'ending';
+  }
+  // 타이틀의 엔딩 목록: 획득한 것은 제목/설명, 못 얻은 것은 ??? + 힌트
+  function openEndingList() {
+    var rec = readEndings(), list = endingDefs(), got = 0;
+    E.endingListBody.innerHTML = '';
+    list.forEach(function (d) {
+      var have = !!rec[d.id]; if (have) got++;
+      var row = document.createElement('div');
+      row.className = 'end-row' + (have ? ' got' : '');
+      var ch = CHARACTERS[d.heroine];
+      var pic = document.createElement('span');
+      pic.className = 'end-pic';
+      if (have && ch) { var im = document.createElement('img'); im.alt = ''; im.src = ch.faces[d.face] || ch.faces.smile; pic.appendChild(im); pic.style.borderColor = ch.color; }
+      else pic.textContent = have ? '★' : '?';
+      var tx = document.createElement('span');
+      tx.className = 'end-tx';
+      var t = document.createElement('b'); t.textContent = have ? d.title : '???';
+      var s2 = document.createElement('small'); s2.textContent = have ? d.desc : '힌트: ' + d.hint;
+      tx.appendChild(t); tx.appendChild(s2);
+      row.appendChild(pic); row.appendChild(tx);
+      E.endingListBody.appendChild(row);
+    });
+    E.endingListCount.textContent = got + ' / ' + list.length;
+    openOverlay(E.endingList);
   }
 
   // ---------- 결과 요약 ----------
@@ -395,10 +600,7 @@
       var c = CHARACTERS[id];
       if (!c.affinity) return;
       var v = (S.vars.aff && S.vars.aff[id]) || 0;
-      var hearts = Math.max(0, Math.min(5, v)); // 0~5 칸으로 표시
-      var bar = '';
-      for (var i = 0; i < 5; i++) bar += '<i class="' + (i < hearts ? 'on' : '') + '">♥</i>';
-      h += '<div class="sum-row"><span style="color:' + c.color + '">' + c.name + ' 호감도</span><b>' + v + ' <em class="hearts">' + bar + '</em></b></div>';
+      h += '<div class="sum-row"><span style="color:' + c.color + '">' + c.name + ' 호감도</span><b>' + v + ' <em class="hearts">' + heartsHtml(v) + '</em></b></div>';
     });
     E.summaryBody.innerHTML = h;
     E.summary.classList.remove('hidden');
@@ -410,6 +612,8 @@
     S = freshState();
     closeAllOverlays();
     E.summary.classList.add('hidden');
+    E.ending.classList.add('hidden');
+    E.card.classList.add('hidden');
     POS.forEach(function (p) { E.sprites[p].classList.remove('on'); });
     showScreen('game');
     updateHud();
@@ -417,10 +621,13 @@
     run();
   }
   function loadSnap(sn) {
+    if (!sn || !STORY.scenes[sn.scene]) { toTitle(); return; }
     S = clone(sn);
     delete S.label;
     closeAllOverlays();
     E.summary.classList.add('hidden');
+    E.ending.classList.add('hidden');
+    E.card.classList.add('hidden');
     showScreen('game');
     updateHud();
     renderBg(S.bg, false);
@@ -453,7 +660,7 @@
       b.addEventListener('click', function () {
         if (kind === 'save') {
           if (!snap) return;
-          var ok = store.set(k, JSON.stringify({ t: Date.now(), snap: snap }));
+          var ok = writeSlot(k, snap);
           toast(ok ? name + '에 저장했어요' : '저장할 수 없어요 (저장소 사용 불가)', ok ? 'up' : 'down');
           openSlots('save'); // 목록 갱신
         } else if (d) {
@@ -494,9 +701,13 @@
   // ---------- 초기화 ----------
   function init() {
     ['title', 'game', 'bg', 'hud', 'dialog', 'nametag', 'text', 'choices', 'toasts', 'menu', 'slots', 'backlog',
-      'summary', 'confirm'].forEach(function (id) { E[id] = $(id); });
+      'summary', 'confirm', 'ending', 'fx', 'flash'].forEach(function (id) { E[id] = $(id); });
+    E.card = $('daycard'); E.cardTitle = $('card-title'); E.cardSub = $('card-sub'); E.cardTip = $('card-tip'); E.cardBody = $('card-body');
+    E.endLabel = $('ending-label'); E.endTitle = $('ending-title'); E.endDesc = $('ending-desc'); E.endNew = $('ending-new');
+    E.endCount = $('ending-count'); E.endPic = $('ending-pic'); E.endBody = $('ending-body');
+    E.btnEndings = $('btn-endings'); E.endingList = $('endings'); E.endingListBody = $('endings-body'); E.endingListCount = $('endings-count');
     E.nextMark = $('next-mark');
-    E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep');
+    E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep'); E.hudDay = $('hud-day');
     E.btnContinue = $('btn-continue'); E.btnTitleLoad = $('btn-title-load');
     E.slotsTitle = $('slots-title'); E.slotList = $('slot-list');
     E.backlogList = $('backlog-list');
@@ -512,6 +723,18 @@
     var tb = BACKGROUNDS.inn_front || BACKGROUNDS[Object.keys(BACKGROUNDS)[0]];
     if (tb) E.title.style.backgroundImage = 'url("' + tb + '")';
 
+    // 타이틀 히로인 소개 (STORY.cast 의 캐릭터를 포스터처럼 나란히)
+    var castBox = $('title-cast'), names = $('title-names');
+    (STORY.cast || []).forEach(function (cid, i) {
+      var ch = CHARACTERS[cid]; if (!ch) return;
+      var im = document.createElement('img');
+      im.className = 'cast cast-' + i; im.alt = ch.name; im.src = ch.faces.smile || ch.faces[Object.keys(ch.faces)[0]];
+      castBox.appendChild(im);
+      var sp = document.createElement('span');
+      sp.textContent = ch.name; sp.style.color = ch.color; sp.title = ch.tag || '';
+      names.appendChild(sp);
+    });
+
     // 이미지 미리 로드 (표정 교체 시 깜빡임 방지)
     Object.keys(CHARACTERS).forEach(function (id) {
       var f = CHARACTERS[id].faces;
@@ -526,6 +749,9 @@
       if (d) loadSnap(d.snap);
     });
     E.btnTitleLoad.addEventListener('click', function () { openSlots('load'); });
+
+    // 일차 전환 카드 탭 = 진행 (카드는 #game 바깥에 있으므로 따로 연결)
+    E.card.addEventListener('click', advance);
 
     // 게임 화면 탭 = 진행
     E.game.addEventListener('click', function (ev) {
@@ -548,6 +774,9 @@
     $('backlog-close').addEventListener('click', function () { closeOverlay(E.backlog); });
     $('confirm-no').addEventListener('click', function () { closeOverlay(E.confirm); });
     $('summary-btn').addEventListener('click', toTitle);
+    $('ending-btn').addEventListener('click', toTitle);
+    E.btnEndings.addEventListener('click', openEndingList);
+    $('endings-close').addEventListener('click', function () { closeOverlay(E.endingList); });
 
     // 키보드(데스크톱 편의): 스페이스/엔터 = 진행
     document.addEventListener('keydown', function (ev) {
@@ -568,6 +797,8 @@
   // 테스트/디버그용 읽기 전용 접근자
   Object.defineProperty(VN, 'state', { get: function () { return S; } });
   Object.defineProperty(VN, 'mode', { get: function () { return mode; } });
+  Object.defineProperty(VN, 'options', { get: function () { return curOpts; } });
+  Object.defineProperty(VN, 'endings', { get: function () { return readEndings(); } });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
