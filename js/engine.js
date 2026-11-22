@@ -119,6 +119,11 @@
   var $ = function (id) { return document.getElementById(id); };
   var E = {};          // DOM 요소 캐시
   var LOG_MAX = 120;
+  // ----- 자유 대화(로컬 LLM) 상태: PC 서버(pc-server/inn_server.py)에서 열렸을 때만 켜진다 -----
+  var LLM = { server: false, state: 'none', model: '' }; // state: none(PC 서버 아님) | checking | nollm(서버는 있는데 LLM 이 꺼짐) | ready
+  var CH = null;        // 자유 대화 진행 상태 (세이브에 들어가지 않음)
+  var curPick = false;  // 지금 떠 있는 선택지가 낮 "누구와 시간을 보낼까" 인지 (choice 의 talkpick)
+  var replay = false;   // 같은 줄을 다시 실행하는 중 (백로그에 중복 기록하지 않음)
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function warn(msg) { console.warn('[VN] ' + msg); }
@@ -149,12 +154,13 @@
   function openOverlay(el) { if (el.classList.contains('hidden')) { el.classList.remove('hidden'); modal++; } }
   function closeOverlay(el) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); modal--; } }
   function closeAllOverlays() {
-    [E.menu, E.slots, E.backlog, E.confirm, E.endingList].forEach(closeOverlay);
+    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick].forEach(closeOverlay);
     modal = 0;
   }
 
   function toTitle() {
     stopTyping();
+    chatReset();
     tvReset();
     closeAllOverlays();
     E.summary.classList.add('hidden');
@@ -306,6 +312,7 @@
     writeSlot('auto', snap);
   }
   function pushLog(entry) {
+    if (replay) return;
     S.log.push(entry);
     if (S.log.length > LOG_MAX) S.log.shift();
   }
@@ -357,21 +364,19 @@
       return true;
     }
     if ('choice' in c) {
-      var opts = c.choice.filter(function (o) { return !o.if || evalCond(o.if, S.vars); });
-      takeSnap('선택지');
-      mode = 'choice';
-      curOpts = opts;
-      stopTyping();
-      E.nextMark.classList.remove('on');
-      E.choices.innerHTML = '';
-      opts.forEach(function (o) { E.choices.appendChild(makeChoiceBtn(o)); });
-      E.choices.classList.remove('hidden');
-      E.choices.scrollTop = 0;
+      showChoices(c.choice.filter(function (o) { return !o.if || evalCond(o.if, S.vars); }), !!c.talkpick);
       return true;
+    }
+    if ('talkoffer' in c) { // 낮 이벤트 뒤 "조금 더 이야기하기" 제안 (자유 대화가 가능할 때만. 아니면 그냥 지나감)
+      var lst = LLMCore.ensureState(S.vars), tid = lst.last;
+      if (tid && LLM.state === 'ready' && chatReady() && LLMCore.remaining(S.vars, tid, LLM_ST()) > 0) { showTalkOffer(tid); return true; }
+      lst.last = '';
+      next(); return false;
     }
     if ('day' in c) { // 일차 전환 화면: {day:2, time:'아침', tip:'...'}
       S.vars.day = c.day; S.vars.time = c.time || '아침';
       updateHud();
+      refreshLlm();
       var dl = c.day + '일차 ' + S.vars.time;
       takeSnap(dl);
       pushLog({ name: '', color: '', text: '— ' + dl + ' —' });
@@ -448,6 +453,19 @@
     toTitle();
   }
 
+  function showChoices(opts, talkpick) {
+    takeSnap('선택지');
+    mode = 'choice';
+    curOpts = opts;
+    curPick = !!talkpick;
+    stopTyping();
+    E.nextMark.classList.remove('on');
+    E.choices.innerHTML = '';
+    opts.forEach(function (o) { E.choices.appendChild(makeChoiceBtn(o)); });
+    E.choices.classList.remove('hidden');
+    E.choices.scrollTop = 0;
+  }
+
   // 선택지 클릭
   function pick(o) {
     if (mode !== 'choice') return;
@@ -455,6 +473,13 @@
     pushLog({ name: '', color: '', text: '▶ ' + interp(o.text), choice: true });
     E.choices.classList.add('hidden');
     curOpts = [];
+    if (curPick && o.who && CHARACTERS[o.who]) { // 낮에 함께 보낼 히로인을 골랐다: 자유 대화 대상으로 기억
+      var lp = LLMCore.ensureState(S.vars);
+      lp.last = o.who;
+      if (lp.met.indexOf(o.who) < 0) lp.met.push(o.who);
+    }
+    curPick = false;
+    if (o.talk) { enterChat(o.talk, 'offer'); return; }
     if (o.cost) applySet({ gold: -o.cost });
     applySet(o.set);
     if (o.goto) { if (!gotoScene(o.goto)) return; } else { next(); }
@@ -463,6 +488,7 @@
 
   // 화면 탭: 타이핑 중이면 즉시 완성, 아니면 다음 줄
   function advance() {
+    if (mode === 'chat') { if (typing) finishTyping(); return; }
     if (mode === 'card' && modal === 0) { E.card.classList.add('hidden'); next(); run(); return; }
     if (mode !== 'text' || modal > 0) return;
     if (typing) { finishTyping(); return; }
@@ -629,6 +655,7 @@
   // ---------- 세이브 / 로드 ----------
   function startNew() {
     S = freshState();
+    chatReset();
     tvReset();
     closeAllOverlays();
     E.summary.classList.add('hidden');
@@ -644,6 +671,7 @@
     if (!sn || !STORY.scenes[sn.scene]) { toTitle(); return; }
     S = clone(sn);
     delete S.label;
+    chatReset();
     tvReset();
     closeAllOverlays();
     E.summary.classList.add('hidden');
@@ -1134,6 +1162,218 @@
     next(); run();
   }
 
+  // ---------- 자유 대화 (로컬 LLM) ----------
+  // 흐름: 진입(낮 이벤트 뒤 제안 'offer' / 메뉴 'menu') -> 입력 -> js/llm-core.js 가 PC 서버(/llm/chat)로 요청 -> 대사/표정/호감도 반영
+  // 하루 턴 수 / 호감도 상한은 story/llm-persona.js 의 settings. 사용량은 S.vars.llm 에 저장된다.
+  var CHE = {};  // 자유 대화 화면 요소 캐시
+  function LLM_ST() { return globalThis.LLM_PERSONA.settings; }
+  function chatReady() { return !!(globalThis.LLMCore && globalThis.LLM_PERSONA); }
+
+  // PC 서버/LLM 상태 확인 (PC 서버 표식이 없으면 요청 자체를 보내지 않는다 -> GitHub Pages 에서는 네트워크 오류 0)
+  function refreshLlm() {
+    if (!LLM.server || !chatReady()) return Promise.resolve();
+    return LLMCore.status().then(function (st) {
+      LLM.state = st.state; LLM.model = st.model || '';
+      updateMenuChat();
+    });
+  }
+  function updateMenuChat() {
+    var b = $('menu-chat'); if (!b) return;
+    var msg = {
+      none: 'PC 서버에서 실행할 때만 사용 가능',
+      checking: 'PC 서버 연결 확인 중…',
+      nollm: 'LLM 에 연결되지 않았어요 (탭하면 다시 확인)',
+      ready: '히로인과 자유롭게 이야기하기'
+    }[LLM.state];
+    b.innerHTML = '자유 대화<small></small>';
+    b.lastChild.textContent = msg;
+    b.classList.toggle('off', LLM.state !== 'ready');
+  }
+
+  // 오늘 대화할 수 있는 히로인 (낮에 함께 보낸 사람, 저녁부터는 전원)
+  function chatCandidates() {
+    var l = LLMCore.ensureState(S.vars), evening = /^(저녁|밤|황혼)$/.test(S.vars.time || '');
+    return HEROINES.filter(function (id) { return evening || l.met.indexOf(id) >= 0; });
+  }
+  function openChatPick() {
+    if (!chatReady() || LLM.state === 'none') return; // PC 서버가 아니면 메뉴 버튼의 안내 문구만 보여 준다
+    LLM.state = 'checking'; updateMenuChat();
+    refreshLlm().then(function () {
+      if (LLM.state !== 'ready') return;             // 연결 실패: 메뉴 버튼의 안내 문구가 바뀐다
+      closeOverlay(E.menu);
+      if (mode !== 'text' && mode !== 'choice') { toast('지금은 이야기를 나눌 수 없어요 (장면이 끝난 뒤에 시도해 주세요)', 'down'); return; }
+      var list = chatCandidates(), st = LLM_ST();
+      E.chatPickList.innerHTML = '';
+      E.chatPickNote.textContent = list.length ? '오늘 대화할 수 있는 사람이에요. (한 사람당 하루 ' + st.turnsPerDay + '번)' : '아직 오늘 만난 사람이 없어요. 낮에 누군가와 시간을 보낸 뒤 다시 와 주세요.';
+      list.forEach(function (id) {
+        var ch = CHARACTERS[id], rem = LLMCore.remaining(S.vars, id, st), v = (S.vars.aff && S.vars.aff[id]) || 0;
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'slot-btn chat-pick-btn'; b.dataset.who = id; b.disabled = rem <= 0;
+        var im = document.createElement('img'); im.alt = ''; setIcon(im, ch);
+        var tx = document.createElement('span'); tx.className = 'cp-tx';
+        var nm = document.createElement('strong'); nm.textContent = ch.name; nm.style.color = ch.color;
+        var sub = document.createElement('span'); sub.textContent = rem > 0 ? '남은 대화 ' + rem + '/' + st.turnsPerDay : '오늘은 충분히 이야기했어요';
+        var hh = document.createElement('em'); hh.className = 'hearts'; hh.innerHTML = heartsHtml(v);
+        tx.appendChild(nm); tx.appendChild(hh); tx.appendChild(sub);
+        b.appendChild(im); b.appendChild(tx);
+        b.addEventListener('click', function () { closeOverlay(E.chatPick); enterChat(id, 'menu'); });
+        E.chatPickList.appendChild(b);
+      });
+      openOverlay(E.chatPick);
+    });
+  }
+
+  function showTalkOffer(id) {
+    var rem = LLMCore.remaining(S.vars, id, LLM_ST());
+    var opts = [
+      { who: id, text: '조금 더 이야기해 볼까?', tag: '자유 대화 · 남은 ' + rem + '번', talk: id },
+      { text: '이만 저녁 준비를 하러 간다.' }
+    ];
+    showChoices(opts, false);        // 스냅샷은 last 가 남은 상태로 저장된다 (불러오면 다시 제안)
+    LLMCore.ensureState(S.vars).last = '';
+  }
+
+  function chatReset() {
+    if (CH) { try { if (CH.abort) CH.abort.abort(); } catch (e) { /* 무시 */ } clearInterval(CH.dots); }
+    CH = null;
+    if (E.game) E.game.classList.remove('chatting');
+    if (CHE.root) CHE.root.classList.add('hidden');
+    if (E.app) E.app.style.height = '';
+  }
+  function chatSay(text, face) {
+    var id = CH.id, ch = CHARACTERS[id];
+    if (face && S.sprites.center) S.sprites.center.face = face;
+    E.dialog.classList.remove('narr');
+    E.nametag.textContent = ch.name; E.nametag.style.color = ch.color; E.nametag.style.borderColor = ch.color;
+    E.nametag.classList.remove('hidden');
+    renderSprites(id);
+    startTyping(text);
+  }
+  function chatNote(text) { // 설명용 문장(오류 등): 이름표 없이 대사창에
+    E.dialog.classList.add('narr');
+    E.nametag.classList.add('hidden');
+    renderSprites(null);
+    startTyping(text);
+  }
+  function enterChat(id, entry) {
+    var P = globalThis.LLM_PERSONA, h = P.heroines[id], ch = CHARACTERS[id];
+    if (!h || !ch) { warn('자유 대화: 없는 히로인 ' + id); return; }
+    stopTyping();
+    CH = { id: id, entry: entry, busy: false, hist: [], lastText: '', token: 0, abort: null, dots: null, prevMode: mode, saved: clone(S.sprites), gainShown: false };
+    S.sprites = { left: null, center: { id: id, face: 'normal' }, right: null };
+    E.choices.classList.add('hidden');
+    E.dialog.classList.remove('hidden');
+    E.game.classList.add('chatting');
+    CHE.root.classList.remove('hidden');
+    CHE.input.value = ''; CHE.status.classList.add('hidden');
+    mode = 'chat';
+    var g = (h.greet && h.greet.length) ? h.greet[Math.floor(Math.random() * h.greet.length)] : { text: '…무슨 일이야?', face: 'normal' };
+    chatSay(g.text, g.face);
+    pushLog({ name: ch.name, color: ch.color, text: g.text });
+    updateChatBar();
+    chatViewport();
+    if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) CHE.input.focus(); // 폰에서는 키보드가 바로 뜨지 않게 자동 포커스 안 함
+  }
+  function updateChatBar() {
+    if (!CH) return;
+    var st = LLM_ST(), l = LLMCore.ensureState(S.vars), rem = LLMCore.remaining(S.vars, CH.id, st), g = l.gain[CH.id] || 0;
+    CHE.turns.textContent = '남은 대화 ' + rem + '/' + st.turnsPerDay + '  ·  오늘 ♥ +' + g + '/' + st.maxGainPerHeroinePerDay;
+    var done = rem <= 0;
+    CHE.input.disabled = done || CH.busy; CHE.send.disabled = done || CH.busy;
+    CHE.input.placeholder = done ? '오늘은 충분히 이야기했어요' : '말을 건네 보세요 (' + st.maxInputChars + '자)';
+    CHE.root.classList.toggle('done', done);
+    if (done && !CHE.status.classList.contains('err')) {
+      var nm = CHARACTERS[CH.id].name, lc = nm.charCodeAt(nm.length - 1) - 0xAC00;
+      CHE.msg.textContent = nm + ((lc >= 0 && lc % 28 !== 0) ? '과' : '와') + ' 오늘 나눌 수 있는 이야기는 여기까지예요. 내일 또 이야기해요.';
+      CHE.status.classList.remove('hidden', 'err'); CHE.retry.classList.add('hidden');
+    }
+    syncChatH();
+  }
+  function syncChatH() { E.game.style.setProperty('--chat-h', CHE.root.offsetHeight + 'px'); }
+  // 모바일 키보드: visualViewport 높이에 맞춰 앱 높이를 줄여서 입력창이 키보드에 가려지지 않게 한다
+  function chatViewport() {
+    if (!CH || !window.visualViewport) { syncChatH(); return; }
+    E.app.style.height = Math.round(window.visualViewport.height) + 'px';
+    window.scrollTo(0, 0);
+    syncChatH();
+  }
+  function setThinking(on) {
+    clearInterval(CH.dots);
+    if (!on) return;
+    var n = 0, ch = CHARACTERS[CH.id];
+    stopTyping();
+    E.dialog.classList.remove('narr');
+    E.nametag.textContent = ch.name; E.nametag.style.color = ch.color; E.nametag.style.borderColor = ch.color;
+    E.nametag.classList.remove('hidden');
+    E.nextMark.classList.remove('on');
+    var tick = function () { E.text.textContent = '…생각 중' + '.'.repeat(n++ % 4); };
+    tick();
+    CH.dots = setInterval(tick, 380);
+  }
+  function sendChat(again) {
+    if (!CH || CH.busy) return;
+    var st = LLM_ST();
+    var text = String(again || CHE.input.value).trim().slice(0, st.maxInputChars);
+    if (!text || LLMCore.remaining(S.vars, CH.id, st) <= 0) return;
+    CH.busy = true; CH.lastText = text;
+    CHE.status.classList.add('hidden'); CHE.status.classList.remove('err');
+    updateChatBar();
+    setThinking(true);
+    var tok = ++CH.token, ac = new AbortController(), id = CH.id;
+    CH.abort = ac;
+    var c = { id: id, day: S.vars.day || 1, time: S.vars.time || '', aff: (S.vars.aff || {})[id] || 0, ev: (S.vars.ev || {})[id] || 0, flags: S.vars.flag || {}, hist: CH.hist, text: text, where: CH.entry };
+    LLMCore.ask(globalThis.LLM_PERSONA, c, ac.signal).then(function (res) {
+      if (!CH || tok !== CH.token) return;
+      onChatReply(text, res);
+    }, function (e) {
+      if (!CH || tok !== CH.token || (e && e.code === 'aborted')) return;
+      onChatError(e);
+    });
+  }
+  function onChatReply(text, res) {
+    var id = CH.id, st = LLM_ST(), ch = CHARACTERS[id];
+    setThinking(false);
+    CH.busy = false;
+    var l = LLMCore.ensureState(S.vars);
+    l.used[id] = (l.used[id] || 0) + 1;                       // 성공한 턴만 센다
+    var delta = LLMCore.capAffection(S.vars, id, res.affection, st);
+    chatSay(res.reply, res.face);
+    if (delta) applySet({ ['aff.' + id]: delta });            // 토스트 + 하트 연출은 applySet 이 처리
+    else if (res.affection > 0) toast('오늘 대화로 올릴 수 있는 호감도는 여기까지예요', '');
+    CH.hist.push({ user: text, assistant: JSON.stringify({ reply: res.reply, face: res.face, affection: res.affection }) });
+    pushLog({ name: '', color: '', text: '▶ ' + text, choice: true });
+    pushLog({ name: ch.name, color: ch.color, text: res.reply });
+    CHE.input.value = '';
+    takeSnap('자유 대화');                                    // 턴 사용량/호감도가 저장되도록 (불러오기로 되돌려 파밍 방지)
+    updateChatBar();
+  }
+  function onChatError(e) {
+    setThinking(false);
+    CH.busy = false;
+    var msg = LLMCore.errorText(e);
+    chatNote('…(' + msg + ')');
+    CHE.msg.textContent = msg;
+    CHE.status.classList.remove('hidden'); CHE.status.classList.add('err');
+    CHE.retry.classList.remove('hidden');
+    if (e && (e.code === 'llm_unreachable' || e.code === 'network' || e.code === 'no_server')) refreshLlm();
+    updateChatBar();
+  }
+  function endChat() {
+    if (!CH) return;
+    var entry = CH.entry, saved = CH.saved, prev = CH.prevMode;
+    stopTyping();
+    chatReset();
+    S.sprites = saved;
+    renderSprites(null);
+    E.nametag.classList.add('hidden');
+    pushLog({ name: '', color: '', text: '— 자유 대화를 마쳤다 —' });
+    takeSnap('자유 대화 후');
+    if (entry === 'offer') { mode = 'text'; next(); run(); return; }
+    // 메뉴에서 시작했으면 원래 보던 줄을 그대로 다시 보여 준다
+    mode = prev; replay = true;
+    try { run(); } finally { replay = false; }
+  }
+
   // ---------- 초기화 ----------
   function init() {
     ['title', 'game', 'bg', 'hud', 'dialog', 'nametag', 'text', 'choices', 'toasts', 'menu', 'slots', 'backlog',
@@ -1149,6 +1389,9 @@
     E.backlogList = $('backlog-list');
     E.summaryTitle = $('summary-title'); E.summaryNote = $('summary-note'); E.summaryBody = $('summary-body');
     E.confirmMsg = $('confirm-msg'); E.confirmYes = $('confirm-yes');
+    E.app = $('app'); E.chatPick = $('chat-pick'); E.chatPickList = $('chat-pick-list'); E.chatPickNote = $('chat-pick-note');
+    CHE.root = $('chat'); CHE.turns = $('chat-turns'); CHE.status = $('chat-status'); CHE.msg = $('chat-msg');
+    CHE.retry = $('chat-retry'); CHE.input = $('chat-input'); CHE.send = $('chat-send');
     E.sprites = {};
     POS.forEach(function (p) { E.sprites[p] = document.querySelector('.sprite[data-pos="' + p + '"]'); });
 
@@ -1171,6 +1414,20 @@
     $('tv-shop-start').addEventListener('click', function () { TVE.shop.classList.add('hidden'); tvNextCustomer(); });
     $('tv-sum-btn').addEventListener('click', tvClose);
     $('tv-upg-next').addEventListener('click', closeUpgrades);
+
+    // 자유 대화 (로컬 LLM): index.html 에 PC 서버 표식(<meta name="inn-server">)이 있을 때만 서버에 물어본다
+    CHE.root.addEventListener('submit', function (ev) { ev.preventDefault(); sendChat(); });
+    $('chat-end').addEventListener('click', endChat);
+    CHE.retry.addEventListener('click', function () { sendChat(CH && CH.lastText); });
+    $('chat-pick-close').addEventListener('click', function () { closeOverlay(E.chatPick); });
+    $('menu-chat').addEventListener('click', openChatPick);
+    if (chatReady()) CHE.input.maxLength = LLM_ST().maxInputChars;
+    LLM.server = !!document.querySelector('meta[name="inn-server"]') && chatReady();
+    LLM.state = LLM.server ? 'checking' : 'none';
+    updateMenuChat();
+    if (LLM.server) refreshLlm();
+    if (window.visualViewport) { window.visualViewport.addEventListener('resize', chatViewport); window.visualViewport.addEventListener('scroll', chatViewport); }
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(function () { if (CH) syncChatH(); }).observe(CHE.root);
 
     // 타이틀 문구
     $('title-name').textContent = STORY.title || '';
@@ -1212,7 +1469,7 @@
 
     // 게임 화면 탭 = 진행
     E.game.addEventListener('click', function (ev) {
-      if (ev.target.closest('button')) return;
+      if (ev.target.closest('button, input, form')) return;
       advance();
     });
 
@@ -1255,6 +1512,7 @@
   Object.defineProperty(VN, 'state', { get: function () { return S; } });
   Object.defineProperty(VN, 'mode', { get: function () { return mode; } });
   Object.defineProperty(VN, 'options', { get: function () { return curOpts; } });
+  Object.defineProperty(VN, 'llm', { get: function () { return { state: LLM.state, server: LLM.server, chat: CH ? { id: CH.id, entry: CH.entry, busy: CH.busy, hist: CH.hist.length } : null, st: S && S.vars && S.vars.llm }; } });
   Object.defineProperty(VN, 'endings', { get: function () { return readEndings(); } });
   // 영업 상태 (테스트/디버그용): 단계, 손님 순번, 고른 재료, 결과 목록
   Object.defineProperty(VN, 'tavern', { get: function () { return TV ? { phase: TV.phase, idx: TV.idx, total: TV.queue.length, cur: TV.cur && TV.cur.who, order: TV.cur && TV.cur.order, sel: TV.sel.slice(), results: TV.results.map(function (r) { return { who: r.who, result: r.result, dish: r.dish, gold: r.gold, aff: r.aff, rep: r.rep, fav: r.fav, hate: r.hate }; }), repSum: TV.repSum } : null; } });

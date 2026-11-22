@@ -416,3 +416,34 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   .tv-slot { width: 54px; height: 54px; }
   #tv-board-tags { display: none; }
 }
+
+/* ================= 자유 대화 (로컬 LLM) ================= */
+.btn small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; opacity: .8; }
+.btn.off { opacity: .6; }
+#chat {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0;
+  padding: 8px 12px calc(10px + var(--safe-b)); background: rgba(8, 10, 28, .97); border-top: 1px solid var(--line);
+}
+#chat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; font-size: 13px; color: var(--accent); }
+#chat-turns { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-mini {
+  flex: none; min-height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px;
+  background: rgba(255, 255, 255, .1); border: 1px solid var(--line);
+}
+.chat-mini:active { background: rgba(255, 255, 255, .22); }
+#chat-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; padding: 6px 10px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: rgba(255, 255, 255, .08); }
+#chat-status.err { color: #ffb4b4; background: rgba(255, 90, 90, .14); }
+#chat-row { display: flex; gap: 8px; }
+#chat-input {
+  flex: 1; min-width: 0; min-height: 48px; padding: 0 14px; border-radius: 14px; font-size: 16px; /* 16px 미만이면 iOS 가 확대함 */
+  color: var(--text); background: rgba(255, 255, 255, .1); border: 1px solid var(--line); outline: none;
+}
+#chat-input:focus { border-color: var(--accent); }
+#chat-input:disabled { opacity: .5; }
+#chat-send { flex: none; width: 88px; min-height: 48px; margin-top: 0; padding: 0 8px; }
+#game.chatting #menu-btn, #game.chatting #next-mark { display: none; }
+#game.chatting #dialog { bottom: var(--chat-h, 118px); min-height: 22%; padding-bottom: 14px; }
+.chat-pick-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
+.chat-pick-btn img { flex: none; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--line); background: rgba(255, 255, 255, .06); }
+.chat-pick-btn .cp-tx { display: flex; flex-direction: column; gap: 2px; }
+.chat-pick-btn strong { font-size: 17px; }

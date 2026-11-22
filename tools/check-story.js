@@ -19,7 +19,7 @@ const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
 const scenes = STORY.scenes;
 const edges = {};
-const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades'];
+const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer'];
 const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending'];
 const files = new Set();
 let lines = 0, choices = 0;
@@ -87,7 +87,7 @@ for (const [id, cmds] of Object.entries(scenes)) {
   const sets = [];
   cmds.forEach((c) => { if (c.set) sets.push(c.set); if (c.put) sets.push(c.put); (c.choice || []).forEach((o) => o.set && sets.push(o.set)); });
   sets.forEach((s) => Object.keys(s).forEach((k) => {
-    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$/);
+    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$/);
     if (!m) wn(`[${id}] 변수 이름 확인: ${k}`);
     else if (m[2] && !CHARACTERS[m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
   }));
@@ -107,6 +107,46 @@ seen.forEach((id) => scenes[id].forEach((c) => { if ('ending' in c) reachedEndin
   if (!CHARACTERS[h]) err(`HEROINES 의 캐릭터 정의 없음: ${h}`);
 });
 (ENDINGS || []).forEach((e) => { if (e.heroine && !CHARACTERS[e.heroine]) err(`ENDINGS ${e.id}: 없는 heroine ${e.heroine}`); });
+
+// ---------- 자유 대화(로컬 LLM) 페르소나 검사 (story/llm-persona.js) ----------
+const PERSONA = ctx.LLM_PERSONA, LLMCore = ctx.LLMCore;
+if (!PERSONA || !LLMCore) err('story/llm-persona.js 또는 js/llm-core.js 가 index.html 에서 로드되지 않음');
+else {
+  const st = PERSONA.settings;
+  ['turnsPerDay', 'maxGainPerHeroinePerDay', 'maxGainPerDay', 'maxLossPerHeroinePerDay', 'historyTurns', 'temperature', 'maxTokens', 'maxReplyChars', 'maxInputChars', 'timeoutMs'].forEach((k) => { if (!(typeof st[k] === 'number' && st[k] > 0)) err(`LLM_PERSONA.settings.${k} 는 양수여야 함`); });
+  if (!Array.isArray(st.tierLines) || st.tierLines.length !== 2 || st.tierLines[0] >= st.tierLines[1]) err('LLM_PERSONA.settings.tierLines 는 [작은값, 큰값]');
+  ['world', 'player', 'format'].forEach((k) => { if (!PERSONA.common[k]) err(`LLM_PERSONA.common.${k} 없음`); });
+  if (!Array.isArray(PERSONA.common.rules) || PERSONA.common.rules.length < 5) err('LLM_PERSONA.common.rules 가 너무 적음');
+  const flagsInStory = new Set();
+  Object.values(scenes).forEach((cmds) => cmds.forEach((c) => { [c.set, c.put].forEach((x) => x && Object.keys(x).forEach((k) => { const m = k.match(/^flag\.(\w+)$/); if (m) flagsInStory.add(m[1]); })); (c.choice || []).forEach((o) => o.set && Object.keys(o.set).forEach((k) => { const m = k.match(/^flag\.(\w+)$/); if (m) flagsInStory.add(m[1]); })); }));
+  Object.keys(PERSONA.flagNotes).forEach((f) => { if (!flagsInStory.has(f)) err(`LLM_PERSONA.flagNotes 의 flag 가 스토리에 없음: ${f}`); });
+  flagsInStory.forEach((f) => { if (!PERSONA.flagNotes[f] && !/^partner_/.test(f)) wn(`LLM_PERSONA.flagNotes 에 설명이 없는 flag: ${f}`); });
+  for (let d = 1; d <= 5; d++) if (!PERSONA.days[d]) err(`LLM_PERSONA.days.${d} 없음`);
+  const lens = [];
+  (HEROINES || []).forEach((h) => {
+    const p = PERSONA.heroines[h];
+    if (!p) return err(`LLM_PERSONA.heroines.${h} 없음`);
+    if (p.name !== (CHARACTERS[h] || {}).name) err(`LLM_PERSONA ${h}: name 이 CHARACTERS 와 다름`);
+    ['call', 'who', 'likesExtra', 'dislikesExtra'].forEach((k) => { if (!p[k]) err(`LLM_PERSONA ${h}: ${k} 없음`); });
+    if (!(p.speech || []).length || p.speech.length < 3 || p.speech.length > 6) err(`LLM_PERSONA ${h}: speech 는 3~6개`);
+    if ((p.tiers || []).length !== 3) err(`LLM_PERSONA ${h}: tiers 는 3개(경계/호의/설렘)`);
+    if ((p.events || []).length !== 4) err(`LLM_PERSONA ${h}: events 는 4개 (낮 이벤트 1~4)`);
+    for (let d = 1; d <= 5; d++) if (!(p.reveal || {})[d]) err(`LLM_PERSONA ${h}: reveal.${d} 없음`);
+    (p.greet || []).forEach((g) => { if (!CHARACTERS[h].faces[g.face]) err(`LLM_PERSONA ${h}: greet 의 없는 표정 ${g.face}`); });
+    if (!(p.greet || []).length) err(`LLM_PERSONA ${h}: greet 없음`);
+    const cu = TAVERN.customers[h];
+    if (!cu || !cu.fav || !TAVERN.recipes[cu.fav]) err(`LLM_PERSONA ${h}: story/tavern.js 에 히로인 최애 레시피가 없음`);
+    for (let d = 1; d <= 5; d++) {
+      const msgs = LLMCore.buildMessages(PERSONA, { id: h, day: d, time: d % 2 ? '저녁' : '낮', aff: d * 3, ev: Math.min(4, d), flags: { seal_patch: true }, hist: [], text: '안녕', where: 'menu' });
+      const sys = msgs[0].content;
+      lens.push(sys.length);
+      if (cu && cu.fav && !sys.includes(TAVERN.recipes[cu.fav].name)) err(`LLM_PERSONA ${h}: 프롬프트에 최애 메뉴가 안 들어감`);
+      if (!sys.includes(p.reveal[d])) err(`LLM_PERSONA ${h}: ${d}일차 비밀 공개 범위가 프롬프트에 안 들어감`);
+      if (/undefined|\[object/.test(sys)) err(`LLM_PERSONA ${h}: ${d}일차 프롬프트에 undefined`);
+    }
+  });
+  if (lens.length) console.log(`자유 대화 시스템 프롬프트 길이: ${Math.min(...lens)}~${Math.max(...lens)}자 (히로인 4명 x 5일)`);
+}
 
 // 이미지 파일
 Object.entries(CHARACTERS).forEach(([id, c]) => { if (c.icon) { files.add(c.icon); if (!fs.existsSync(path.join(root, c.icon))) err(`얼굴 썸네일 없음: ${id} -> ${c.icon}`); } });

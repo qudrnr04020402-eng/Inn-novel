@@ -42,6 +42,18 @@
 - 골드가 모자라 유료 선택지가 잠겨도 무료 선택지는 항상 남습니다. 큰 돈은 "마음에 드는 사람을 위한 선물"에 쓰면 효율이 좋습니다.
 - 평판이 -3 이하가 되면 배드 엔딩이니, 욕심을 부리는 선택은 몇 번까지만.
 
+## 자유 대화 (PC의 로컬 LLM, 선택 기능)
+
+PC에서 돌아가는 로컬 LLM(Ollama / LM Studio)에게 히로인을 연기시켜서, 폰에서 히로인과 **자유롭게 대화(티키타카)** 할 수 있습니다. 대화 내용은 내 PC 밖으로 나가지 않습니다.
+설치와 사용법은 **[pc-server/README.md](pc-server/README.md)** (초보자용, 단계별)를 보세요.
+
+- **PC 서버(`pc-server/start.bat`)로 연 게임에서만** 켜집니다. GitHub Pages(https)에서는 PC의 LLM 주소를 부를 수 없어서, PC가 게임 파일까지 직접 서빙합니다. GitHub Pages 나 오프라인 버전은 기존 그대로 동작하고, 메뉴의 "자유 대화"에 `PC 서버에서 실행할 때만 사용 가능` 이라고만 표시됩니다. (이때 게임은 `/llm/` 으로 요청을 보내지 않습니다.)
+- **들어가는 길**: ① 낮에 히로인과 시간을 보내는 이벤트가 끝나면 "조금 더 이야기해 볼까?" 선택지가 나옵니다(5일차 출정 전 포함). ② 메뉴 -> "자유 대화"로 오늘 만난 히로인(저녁부터는 전원)을 골라 시작.
+- **규칙**: 히로인 한 명과 하루 6번까지. 호감도는 대화로 히로인당 하루 최대 +3, 전체 합쳐 하루 최대 +4 (깎이는 건 -4까지)라서 대화만으로 호감도를 쌓을 수 없고 엔딩 밸런스는 그대로입니다. 오류로 실패한 턴은 세지 않습니다. 하루 사용량은 세이브에 들어가므로 불러오기로 되돌려도 파밍할 수 없습니다.
+- **화면**: 하단 입력창 + 보내기, 답은 기존 대사창에 타이핑 효과, 표정 즉시 교체, 호감도가 오르면 하트 연출, "대화 끝내기", "…생각 중" 표시, 오류 때는 친절한 문구와 "다시 시도" 버튼. 모바일 키보드가 올라와도 입력창이 가려지지 않게 `visualViewport` 에 맞춥니다.
+- **프롬프트 / 말투 수정**: `story/llm-persona.js` 한 파일에 모두 있습니다 (공통 지시, 히로인별 성격/말투 예시/호칭, 일차별 비밀 공개 범위, 호감도 구간별 태도, 하루 턴 수/호감도 상한/temperature 등). 최애/싫어하는 메뉴는 `story/tavern.js` 의 정의를 자동으로 읽습니다. 모델은 `{"reply","face","affection"}` JSON 한 줄로 답하도록 지시받고, 형식이 깨져도(코드블록, 잡문, 잘린 JSON, 일반 문장, `<think>` 블록, 영어 응답) 최대한 살려서 표시합니다.
+- 검증: `python3 pc-server/test_inn_server.py`(서버), `node tools/test-llm-core.js`(파서/프롬프트/상한), `node tools/test-llm.js`(Playwright 통합, 가짜 LLM `pc-server/fake_llm.py` 사용).
+
 ## 저녁 영업 데이터 작성법 (`story/tavern.js`)
 
 코드를 몰라도 글자와 숫자만 바꾸면 영업을 고칠 수 있습니다. 구성은 위에서 아래로 `rules` -> `tags` -> `ingredients` -> `recipes` -> `upgrades` -> `customers` -> `days` 입니다.
@@ -120,7 +132,8 @@ manifest.webmanifest    PWA 매니페스트
 sw.js                   서비스 워커 (오프라인 캐시, VERSION 으로 캐시 갱신)
 css/style.css           모든 스타일
 js/tavern-core.js       영업 규칙(판정/보상 계산, DOM 무관 순수 함수). 엔진과 검사 시뮬레이션이 같이 사용
-js/engine.js            엔진 (보통 수정할 필요 없음). 영업 화면(장보기/재료 고르기/결산/업그레이드/메뉴판)도 여기
+js/engine.js            엔진 (보통 수정할 필요 없음). 영업 화면(장보기/재료 고르기/결산/업그레이드/메뉴판), 자유 대화 화면도 여기
+js/llm-core.js          자유 대화 핵심 로직(프롬프트 조립, 응답 파서, 하루 턴/호감도 상한, PC 서버 호출). DOM 무관
 story/
   characters.js         캐릭터 정의: 이름, 이름 색, 표정별 이미지 경로
   backgrounds.js        배경 정의: 배경 id -> 이미지 경로
@@ -128,6 +141,7 @@ story/
   day1.js ~ day5.js     일차별 스크립트 (아침 / 히로인 이벤트 / 저녁 / 밤)   <- 여기를 고쳐서 이야기를 늘립니다
   tavern.js             저녁 영업 데이터: 규칙 수치, 재료, 레시피, 손님(반응 대사), 일차별 손님/주문, 업그레이드  <- 영업 내용은 여기만 고치면 됨
   endings.js            엔딩 6종 정의(ENDINGS) + 엔딩 판정(end_judge) + 엔딩 장면
+  llm-persona.js        자유 대화(로컬 LLM) 설정: 공통 지시, 히로인별 성격/말투/비밀 공개 범위, 턴/호감도 상한   <- 말투는 여기만 고치면 됨
 assets/
   char/<id>/{normal,smile,angry,shy,surprised,sad}.webp  히로인 일러스트 (투명 배경 WebP, 684x1000 상반신)
   char/<id>/face.webp                                     히로인 얼굴 동그라미용 썸네일 (256x256)
@@ -135,10 +149,13 @@ assets/
   char/{baron,tobi,greta,marta,fin,chief}/               영업 단골/손님 (같은 6표정 규격)
   tavern/*.svg                                            재료 아이콘 8종 (tools/gen-tavern-art.js 로 재생성)
   bg/*.svg                                                배경 (720x1280)
+pc-server/              PC 서버(게임 서빙 + 로컬 LLM 중계): inn_server.py, start.bat, config.json, fake_llm.py(테스트용 가짜 LLM), README.md(설치 안내)
 icons/                  앱 아이콘 (icon.svg, icon-192.png, icon-512.png)
 tools/
   check-story.js        스크립트 정적 검사 + 브라우저 없는 시뮬레이션(엔딩 분포)
   test-play.js          Playwright 자동 플레이 테스트 (히로인별/노멀/배드/무작위, 저장/로드, 엔딩 목록, 스크린샷)
+  test-llm.js           자유 대화 Playwright 통합 테스트 (PC 서버 + 가짜 LLM 을 직접 띄움)
+  test-llm-core.js      자유 대화 파서/프롬프트/상한 단위 테스트 (node)
   process-sprites.py    히로인 원본 PNG -> 배경 제거(rembg isnet-anime) + 투명 WebP + 얼굴 썸네일 변환기
   gen-chars.js          손님(및 옛 히로인 임시) SVG 일러스트 생성기 (머리색/귀/꼬리/표정을 파라미터로 그림)
   gen-tavern-art.js     재료 아이콘 SVG 생성기

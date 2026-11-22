@@ -57,7 +57,7 @@ Object.assign(STORY.scenes, {
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
     { narr: '해 질 녘까지 몇 시간이 남았다. 동굴로 가는 길에 가장 곁에 있어 주었으면 하는 사람은 누구일까?' },
     { narr: '이 선택이 결전의 분위기를 바꿀 것이다. 그리고 마음도.' },
-    { choice: [
+    { talkpick: true, choice: [
       { who: 'erion', text: '"에리온, 마지막으로 곁에서 준비를 도울게요."', set: { 'aff.erion': 2, 'flag.partner_erion': true }, goto: 'd5_with_erion' },
       { who: 'kaela', text: '"카엘라, 같이 앞에서 길을 열어요."', set: { 'aff.kaela': 2, 'flag.partner_kaela': true }, goto: 'd5_with_kaela' },
       { who: 'miho', text: '"미호, 같이 정찰하면서 가요."', set: { 'aff.miho': 2, 'flag.partner_miho': true }, goto: 'd5_with_miho' },
@@ -112,6 +112,7 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 출정 전 마지막 영업 =================
   // 저녁 영업(story/tavern.js 의 day5) -> 동굴 결전
   d5_tavern: [
+    { talkoffer: true },   // 자유 대화 제안 (PC 서버 + 로컬 LLM 일 때만)
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '출발 시각이 가까워졌다. 하지만 식당에는 대피한 마을 사람들이, 그리고 마지막 한 잔을 청하는 동료들이 모여 있다.' },
     { narr: '\'은빛 여우관\'의 주인으로서 하는 마지막 영업이다. 주문을 받고, 재료를 고르고, 한 잔씩 내었다.' },

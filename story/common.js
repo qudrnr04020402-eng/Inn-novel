@@ -13,7 +13,8 @@ window.STORY = {
     gold: 80, rep: 0, day: 1, time: '아침',
     aff: { erion: 0, kaela: 0, miho: 0, lia: 0 },   // 호감도
     ev: { erion: 0, kaela: 0, miho: 0, lia: 0 },    // 각 히로인과 낮 이벤트를 본 횟수
-    flag: {}
+    flag: {},
+    llm: { day: 0, used: {}, gain: {}, loss: {}, last: '', met: [] }   // 자유 대화(로컬 LLM) 하루 사용량 (story/llm-persona.js)
   },
   scenes: {}
 };
@@ -37,7 +38,7 @@ Object.assign(STORY.scenes, {
   // 각 히로인을 "N번째로 고를 때" dayN.js 의 이벤트 N 이 열립니다. (매일 같은 사람을 고르면 1~4일차 이벤트가 순서대로)
   // 옵션 글은 "다음에 볼 이벤트"를 미리 보여 주는 한 줄입니다.
   pick: [
-    { choice: [
+    { talkpick: true, choice: [
       // ----- 에리온 -----
       { who: 'erion', if: 'ev.erion==0', text: '마당 구석 벤치에서 푸른 책을 펼쳐 놓고 먼 산을 보고 있다.', goto: 'erion_1' },
       { who: 'erion', if: 'ev.erion==1', text: '주방 앞을 서성인다. 달콤한 냄새가 나는 쪽을 자꾸 흘끔거린다.', goto: 'erion_2' },
@@ -81,6 +82,7 @@ Object.assign(STORY.scenes, {
 
   // 낮 이벤트가 끝나면 날짜에 맞는 저녁으로 이동
   after_pick: [
+    { talkoffer: true },   // PC 서버 + 로컬 LLM 이 있을 때만 "조금 더 이야기하기" 제안 (없으면 그냥 지나감)
     { if: 'day==1', goto: 'd1_evening' },
     { if: 'day==2', goto: 'd2_evening' },
     { if: 'day==3', goto: 'd3_evening' },

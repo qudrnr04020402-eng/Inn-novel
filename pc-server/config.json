@@ -1,0 +1,7 @@
+{
+  "preset": "ollama",
+  "base_url": "",
+  "model": "",
+  "port": 8080,
+  "timeout": 120
+}

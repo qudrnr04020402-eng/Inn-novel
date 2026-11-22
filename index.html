@@ -60,6 +60,16 @@
       <div id="next-mark">▼</div>
     </div>
 
+    <!-- 자유 대화(로컬 LLM): PC 서버에서 열었을 때만 사용됨 -->
+    <form id="chat" class="hidden" autocomplete="off">
+      <div id="chat-top"><span id="chat-turns"></span><button id="chat-end" class="chat-mini" type="button">대화 끝내기</button></div>
+      <div id="chat-status" class="hidden"><span id="chat-msg"></span><button id="chat-retry" class="chat-mini" type="button">다시 시도</button></div>
+      <div id="chat-row">
+        <input id="chat-input" type="text" maxlength="80" enterkeyhint="send" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="말을 건네 보세요">
+        <button id="chat-send" class="btn primary" type="submit">보내기</button>
+      </div>
+    </form>
+
     <!-- 저녁 영업: 장보기 / 재료 고르기 / 하루 결산 / 밤의 업그레이드 / 메뉴판 / 레시피 발견 -->
     <div id="tv-prog" class="hidden"></div>
     <div id="tavern" class="hidden">
@@ -174,9 +184,20 @@
       <button id="menu-save" class="btn" type="button">저장하기</button>
       <button id="menu-load" class="btn" type="button">불러오기</button>
       <button id="menu-log" class="btn" type="button">백로그 (지난 대사)</button>
+      <button id="menu-chat" class="btn off" type="button">자유 대화<small>PC 서버에서 실행할 때만 사용 가능</small></button>
       <button id="menu-restart" class="btn" type="button">처음부터</button>
       <button id="menu-title" class="btn" type="button">타이틀로</button>
       <button id="menu-close" class="btn primary" type="button">닫기</button>
+    </div>
+  </section>
+
+  <!-- 자유 대화 상대 고르기 -->
+  <section id="chat-pick" class="overlay hidden">
+    <div class="panel">
+      <h2>자유 대화</h2>
+      <p id="chat-pick-note"></p>
+      <div id="chat-pick-list"></div>
+      <button id="chat-pick-close" class="btn" type="button">닫기</button>
     </div>
   </section>
 
@@ -222,6 +243,8 @@
 <script src="story/day4.js"></script>
 <script src="story/day5.js"></script>
 <script src="story/endings.js"></script>
+<script src="story/llm-persona.js"></script>
+<script src="js/llm-core.js"></script>
 <script src="js/tavern-core.js"></script>
 <script src="js/engine.js"></script>
 </body>
