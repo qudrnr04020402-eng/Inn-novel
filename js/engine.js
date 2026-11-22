@@ -181,6 +181,11 @@
     }
   }
 
+  // 얼굴 동그라미 이미지 설정: 썸네일(icon)이 있으면 그대로(꽉 채움), 없으면 CSS 로 얼굴 부분만 잘라 씀
+  function setIcon(im, ch, face) {
+    if (ch.icon) { im.src = ch.icon; im.classList.add('thumb'); }
+    else im.src = (face && ch.faces[face]) || ch.faces.normal || ch.faces[Object.keys(ch.faces)[0]];
+  }
   function faceUrl(id, face) {
     var c = CHARACTERS[id];
     if (!c) { warn('없는 캐릭터: ' + id); return ''; }
@@ -190,6 +195,8 @@
   }
   // speaker: 말하는 캐릭터 id (그 외는 어둡게). null 이면 모두 밝게
   function renderSprites(speaker) {
+    var cnt = POS.filter(function (q) { return S.sprites[q]; }).length;
+    E.sprites.left.parentNode.setAttribute('data-n', cnt);
     POS.forEach(function (p) {
       var img = E.sprites[p], s = S.sprites[p];
       if (!s) { img.classList.remove('on'); return; }
@@ -481,7 +488,7 @@
       pic.className = 'who-pic';
       pic.style.borderColor = ch.color;
       var im = document.createElement('img');
-      im.alt = ''; im.src = ch.faces.normal || ch.faces[Object.keys(ch.faces)[0]];
+      im.alt = ''; setIcon(im, ch);
       pic.appendChild(im);
       var head = document.createElement('span');
       head.className = 'who-head';
@@ -561,7 +568,7 @@
     E.endCount.textContent = '획득한 엔딩 ' + got + ' / ' + total;
     var ch = CHARACTERS[def.heroine];
     E.endPic.classList.toggle('hidden', !ch);
-    if (ch) E.endPic.src = ch.faces[def.face] || ch.faces.smile || ch.faces[Object.keys(ch.faces)[0]];
+    if (ch) { E.endPic.classList.toggle('thumb', !!ch.icon); E.endPic.src = ch.icon || ch.faces[def.face] || ch.faces.smile || ch.faces[Object.keys(ch.faces)[0]]; }
     var h = '';
     h += '<div class="sum-row"><span>골드 / 평판</span><b>' + (S.vars.gold || 0) + ' G / ' + (S.vars.rep || 0) + '</b></div>';
     Object.keys(CHARACTERS).forEach(function (cid) {
@@ -585,7 +592,7 @@
       var ch = CHARACTERS[d.heroine];
       var pic = document.createElement('span');
       pic.className = 'end-pic';
-      if (have && ch) { var im = document.createElement('img'); im.alt = ''; im.src = ch.faces[d.face] || ch.faces.smile; pic.appendChild(im); pic.style.borderColor = ch.color; }
+      if (have && ch) { var im = document.createElement('img'); im.alt = ''; setIcon(im, ch, d.face || 'smile'); pic.appendChild(im); pic.style.borderColor = ch.color; }
       else pic.textContent = have ? '★' : '?';
       var tx = document.createElement('span');
       tx.className = 'end-tx';
@@ -1064,7 +1071,7 @@
       var c = CHARACTERS[r.who] || {};
       var w = tvEl('div', 'tv-res r-' + r.result);
       w.title = (c.name || r.who) + ': ' + RES_LABEL[r.result];
-      var pic = tvEl('span', 'tv-res-pic'); var im = document.createElement('img'); im.alt = ''; im.src = (c.faces || {}).normal || ''; pic.appendChild(im);
+      var pic = tvEl('span', 'tv-res-pic'); var im = document.createElement('img'); im.alt = ''; if (c.icon) setIcon(im, c); else im.src = (c.faces || {}).normal || ''; pic.appendChild(im);
       w.appendChild(pic);
       w.appendChild(tvEl('i', null, RES_ICON[r.result]));
       w.appendChild(tvEl('small', null, (c.name || r.who)));
@@ -1188,6 +1195,7 @@
     Object.keys(CHARACTERS).forEach(function (id) {
       var f = CHARACTERS[id].faces;
       Object.keys(f).forEach(function (k) { new Image().src = f[k]; });
+      if (CHARACTERS[id].icon) new Image().src = CHARACTERS[id].icon;
     });
     Object.keys(BACKGROUNDS).forEach(function (k) { new Image().src = BACKGROUNDS[k]; });
 

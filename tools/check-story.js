@@ -109,6 +109,7 @@ seen.forEach((id) => scenes[id].forEach((c) => { if ('ending' in c) reachedEndin
 (ENDINGS || []).forEach((e) => { if (e.heroine && !CHARACTERS[e.heroine]) err(`ENDINGS ${e.id}: 없는 heroine ${e.heroine}`); });
 
 // 이미지 파일
+Object.entries(CHARACTERS).forEach(([id, c]) => { if (c.icon) { files.add(c.icon); if (!fs.existsSync(path.join(root, c.icon))) err(`얼굴 썸네일 없음: ${id} -> ${c.icon}`); } });
 Object.entries(CHARACTERS).forEach(([id, c]) => Object.entries(c.faces).forEach(([f, p]) => {
   files.add(p); if (!fs.existsSync(path.join(root, p))) err(`캐릭터 이미지 없음: ${id}.${f} -> ${p}`);
 }));

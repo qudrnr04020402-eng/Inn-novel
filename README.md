@@ -129,7 +129,9 @@ story/
   tavern.js             저녁 영업 데이터: 규칙 수치, 재료, 레시피, 손님(반응 대사), 일차별 손님/주문, 업그레이드  <- 영업 내용은 여기만 고치면 됨
   endings.js            엔딩 6종 정의(ENDINGS) + 엔딩 판정(end_judge) + 엔딩 장면
 assets/
-  char/<id>/{normal,smile,angry,shy,surprised,sad}.svg   히로인 일러스트 (400x600 상반신)
+  char/<id>/{normal,smile,angry,shy,surprised,sad}.webp  히로인 일러스트 (투명 배경 WebP, 684x1000 상반신)
+  char/<id>/face.webp                                     히로인 얼굴 동그라미용 썸네일 (256x256)
+  (히로인 4명 폴더의 옛 .svg 는 더 이상 쓰지 않는 임시 그림)
   char/{baron,tobi,greta,marta,fin,chief}/               영업 단골/손님 (같은 6표정 규격)
   tavern/*.svg                                            재료 아이콘 8종 (tools/gen-tavern-art.js 로 재생성)
   bg/*.svg                                                배경 (720x1280)
@@ -137,7 +139,8 @@ icons/                  앱 아이콘 (icon.svg, icon-192.png, icon-512.png)
 tools/
   check-story.js        스크립트 정적 검사 + 브라우저 없는 시뮬레이션(엔딩 분포)
   test-play.js          Playwright 자동 플레이 테스트 (히로인별/노멀/배드/무작위, 저장/로드, 엔딩 목록, 스크린샷)
-  gen-chars.js          히로인/손님 SVG 일러스트 생성기 (머리색/귀/꼬리/표정을 파라미터로 그림)
+  process-sprites.py    히로인 원본 PNG -> 배경 제거(rembg isnet-anime) + 투명 WebP + 얼굴 썸네일 변환기
+  gen-chars.js          손님(및 옛 히로인 임시) SVG 일러스트 생성기 (머리색/귀/꼬리/표정을 파라미터로 그림)
   gen-tavern-art.js     재료 아이콘 SVG 생성기
   gen-icons.js          icon.svg -> PNG 아이콘 생성
 ```
@@ -234,10 +237,16 @@ node tools/check-story.js
 
 ## 이미지 교체 방법
 
-지금 들어 있는 SVG 는 임시 그림입니다(`tools/gen-chars.js` 가 생성). PNG/JPG/WebP 로 바꾸려면:
+히로인 4명은 ComfyUI 로 만든 일러스트(투명 WebP)이고, 손님(baron 등)은 `tools/gen-chars.js` 가 만든 임시 SVG 입니다. 히로인 그림을 바꾸려면:
 
-1. 캐릭터: `assets/char/<id>/<표정>.png` 로 파일을 넣고, `story/characters.js` 의 `faces()` 헬퍼에서 `.svg` 를 `.png` 로 고칩니다. 표정을 더 늘리려면 헬퍼의 표정 목록에 추가하고 스크립트에서 `face:'새표정'` 으로 사용합니다.
-   - 권장: 세로로 긴 상반신 이미지(비율 2:3, 예 800x1200), 투명 배경. 히로인은 `normal, smile, angry, shy, surprised` 5종이 필수입니다(검사기가 확인).
+1. 캐릭터: 원본 PNG 를 `<id>_<표정>.png` 이름(예 `lia_shy.png`, 표정 6종 × 4명)으로 한 폴더에 모은 뒤 변환합니다. 같은 캐릭터의 표정은 모두 같은 스케일로 처리되어 표정을 바꿔도 위치가 튀지 않습니다.
+   ```
+   pip install "rembg[cpu]" pillow numpy scipy
+   python3 tools/process-sprites.py <원본폴더> [--h 1000] [--q 85]
+   ```
+   결과로 `assets/char/<id>/<표정>.webp` 와 `face.webp`(얼굴 썸네일)가 만들어집니다. 얼굴 위치는 스크립트 위쪽 `FACE` 표(원본 832x1216 기준 중심 좌표/크기)에서 조정합니다. 첫 실행 때 모델(isnet-anime, 약 176MB)을 내려받으니 네트워크가 필요합니다.
+   - 새 히로인을 추가하려면 `story/characters.js` 에서 `faces: heroine('id'), icon: heroineIcon('id')` 를 쓰고 `FACE` 표에도 추가합니다. 손님을 PNG/WebP 로 바꾸려면 `faces(id, 'webp')` 를 쓰면 됩니다(얼굴 아이콘은 `icon` 이 없으면 CSS 로 잘라 씁니다).
+   - 히로인은 `normal, smile, angry, shy, surprised` 5종이 필수입니다(검사기가 확인).
 2. 배경: `assets/bg/` 에 이미지를 넣고 `story/backgrounds.js` 의 경로를 수정합니다. 권장 비율 9:16(예 1080x1920). 화면 비율이 달라도 `cover` 로 꽉 차게 표시됩니다.
 3. 바꾼 파일 경로가 `sw.js` 의 `ASSETS` 목록과 다르면 목록도 고치고 `VERSION` 을 올립니다. (`node tools/check-story.js` 가 불일치를 경고)
 
@@ -249,6 +258,7 @@ SVG 를 계속 쓰면서 그림을 다듬고 싶다면 `node tools/gen-chars.js`
 node tools/check-story.js                 # 스크립트 검사 + 시뮬레이션 (1초)
 python3 -m http.server 8765 &
 node tools/test-play.js [스크린샷 폴더]   # Playwright 390x844 모바일: 히로인 4명/노멀/배드/무작위 플레이(영업 포함), 영업 UI 탭 테스트, 저장/로드, 엔딩 목록, 스크린샷 (2~3분 소요)
-node tools/gen-chars.js                   # 히로인 SVG 일러스트 재생성
+node tools/gen-chars.js                   # 손님 SVG 일러스트 재생성
+python3 tools/process-sprites.py <원본폴더>   # 히로인 PNG -> 투명 WebP (배경 제거)
 node tools/gen-icons.js                   # icons/icon.svg 에서 PNG 아이콘 재생성
 ```

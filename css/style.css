@@ -62,12 +62,25 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   position: absolute; bottom: 24%; width: 80%; height: auto; opacity: 0;
   transition: opacity .3s, filter .25s, transform .25s;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .45));
+  /* 원본 그림의 잘린 가장자리가 직선으로 보이지 않도록 좌/우/상 4%를 부드럽게 페이드.
+     아래쪽은 대사창에 가려지므로 페이드하지 않는다. 여러 gradient 는 교집합(intersect/source-in)으로 결합 */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 4%), linear-gradient(to left, transparent, #000 4%), linear-gradient(to bottom, transparent, #000 4%);
+  mask-image: linear-gradient(to right, transparent, #000 4%), linear-gradient(to left, transparent, #000 4%), linear-gradient(to bottom, transparent, #000 4%);
+  -webkit-mask-composite: source-in; mask-composite: intersect;
 }
 .sprite.on { opacity: 1; }
 .sprite.dim { filter: brightness(.55) saturate(.8) drop-shadow(0 6px 10px rgba(0, 0, 0, .45)); transform: scale(.98); }
 .sprite[data-pos="left"]   { left: -16%; }
 .sprite[data-pos="center"] { left: 10%; }
 .sprite[data-pos="right"]  { right: -16%; }
+/* 동시 등장 인원에 따라 크기/위치를 줄여 겹침을 자연스럽게 (engine.js 가 #sprites[data-n] 설정) */
+#sprites[data-n="2"] .sprite { width: 64%; }
+#sprites[data-n="2"] .sprite[data-pos="left"] { left: -8%; }
+#sprites[data-n="2"] .sprite[data-pos="right"] { right: -8%; }
+#sprites[data-n="3"] .sprite { width: 54%; }
+#sprites[data-n="3"] .sprite[data-pos="left"] { left: -14%; }
+#sprites[data-n="3"] .sprite[data-pos="center"] { left: 23%; }
+#sprites[data-n="3"] .sprite[data-pos="right"] { right: -14%; }
 
 #hud {
   z-index: 3; position: absolute; top: calc(10px + var(--safe-t)); left: 12px; display: flex; gap: 8px;
@@ -181,7 +194,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
 /* 타이틀: 히로인 소개 포스터 */
 #title-cast { position: absolute; left: 0; right: 0; top: calc(34px + var(--safe-t)); height: 50%; overflow: hidden; pointer-events: none;
   -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
-.cast { position: absolute; width: 56%; height: auto; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); animation: castin .7s ease both; }
+.cast { position: absolute; width: 56%; height: auto; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); animation: castin .7s ease both;
+  /* 좌/우/상 가장자리 약 7%를 부드럽게 페이드해 이미지 사각형 경계가 직선으로 보이지 않게 함.
+     허리에서 잘린 그림 아래쪽 페이드(78%)도 함께 유지 (네 gradient 교집합) */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%), linear-gradient(to left, transparent, #000 7%), linear-gradient(to bottom, transparent, #000 7%), linear-gradient(#000 78%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 7%), linear-gradient(to left, transparent, #000 7%), linear-gradient(to bottom, transparent, #000 7%), linear-gradient(#000 78%, transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
 .cast-0 { left: -12%; top: 18px; z-index: 1; animation-delay: .05s; }
 .cast-1 { left: 11%; top: 54px; z-index: 2; animation-delay: .15s; }
 .cast-2 { left: 33%; top: 8px; z-index: 3; animation-delay: .25s; }
@@ -218,6 +236,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
 .choice-btn.who { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 76px; }
 .who-pic { flex: 0 0 56px; width: 56px; height: 56px; border-radius: 50%; border: 3px solid; overflow: hidden; position: relative; background: #fff3; }
 .who-pic img { position: absolute; width: 150px; left: -47px; top: -66px; max-width: none; }
+.who-pic img.thumb, .tv-res-pic img.thumb, .end-pic img.thumb { width: 100%; height: 100%; left: 0; top: 0; object-fit: cover; } /* 히로인 얼굴 썸네일 */
 .who-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .who-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; }
 .who-body .ch-text { font-size: 15px; opacity: .92; line-height: 1.4; }
@@ -246,6 +265,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   background: radial-gradient(circle at 50% 30%, rgba(60, 30, 80, .93), rgba(5, 5, 20, .97)); overflow-y: auto; }
 .ending-panel { width: 100%; text-align: center; padding: 8px 6px 14px; }
 #ending-label { font-size: 13px; letter-spacing: 5px; color: var(--accent); }
+#ending-pic.thumb { object-position: 50% 50%; }
 #ending-pic { display: block; margin: 6px auto 0; width: 150px; height: 150px; border-radius: 50%; object-fit: cover; object-position: 50% 22%;
   border: 3px solid #ffd9a0; background: #ffffff22; }
 #ending-title { margin: 12px 0 4px; font-size: 28px; color: #fff3d8; text-shadow: 0 0 22px rgba(255, 180, 84, .6); word-break: keep-all; }
@@ -276,7 +296,11 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
 #tv-prog { position: absolute; z-index: 2; top: calc(52px + var(--safe-t)); right: 12px; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
   background: rgba(255, 180, 84, .25); border: 1px solid rgba(255, 190, 110, .6); pointer-events: none; }
 /* 재료 고르는 동안 손님은 위쪽에 작게 */
-#game.tv-brew .sprite { bottom: 49%; width: 60%; }
+/* 기존 아래쪽 페이드(82%)를 유지하면서 좌/우/상 가장자리 페이드도 합쳐서 적용 (.sprite 기본 마스크를 덮어쓰므로 함께 지정) */
+#game.tv-brew .sprite { bottom: 49%; width: 60%;
+  -webkit-mask-image: linear-gradient(#000 82%, transparent), linear-gradient(to right, transparent, #000 4%), linear-gradient(to left, transparent, #000 4%), linear-gradient(to bottom, transparent, #000 4%);
+  mask-image: linear-gradient(#000 82%, transparent), linear-gradient(to right, transparent, #000 4%), linear-gradient(to left, transparent, #000 4%), linear-gradient(to bottom, transparent, #000 4%);
+  -webkit-mask-composite: source-in; mask-composite: intersect; } /* 허리에서 잘린 히로인 그림은 아래를 서서히 투명하게 */
 #game.tv-brew .sprite[data-pos="center"] { left: 20%; }
 
 /* 하단 조합 패널 */
