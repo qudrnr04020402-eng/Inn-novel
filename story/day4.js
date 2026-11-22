@@ -35,7 +35,9 @@ Object.assign(STORY.scenes, {
   ],
 
   // ================= 낮 =================
-  d4_pick: [
+  // 아침 랜덤 사건 (story/random-events.js): 확률로 짧은 돌발 사건을 거친 뒤 낮으로 이어진다
+  d4_pick: [{ rand: 'morning', then: 'd4_pick_day' }],
+  d4_pick_day: [
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
     { narr: '오늘이 사실상 마지막으로 마음 편히 시간을 보낼 수 있는 날이다. 누구와 함께할까?' },
     { goto: 'pick' }
@@ -195,7 +197,9 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'smile', text: '웃기지? 이것 때문에 신전에 들어간 거야. 이 부적이 진짜 힘이 있는지 알고 싶어서. 그리고, 다음에 만날 때 당당하게 말하고 싶어서.' },
     { say: 'lia', face: 'sad', text: '…내일, 위험한 일을 하러 가는 거지? 말 안 해도 알아. 네 얼굴에 다 쓰여 있어.' },
     { narr: '리아의 손이 내 소매 끝을 꼭 쥐었다. 힘이 너무 세서 조금 아팠다.' },
+    { cg: 'lia_charm' },
     { say: 'lia', text: '약속해 줘. 꼭 돌아오겠다고. 그것만 약속해 줘.' },
+    { cg: 'hide' },
     { choice: [
       { text: '"약속할게. 반드시 돌아와서, 네 곁에 있을게."', set: { 'aff.lia': 2 }, goto: 'lia_4_promise' },
       { text: '(부적을 받아 목에 걸고, 리아의 머리를 쓰다듬는다)', set: { 'aff.lia': 2 }, goto: 'lia_4_charm' },

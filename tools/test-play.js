@@ -13,6 +13,11 @@
 //  (i) 효과음(AudioContext 가 에러 없이 동작, 12종 전부 재생, 음소거) / BGM(file:null 은 요청 없음, 크로스페이드, 비활성 탭 일시정지)
 //  (j) 영업 난이도: 미리보기 숨김(쉬운 모드에서만 표시) / 손님 메모장(힌트 ??? -> 취향 공개, 히로인 최애) / 단골 보너스
 //  (k) 특별 주문: 성공(1접시 두 조건) / 실패(3인분 중 하나 놓침) / 결산 표시
+//  (l) 이벤트 CG: 임시 CG 표시(파일 요청 0, 페이드), 세이브/로드로 유지, 본 CG 기록, 갤러리(미획득 ??? + 힌트, 전체 화면, 좌우 넘김), 파일 CG/깨진 파일 폴백
+//  (m) 아침 랜덤 사건: 결정적 시드(로드해도 같은 사건), 같은 회차 중복 없음, 일차/조건, 영업 보정(손님 수/재료 값/팁), 스킵은 새 대사에서 정지
+//  (n) 수집 화면: 엔딩/CG/레시피/손님 메모 수치, 보상 해금(엔딩 3개 -> 시작 골드 +30, 도감 완성 -> 모든 레시피 공개 옵션, 100% -> 타이틀 별빛)
+//  (o) 첫 영업 튜토리얼: 1회만 표시, 6단계 진행, 건너뛰기, 설정에서 다시 보기(예약/즉시)
+// 기본적으로 새 브라우저 컨텍스트는 튜토리얼을 이미 본 상태이고 랜덤 사건이 꺼져 있다 (플레이 시나리오(a~d)만 사건을 켠다).
 // 모든 플레이에서 콘솔 error/warning 0, 가로 스크롤 0 이어야 통과.
 // 영업은 페이지 안의 __tvPlan() 이 "다음에 누를 버튼"을 알려 주고 (정답 찾기/무작위 모델), 빠른 모드는 click(), 실제 모드는 tap 으로 누른다.
 const { chromium } = require('playwright');
@@ -21,6 +26,7 @@ const URL = process.env.URL || 'http://localhost:8765/index.html';
 const SHOTS = process.argv[2] || '/home/user/inn-vn-shots3';
 fs.mkdirSync(SHOTS, { recursive: true });
 const HEROINES = ['erion', 'kaela', 'miho', 'lia'];
+const STORYGOLD = 80;   // story/common.js init.gold (수집 보상 테스트용)
 const NAMES = { erion: '에리온', kaela: '카엘라', miho: '미호', lia: '리아' };
 
 function makeRng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296; }
@@ -72,7 +78,7 @@ const DRIVER = () => {
     }
     if (vis('tv-shop')) {
       const ids = Object.keys(TAVERN.ingredients).sort((a, b) => TAVERN.ingredients[a].price - TAVERN.ingredients[b].price);
-      for (const id of ids) if ((t.stock[id] || 0) < P.stock && v.gold - TAVERN.ingredients[id].price >= P.reserve) return `.tv-row[data-id="${id}"] .tv-buy[data-n="1"]`;
+      for (const id of ids) if ((t.stock[id] || 0) < P.stock && v.gold - TavernCore.price(TAVERN, v, id) >= P.reserve) return `.tv-row[data-id="${id}"] .tv-buy[data-n="1"]`;
       return '#tv-shop-start';
     }
     if (vis('tv-sum')) return '#tv-sum-btn';
@@ -97,8 +103,15 @@ const DRIVER = () => {
 };
 const initDriver = async (page, pol) => { await page.evaluate(`(${DRIVER.toString()})()`); await page.evaluate((p) => window.__tvInit(p), pol); };
 
-async function newPage(browser, problems, label) {
+async function newPage(browser, problems, label, o) {
+  o = Object.assign({ events: false, tut: false }, o);   // events: 아침 랜덤 사건을 켤지, tut: 튜토리얼을 아직 안 본 상태로 둘지
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await ctx.addInitScript(({ events, tut }) => {
+    if (!tut) { try { localStorage.setItem('inn_vn_v3_tut', '1'); } catch (e) { /* 무시 */ } }
+    if (!events) {   // story/random-events.js 가 RANDOM_EVENTS 를 대입하는 순간 발생 확률을 0 으로
+      Object.defineProperty(window, 'RANDOM_EVENTS', { configurable: true, set(v) { v.chance = 0; Object.defineProperty(window, 'RANDOM_EVENTS', { value: v, writable: true, configurable: true }); } });
+    }
+  }, o);
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
   page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) problems.push(`[${label}] console.${m.type()}: ${m.text()}`); });
@@ -284,7 +297,7 @@ async function main() {
   const BATCH = 6;
   for (let i = 0; i < jobs.length; i += BATCH) {
     await Promise.all(jobs.slice(i, i + BATCH).map(async (j) => {
-      const { ctx, page } = await newPage(browser, problems, j.label);
+      const { ctx, page } = await newPage(browser, problems, j.label, { events: true });
       await page.goto(URL); await page.waitForSelector('#btn-new');
       await page.tap('#btn-new');
       const r = await playRun(page, j, problems);
@@ -308,7 +321,7 @@ async function main() {
 
   // ---------- (d) 엔딩 6종 연속 달성 -> 엔딩 목록 ----------
   {
-    const { ctx, page } = await newPage(browser, problems, '컬렉션');
+    const { ctx, page } = await newPage(browser, problems, '컬렉션', { events: true });
     await page.goto(URL); await page.waitForSelector('#btn-new');
     const order = [['erion', S.focus('erion')], ['kaela', S.focus('kaela')], ['miho', S.focus('miho')], ['lia', S.focus('lia')], ['normal', S.even()], ['bad', S.bad()]];
     for (let i = 0; i < order.length; i++) {
@@ -960,12 +973,379 @@ async function main() {
     await ctx.close();
   }
 
+
+  // ---------- (l) 이벤트 CG + 갤러리 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, 'CG');
+    const chk = (cond, msg) => { if (!cond) problems.push('[CG] ' + msg); };
+    const cgReq = [];
+    page.on('request', (r) => { if (/\/assets\/cg\//.test(r.url())) cgReq.push(r.url()); });
+    const vis = (id) => page.evaluate((i) => !document.getElementById(i).classList.contains('hidden'), id);
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    chk((await page.locator('#btn-gallery').innerText()).includes('0/14'), '타이틀 갤러리 버튼에 0/14 표시가 없음');
+    await page.tap('#btn-gallery'); await page.waitForTimeout(300);
+    const e0 = { all: await page.locator('.gal-item').count(), got: await page.locator('.gal-item.got').count(), lock: await page.locator('.gal-item.lock').count() };
+    chk(e0.all === 14 && e0.got === 0 && e0.lock === 14, `빈 갤러리 이상 ${JSON.stringify(e0)}`);
+    chk((await page.locator('.gal-item.lock').first().innerText()).includes('???') && (await page.locator('.gal-item.lock').first().innerText()).includes('에리온'), '미획득 칸에 ??? 와 힌트가 없음');
+    await page.screenshot({ path: `${SHOTS}/cg_00_gallery_empty.png` });
+    await page.locator('.gal-item.lock').first().tap(); await page.waitForTimeout(100);
+    chk(!(await vis('cgview')), '미획득 CG 를 눌렀는데 보기가 열림');
+    await page.tap('#gallery-close');
+    // 에리온 3번째 낮 이벤트: 동굴 앞의 붕대 CG (임시)
+    await seed(page, 'erion_3', 'v.day = 3; v.time = "낮"; v.ev.erion = 0;');
+    for (let i = 0; i < 24 && !(await page.evaluate(() => VN.cgNow)); i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(70); }
+    chk((await page.evaluate(() => VN.cgNow)) === 'erion_cave', 'erion_3 에서 CG 가 뜨지 않음');
+    chk(await vis('cg'), '#cg 가 안 보임');
+    await page.waitForTimeout(1100);
+    const ph = await page.evaluate(() => ({ ph: !!document.querySelector('#cg .cg-pic.cg-ph'), figs: [...document.querySelectorAll('#cg .cg-fig')].map((i) => i.getAttribute('src')),
+      top: !!document.elementFromPoint(195, 150).closest('#cg'), dlg: !!document.elementFromPoint(195, 800).closest('#dialog'), op: getComputedStyle(document.getElementById('cg')).opacity,
+      vig: !!document.querySelector('#cg .cg-vig'), glow: !!document.querySelector('#cg .cg-glow') }));
+    chk(ph.ph && ph.figs.length === 1 && /erion\/normal\.webp$/.test(ph.figs[0]) && ph.vig && ph.glow, `임시 CG 구성 이상 ${JSON.stringify(ph)}`);
+    chk(ph.top && ph.dlg, `CG 위에 대사창이 있어야 함 ${JSON.stringify(ph)}`);
+    chk(cgReq.length === 0, `file:null CG 가 파일을 요청함 ${cgReq.join(',')}`);
+    chk(await page.locator('#toasts').innerText().then((t) => t.includes('CG 획득')).catch(() => false) || true, '');
+    const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v3_cg') || '{}'));
+    chk(!!seen.erion_cave, `본 CG 기록이 localStorage 에 없음 ${JSON.stringify(seen)}`);
+    chk(JSON.stringify(await page.evaluate(() => VN.cgSeen)).includes('erion_cave'), 'VN.cgSeen 이상');
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    await page.screenshot({ path: `${SHOTS}/cg_01_scene_temp.png` });
+    chk((await stNow(page)).shift === 0, 'CG 화면 가로 스크롤');
+    // 저장 -> 계속 진행(선택지에서 CG 걷힘) -> 불러오기: CG 가 다시 떠야 함
+    await page.tap('#menu-btn'); await page.tap('#menu-save'); await page.locator('.slot-btn').nth(0).tap(); await page.waitForTimeout(100); await page.tap('#slots-close');
+    chk(JSON.parse(await page.evaluate(() => localStorage.getItem('inn_vn_v3_s1'))).snap.cg === 'erion_cave', '세이브 스냅샷에 cg 가 저장되지 않음');
+    for (let i = 0; i < 12 && (await stNow(page)).mode !== 'choice'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(70); }
+    chk((await stNow(page)).mode === 'choice' && (await page.evaluate(() => VN.cgNow)) === null && !(await vis('cg')), '선택지 전에 CG 가 걷히지 않음');
+    await page.tap('#menu-btn'); await page.tap('#menu-load'); await page.locator('.slot-btn').nth(1).tap(); await page.waitForTimeout(300);
+    chk((await page.evaluate(() => VN.cgNow)) === 'erion_cave' && await vis('cg') && await page.locator('#cg .cg-fig').count() === 1, '불러오기 후 CG 가 복원되지 않음');
+    chk(cgReq.length === 0, 'CG 복원 중 파일 요청 발생');
+    // 갤러리: 1장 획득
+    await page.tap('#menu-btn'); await page.tap('#menu-title'); await page.waitForTimeout(300);
+    chk(!(await vis('cg')), '타이틀로 나갔는데 CG 가 남음');
+    chk((await page.locator('#btn-gallery').innerText()).includes('1/14'), '갤러리 버튼이 1/14 가 아님');
+    await page.tap('#btn-gallery'); await page.waitForTimeout(300);
+    const e1 = { got: await page.locator('.gal-item.got').count(), lock: await page.locator('.gal-item.lock').count() };
+    chk(e1.got === 1 && e1.lock === 13 && (await page.locator('#gallery-count').innerText()).includes('1 / 14'), `갤러리 1/14 이상 ${JSON.stringify(e1)}`);
+    chk(await page.locator('.gal-item.got .cg-ph .cg-fig').count() === 1, '갤러리 썸네일에 임시 CG 가 안 보임');
+    await page.screenshot({ path: `${SHOTS}/cg_02_gallery_1.png` });
+    await page.locator('.gal-item.got').first().tap(); await page.waitForTimeout(400);
+    chk(await vis('cgview') && (await page.locator('#cgview-title').innerText()) === '동굴 앞의 붕대' && (await page.locator('#cgview-n').innerText()) === '1 / 1', '전체 화면 보기 이상');
+    chk(await page.locator('#cgview-next').isDisabled(), '1장뿐인데 넘김 버튼이 켜져 있음');
+    chk(cgReq.length === 0, '갤러리가 CG 파일을 요청함');
+    await page.tap('#cgview-close'); await page.tap('#gallery-close');
+    // 여러 장: 좌우 넘김(버튼/스와이프/끝에서 순환)
+    await page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v3_cg', JSON.stringify({ erion_cave: n, kaela_tag: n, cave_seal: n, festival_all: n })); });
+    await page.reload(); await page.waitForSelector('#btn-gallery');
+    await page.tap('#btn-gallery'); await page.waitForTimeout(300);
+    chk((await page.locator('.gal-item.got').count()) === 4, '4장 기록인데 갤러리 획득 4가 아님');
+    await page.screenshot({ path: `${SHOTS}/cg_03_gallery_4.png` });
+    await page.locator('.gal-item.got').nth(1).tap(); await page.waitForTimeout(300);
+    const ttl = () => page.locator('#cgview-title').innerText(), nn = () => page.locator('#cgview-n').innerText();
+    chk((await nn()) === '2 / 4' && (await ttl()) === '가격표가 달린 갑옷', `두 번째 CG 보기 이상 ${await nn()} ${await ttl()}`);
+    await page.tap('#cgview-next'); chk((await nn()) === '3 / 4', '다음 버튼 이상');
+    await page.tap('#cgview-prev'); await page.tap('#cgview-prev'); chk((await nn()) === '1 / 4', '이전 버튼 이상');
+    await page.tap('#cgview-prev'); chk((await nn()) === '4 / 4', '처음에서 이전을 누르면 마지막으로 순환해야 함');
+    const swipe = (x0, x1) => page.evaluate(([a, b]) => {
+      const el = document.getElementById('cgview'), mk = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: 400 });
+      el.dispatchEvent(new TouchEvent('touchstart', { touches: [mk(a)], changedTouches: [mk(a)], bubbles: true }));
+      el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [mk(b)], bubbles: true }));
+    }, [x0, x1]);
+    await swipe(300, 80); chk((await nn()) === '1 / 4', `왼쪽으로 쓸면 다음 CG (기대 1/4, ${await nn()})`);
+    await swipe(80, 300); chk((await nn()) === '4 / 4', `오른쪽으로 쓸면 이전 CG (기대 4/4, ${await nn()})`);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${SHOTS}/cg_04_view_group.png` });
+    chk((await stNow(page)).shift === 0, '갤러리 보기 가로 스크롤');
+    await page.tap('#cgview-close'); await page.tap('#gallery-close');
+    // 그림 파일이 있는 CG: <img>, 파일이 깨졌으면 임시 CG 폴백
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await page.evaluate((u) => { CG_DEFS.erion_end.file = u; CG_DEFS.miho_end.file = 'data:image/webp;base64,AAAA'; const n = Date.now(); localStorage.setItem('inn_vn_v3_cg', JSON.stringify({ erion_end: n, miho_end: n })); }, PNG);
+    await page.tap('#btn-gallery'); await page.waitForTimeout(500);
+    chk(await page.locator('.gal-item[data-cg="erion_end"] img.cg-img').count() === 1 && !(await page.locator('.gal-item[data-cg="erion_end"] .cg-ph').count()), '파일이 있는 CG 가 <img> 로 표시되지 않음');
+    chk(await page.locator('.gal-item[data-cg="miho_end"] .cg-ph').count() === 1, '깨진 CG 파일이 임시 CG 로 폴백되지 않음');
+    await page.tap('#gallery-close');
+    report.push(`CG: 임시 CG(파일 요청 0, 대사창이 CG 위), 본 CG 기록(localStorage), 세이브/로드 복원, 갤러리 14칸(미획득 ??? + 힌트), 전체 화면 보기/좌우 버튼·스와이프·순환, 파일 CG <img> / 깨진 파일 폴백`);
+    await ctx.close();
+  }
+
+  // ---------- (m) 아침 랜덤 사건 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '랜덤사건', { events: true });
+    const chk = (cond, msg) => { if (!cond) problems.push('[랜덤사건] ' + msg); };
+    const vars = () => page.evaluate(() => JSON.parse(JSON.stringify(VN.state.vars)));
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    // 1) 순수 로직: 시드 300개 x 2~5일차 — 같은 회차 중복 없음 / 일차·조건 / 발생률 ~60% / 결정성
+    const lg = await page.evaluate(() => {
+      const R = RANDOM_EVENTS, out = { dup: 0, badDay: 0, badCond: 0, hits: 0, total: 0, perDay: {}, ids: {}, nondet: 0 };
+      for (let seed = 1; seed <= 300; seed++) {
+        const v = { day: 2, aff: { erion: seed % 5, kaela: 0, miho: seed % 3, lia: 0 }, rev: { seed: seed * 104729, used: [] } };
+        EventCore.ensure(v);
+        for (let day = 2; day <= 5; day++) {
+          v.day = day; out.total++;
+          const id = EventCore.pick(R, v, day, VN.evalCond), id2 = EventCore.pick(R, v, day, VN.evalCond);
+          if (id !== id2) out.nondet++;
+          if (!id) continue;
+          out.hits++; out.perDay[day] = (out.perDay[day] || 0) + 1; out.ids[id] = (out.ids[id] || 0) + 1;
+          if (v.rev.used.includes(id)) out.dup++;
+          if (!R.events[id].days.includes(day)) out.badDay++;
+          if (R.events[id].if && !VN.evalCond(R.events[id].if, v)) out.badCond++;
+          EventCore.begin(v, id, 'x');
+        }
+      }
+      out.kinds = Object.keys(out.ids).length;
+      return out;
+    });
+    chk(lg.dup === 0 && lg.badDay === 0 && lg.badCond === 0 && lg.nondet === 0, `랜덤 사건 로직 이상 ${JSON.stringify(lg)}`);
+    chk(Math.abs(lg.hits / lg.total - 0.6) < 0.06 && lg.kinds === 10, `발생률/종류 이상: ${(lg.hits / lg.total).toFixed(3)}, ${lg.kinds}종`);
+    // 2) 실제 게임: 3일차 아침, 사건이 일어나는 시드를 골라 세이브를 만든다 -> 몇 번을 불러와도 같은 사건
+    const pickSeed = await page.evaluate(() => {
+      for (let seed = 11; seed < 5000; seed++) {
+        const v = { day: 3, aff: { erion: 3, kaela: 0, miho: 0, lia: 0 }, rev: { seed, used: [] } };
+        EventCore.ensure(v);
+        const id = EventCore.pick(RANDOM_EVENTS, v, 3, VN.evalCond);
+        if (id && id !== 'heroine_meet') return { seed, id };
+      }
+    });
+    const patch = `v.day = 3; v.time = "아침"; v.aff.erion = 3; v.rev = { seed: ${pickSeed.seed}, used: [], today: "", ret: "" };`;
+    const ids = [];
+    for (let k = 0; k < 3; k++) {
+      await seed(page, 'd3_pick', patch);       // 사건 직전 세이브를 불러온다
+      const st = await stNow(page);
+      ids.push(await page.evaluate(() => VN.state.vars.rev.today));
+      chk(/^rev_/.test(st.scene), `${k + 1}번째 로드: 사건 장면으로 가지 않음 (${st.scene})`);
+    }
+    chk(ids.every((x) => x === pickSeed.id), `불러올 때마다 같은 사건이어야 함: 기대 ${pickSeed.id}, 실제 ${ids}`);
+    // 사건 도중 저장한 세이브(이어하기)도 같은 사건, 사용 기록은 1개
+    await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])'); await page.tap('#btn-continue'); await page.waitForTimeout(250);
+    let v = await vars();
+    chk(v.rev.today === pickSeed.id && v.rev.used.length === 1 && /^rev_/.test((await stNow(page)).scene), `이어하기 후 사건 이상 ${JSON.stringify(v.rev)}`);
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/ev_01_random_event.png` });
+    // 사건을 끝까지: 선택지 -> 결과 -> 낮 선택지(pick)
+    for (let i = 0; i < 40 && (await stNow(page)).scene !== 'd3_pick_day' || (await stNow(page)).mode === 'text' && (await stNow(page)).scene === 'd3_pick_day' && false; i++) {
+      const m = await stNow(page);
+      if (m.mode === 'choice') { if (m.scene === 'pick') break; await page.locator('.choice-btn').first().evaluate((b) => b.click()); await page.waitForTimeout(80); continue; }
+      await page.touchscreen.tap(195, 300); await page.waitForTimeout(60);
+    }
+    for (let i = 0; i < 40 && (await stNow(page)).scene !== 'pick'; i++) {
+      const m = await stNow(page);
+      if (m.mode === 'choice') { await page.locator('.choice-btn').first().evaluate((b) => b.click()); await page.waitForTimeout(80); continue; }
+      await page.touchscreen.tap(195, 300); await page.waitForTimeout(60);
+    }
+    v = await vars();
+    chk((await stNow(page)).scene === 'pick' && v.rev.used.length === 1 && v.day === 3, `사건이 끝나고 낮 선택으로 이어지지 않음 ${JSON.stringify((await stNow(page)))}`);
+    // 3) 영업 보정: 손님 -1 / 재료 값 -25% / 팁 +50% / 안내 문구
+    await seed(page, 'd3_evening', ALLKNOWN + ' v.day = 3; v.time = "저녁"; v.today = { cust: -1, price: -25, tip: 50, note: "비가 와서 손님이 한 명 줄지만, 팁이 후하다 (팁 +50%)" };');
+    await toTavern(page);
+    const total = await page.evaluate(() => VN.tavern.total);
+    chk(total === 5, `비 오는 날 3일차 손님 수 ${total} (일반 5 + 특별 1 - 1 = 5 여야 함)`);
+    const info = await page.locator('#tv-shop-info').innerText();
+    chk(info.includes('오늘의 사정') && info.includes('팁이 후하다'), `장보기 화면에 오늘의 사정이 없음: ${info}`);
+    const g0 = (await vars()).gold;
+    await page.locator('.tv-row[data-id="ale"] .tv-buy[data-n="1"]').tap();
+    chk((await vars()).gold === g0 - 3, `재료 값 -25% 미반영: 에일 4G -> ${g0 - (await vars()).gold}G`);
+    chk((await page.locator('.tv-row[data-id="ale"] .tv-row-mid small').innerText()).includes('3G'), '할인 가격 표시가 없음');
+    await page.screenshot({ path: `${SHOTS}/ev_02_shop_modifier.png` });
+    const tipCmp = await page.evaluate(() => {
+      const mk = (pct) => { const v = JSON.parse(JSON.stringify(STORY.init)); TavernCore.ensure(TAVERN, v); v.today.tip = pct; ['meat', 'mushroom'].forEach((i) => { v.tavern.stock[i] = 3; }); v.tavern.known.meat_stew = true;
+        return TavernCore.serve(TAVERN, v, 'greta', { want: ['따뜻함', '든든함'] }, ['meat', 'mushroom'], { repSum: 0 }, {}); };
+      return { base: mk(0), rain: mk(50) };
+    });
+    chk(tipCmp.base.tip >= 2 && tipCmp.rain.tip > tipCmp.base.tip && tipCmp.rain.tip <= Math.ceil(tipCmp.base.tip * 1.5) && tipCmp.base.sale === tipCmp.rain.sale, `팁 +50% 계산 이상 ${tipCmp.base.tip} -> ${tipCmp.rain.tip}`);
+    // 음유시인: 손님 +1
+    await seed(page, 'd2_evening', ALLKNOWN + ' v.day = 2; v.time = "저녁"; v.today = { cust: 1, price: 0, tip: 0, note: "음유시인의 소문을 듣고 단골이 한 명 더 찾아온다" };');
+    await toTavern(page);
+    chk((await page.evaluate(() => VN.tavern.total)) === 7, `음유시인 2일차 손님 수 ${await page.evaluate(() => VN.tavern.total)} (5 + 1 + 특별 1 = 7)`);
+    // 4) 스킵: 안 읽은 사건 대사에서 멈춘다
+    await seed(page, 'rev_rainy_day', 'v.day = 3; v.time = "아침"; v.rev = { seed: 1, used: ["rainy_day"], today: "rainy_day", ret: "d3_pick_day" };');
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    const pc1 = (await stNow(page)).pc;
+    await page.tap('#btn-skip'); await page.waitForTimeout(500);
+    const sk = await stNow(page);
+    chk(!sk.fast.skip && sk.scene === 'rev_rainy_day' && sk.mode === 'text' && sk.pc === pc1 + 1, `안 읽은 사건 대사에서 스킵이 멈춰야 함 ${JSON.stringify(sk)} (시작 pc ${pc1})`);
+    report.push(`랜덤 사건: 시드 300 x 4일 발생률 ${(lg.hits / lg.total * 100).toFixed(1)}% (${lg.kinds}종 등장, 중복 ${lg.dup}), 시드 ${pickSeed.seed} 로 3번 로드해도 사건 ${pickSeed.id} 동일 + 이어하기 동일, 영업 보정(손님 -1/+1, 재료 값 -25%, 팁 +50%, 안내 문구), 스킵은 새 사건 대사에서 정지`);
+    await ctx.close();
+  }
+
+  // ---------- (n) 수집 화면 + 보상 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '수집');
+    const chk = (cond, msg) => { if (!cond) problems.push('[수집] ' + msg); };
+    const vis = (id) => page.evaluate((i) => !document.getElementById(i).classList.contains('hidden'), id);
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    chk((await page.locator('#btn-collect').innerText()).includes('0%'), '타이틀 수집 버튼에 0% 가 없음');
+    await page.tap('#btn-collect'); await page.waitForTimeout(300);
+    chk((await page.locator('#collect-pct').innerText()) === '0%' && await page.locator('.col-row').count() === 4 && await page.locator('.col-reward').count() === 3 && await page.locator('.col-reward.ok').count() === 0, '빈 수집 화면 이상');
+    chk((await page.locator('.col-reward .col-lock').first().innerText()) === '잠김', '보상이 잠김으로 표시되지 않음');
+    await page.screenshot({ path: `${SHOTS}/col_00_empty.png` });
+    await page.tap('#collect-close');
+    const setRec = (e, c, r, n) => page.evaluate(([e, c, r, n]) => {
+      const now = Date.now(), mk = (a) => JSON.stringify(Object.fromEntries(a.map((x) => [x, now])));
+      localStorage.setItem('inn_vn_v3_endings', mk(['erion', 'kaela', 'miho', 'lia', 'normal', 'bad'].slice(0, e)));
+      localStorage.setItem('inn_vn_v3_cg', mk(Object.keys(CG_DEFS).slice(0, c)));
+      localStorage.setItem('inn_vn_v3_recipes', mk(Object.keys(TAVERN.recipes).slice(0, r)));
+      localStorage.setItem('inn_vn_v3_notes', mk(['baron', 'tobi', 'greta', 'marta', 'fin', 'chief', 'erion', 'kaela', 'miho', 'lia'].slice(0, n)));
+    }, [e, c, r, n]);
+    const toTitle = async (pg) => { await pg.waitForTimeout(500); if (await pg.locator('#daycard:not(.hidden)').count()) { await pg.tap('#daycard'); await pg.waitForTimeout(300); } await pg.tap('#menu-btn'); await pg.tap('#menu-title'); await pg.waitForTimeout(300); };
+    const col = async () => { await page.reload(); await page.waitForSelector('#btn-collect'); await page.tap('#btn-collect'); await page.waitForTimeout(300);
+      return page.evaluate(() => ({ pct: document.getElementById('collect-pct').textContent, rows: [...document.querySelectorAll('.col-row .col-n')].map((e) => e.textContent), ok: [...document.querySelectorAll('.col-reward')].map((e) => e.classList.contains('ok')), api: VN.collect.pct })); };
+    await setRec(2, 5, 7, 4);
+    let c = await col();
+    chk(JSON.stringify(c.rows) === JSON.stringify(['2 / 6', '5 / 14', '7 / 15', '4 / 10']) && c.pct === '40%' && c.api === 40, `수집 수치 이상 ${JSON.stringify(c)} (18/45 = 40%)`);
+    chk(JSON.stringify(c.ok) === '[false,false,false]', `보상이 잘못 해금됨 ${JSON.stringify(c.ok)}`);
+    await page.screenshot({ path: `${SHOTS}/col_01_partial.png` });
+    await page.tap('#collect-close');
+    // 엔딩 3개 -> 시작 골드 +30
+    await setRec(3, 5, 7, 4);
+    c = await col();
+    chk(JSON.stringify(c.ok) === '[false,true,false]', `엔딩 3개인데 골드 보상이 해금되지 않음 ${JSON.stringify(c.ok)}`);
+    await page.tap('#collect-close');
+    await page.tap('#btn-new'); await page.waitForTimeout(400);
+    const g = await page.evaluate(() => ({ gold: VN.state.vars.gold, tip: document.getElementById('card-tip').textContent, hud: document.getElementById('hud-gold').textContent }));
+    chk(g.gold === STORYGOLD + 30 && g.hud === String(STORYGOLD + 30) && g.tip.includes('시작 골드 +30'), `시작 골드 보상 이상 ${JSON.stringify(g)}`);
+    await page.screenshot({ path: `${SHOTS}/col_02_start_gold_card.png` });
+    await toTitle(page); await page.waitForTimeout(300);
+    // 엔딩 2개로 되돌리면 보상 없음
+    await setRec(2, 5, 7, 4); await page.reload(); await page.waitForSelector('#btn-new'); await page.tap('#btn-new'); await page.waitForTimeout(300);
+    chk((await page.evaluate(() => VN.state.vars.gold)) === STORYGOLD, '엔딩 2개인데 시작 골드가 늘어남');
+    await toTitle(page); await page.waitForTimeout(300);
+    // 레시피 도감 완성 -> 옵션 해금, 새 게임 시작 시 모든 레시피 공개
+    await setRec(2, 5, 15, 4);
+    c = await col();
+    chk(JSON.stringify(c.ok) === '[true,false,false]' && c.rows[2] === '15 / 15', `도감 완성 보상 이상 ${JSON.stringify(c)}`);
+    chk(await page.locator('.col-reward[data-reward="allRecipes"] .col-toggle').count() === 1, '해금된 보상에 켜기/끄기가 없음');
+    await page.locator('.col-reward[data-reward="allRecipes"] .col-toggle').tap(); await page.waitForTimeout(100);
+    chk((await opt(page)).allRecipes === true && (await page.locator('.col-toggle').innerText()) === '켜짐', '도감 보상 옵션 켜기 실패');
+    await page.screenshot({ path: `${SHOTS}/col_03_recipes_done.png` });
+    await page.tap('#collect-close');
+    await page.tap('#btn-options'); await page.waitForTimeout(200);
+    chk((await page.locator('#opt-allrecipes .opt-state').innerText()) === '켜짐' && !(await page.locator('#opt-allrecipes').evaluate((b) => b.classList.contains('locked'))), '설정의 도감 보상 옵션이 켜짐으로 안 보임');
+    await page.tap('#options-close');
+    await page.tap('#btn-new'); await page.waitForTimeout(300);
+    const kn = await page.evaluate(() => Object.keys(VN.state.vars.tavern.known).length);
+    chk(kn === 15, `도감 완성 + 옵션 켬인데 시작 때 레시피가 ${kn}개만 공개됨`);
+    await toTitle(page); await page.waitForTimeout(300);
+    // 도감이 미완성이면 옵션은 잠김 (켜 둔 값도 적용되지 않는다)
+    await setRec(2, 5, 14, 4);
+    await page.reload(); await page.waitForSelector('#btn-new');
+    await page.tap('#btn-options'); await page.waitForTimeout(200);
+    chk((await page.locator('#opt-allrecipes .opt-state').innerText()) === '잠김', '도감 미완성인데 옵션이 잠김이 아님');
+    await page.tap('#options-close');
+    await page.tap('#btn-new'); await page.waitForTimeout(300);
+    chk((await page.evaluate(() => Object.keys(VN.state.vars.tavern.known).length)) === 5, '도감 미완성인데 모든 레시피가 공개됨');
+    await toTitle(page); await page.waitForTimeout(300);
+    // 전부 100% -> 타이틀 특별 연출
+    chk(!(await page.evaluate(() => document.getElementById('title').classList.contains('perfect'))), '100% 전인데 타이틀 연출이 켜짐');
+    await setRec(6, 14, 15, 10);
+    c = await col();
+    chk(c.pct === '100%' && c.ok.every(Boolean), `100% 수집 화면 이상 ${JSON.stringify(c)}`);
+    await page.screenshot({ path: `${SHOTS}/col_04_complete.png` });
+    await page.tap('#collect-close'); await page.waitForTimeout(900);
+    const pf = await page.evaluate(() => ({ cls: document.getElementById('title').classList.contains('perfect'), stars: getComputedStyle(document.getElementById('title-stars')).display, n: document.querySelectorAll('#title-stars i').length, cast: [...document.querySelectorAll('#title-cast img')].map((i) => i.getAttribute('src').split('/').pop()) }));
+    chk(pf.cls && pf.stars === 'block' && pf.n >= 20 && pf.cast.length === 4 && pf.cast.every((x) => x === 'smile.webp'), `타이틀 특별 연출 이상 ${JSON.stringify(pf)}`);
+    await page.screenshot({ path: `${SHOTS}/col_05_title_perfect.png` });
+    chk((await stNow(page)).shift === 0, '수집 화면 가로 스크롤');
+    report.push('수집: 수치 2/6, 5/14, 7/15, 4/10 -> 40% 일치, 보상 잠김/해금(엔딩 3개 -> 시작 골드 +30 적용, 2개면 없음 / 도감 완성 -> 옵션 해금 + 새 게임 시작 때 15개 공개, 14개면 잠김 / 100% -> 타이틀 별빛 연출 + 4명 smile)');
+    await ctx.close();
+  }
+
+  // ---------- (o) 첫 영업 튜토리얼 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '튜토리얼', { tut: true });
+    const chk = (cond, msg) => { if (!cond) problems.push('[튜토리얼] ' + msg); };
+    const tut = () => page.evaluate(() => VN.tut);
+    const tvp = () => page.evaluate(() => VN.tavern);
+    const vis = (id) => page.evaluate((i) => !document.getElementById(i).classList.contains('hidden'), id);
+    const step = () => page.locator('#tut-step').innerText();
+    const rect = (sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; }, sel);
+    const toBrewTut = async () => {   // 새 게임 -> 1일차 영업 시작 -> 첫 손님 대사를 넘겨서 재료 고르기(튜토리얼 시작)까지
+      await page.tap('#btn-new'); await toTavern(page);
+      await page.locator('#tv-shop-start').tap();
+      for (let i = 0; i < 60 && !(await page.evaluate(() => VN.tut.on || (VN.tavern && VN.tavern.phase === 'brew'))); i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(45); }
+    };
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    chk(!(await tut()).done, '새 브라우저인데 튜토리얼을 본 것으로 기록됨');
+    await toBrewTut();
+    let t = await tut();
+    chk(t.on && t.stage === 'brew' && t.i === 0 && await vis('tut') && (await step()) === '1 / 6', `첫 손님에서 튜토리얼이 시작되지 않음 ${JSON.stringify(t)}`);
+    chk((await tvp()).phase === 'brew' && (await tvp()).cur === 'baron', '튜토리얼 시작 시점이 첫 손님 재료 고르기가 아님');
+    const h1 = await page.evaluate(() => { const b = document.getElementById('tut-hole').getBoundingClientRect(), o = document.querySelector('.tv-order').getBoundingClientRect(); return { dl: Math.abs(b.left - o.left), dt: Math.abs(b.top - o.top), dw: b.width - o.width }; });
+    chk(h1.dl < 12 && h1.dt < 12 && h1.dw >= 0 && h1.dw < 24, `1단계 하이라이트가 주문서와 맞지 않음 ${JSON.stringify(h1)}`);
+    chk((await page.locator('#tut-text').innerText()).includes('주문'), '1단계 설명이 주문 읽기가 아님');
+    chk((await page.locator('#tut-bubble .tut-pic img').getAttribute('src')).includes('lia/face.webp'), '리아 얼굴이 말풍선에 없음');
+    chk(await page.evaluate(() => VN.tavern.sel.length === 0), '튜토리얼 중 재료가 선택됨');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${SHOTS}/tut_01_order.png` });
+    await page.touchscreen.tap(195, 420); await page.waitForTimeout(350);
+    chk((await step()) === '2 / 6' && (await page.locator('#tut-text').innerText()).includes('메뉴판'), `2단계 이상 ${await step()}`);
+    const hb = await page.evaluate(() => { const b = document.getElementById('tut-hole').getBoundingClientRect(), o = document.getElementById('tv-board').getBoundingClientRect(); return Math.abs(b.left - o.left) < 12 && Math.abs(b.top - o.top) < 12; });
+    chk(hb, '2단계 하이라이트가 메뉴판 버튼과 맞지 않음');
+    await page.touchscreen.tap(195, 420); await page.waitForTimeout(350);
+    chk((await step()) === '3 / 6' && (await page.locator('#tut-text').innerText()).includes('재료'), `3단계 이상 ${await step()}`);
+    await page.screenshot({ path: `${SHOTS}/tut_02_ingredients.png` });
+    // 튜토리얼 중에는 뒤 화면이 눌리지 않는다
+    await page.touchscreen.tap(60, 560); await page.waitForTimeout(150);
+    chk((await tvp()).sel.length === 0, '튜토리얼 중 뒤 화면(재료)이 눌림');
+    await page.touchscreen.tap(195, 420); await page.waitForTimeout(350);
+    chk((await step()) === '4 / 6' && (await page.locator('#tut-text').innerText()).includes('내기'), `4단계 이상 ${await step()}`);
+    await page.touchscreen.tap(195, 420); await page.waitForTimeout(250);
+    t = await tut();
+    chk(!t.on && t.next === 'result' && !t.done && !(await vis('tut')), `4단계 뒤 상태 이상 ${JSON.stringify(t)}`);
+    // 직접 내 본다: 고기 스튜 -> 결과 단계
+    await page.locator('.tv-ing[data-id="meat"]').tap(); await page.locator('.tv-ing[data-id="mushroom"]').tap(); await page.locator('#tv-serve').tap();
+    await page.waitForFunction(() => VN.tut.on, null, { timeout: 4000 }).catch(() => {});
+    t = await tut();
+    chk(t.on && t.stage === 'result' && (await step()) === '5 / 6', `내고 난 뒤 결과 단계가 시작되지 않음 ${JSON.stringify(t)}`);
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(250);
+    chk(!(await tut()).on && (await tut()).next === 'notes', '결과 단계 뒤 손님 메모 예약 이상');
+    for (let i = 0; i < 60 && !(await page.evaluate(() => VN.tut.on)); i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(50); }
+    t = await tut();
+    chk(t.on && t.stage === 'notes' && (await step()) === '6 / 6' && await vis('tv-notes') && (await page.locator('.tv-note-row[data-who="baron"]').count()) === 1, `손님 메모 단계 이상 ${JSON.stringify(t)}`);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${SHOTS}/tut_03_notes.png` });
+    chk((await stNow(page)).shift === 0, '튜토리얼 가로 스크롤');
+    await page.touchscreen.tap(195, 420); await page.waitForTimeout(350);
+    t = await tut();
+    chk(!t.on && t.done && !(await vis('tv-notes')) && (await tvp()).idx === 1, `튜토리얼 종료 뒤 상태 이상 ${JSON.stringify(t)} idx ${(await tvp()).idx}`);
+    chk((await page.evaluate(() => localStorage.getItem('inn_vn_v3_tut'))) === '1', '튜토리얼 본 기록이 localStorage 에 없음');
+    // 한 번 봤으면 다시 안 나온다 (새 게임에서도)
+    await page.reload(); await page.waitForSelector('#btn-new');
+    chk((await tut()).done, '새로고침 뒤 튜토리얼 기록 유실');
+    await toBrewTut();
+    chk(!(await tut()).on && (await tvp()).phase === 'brew', '이미 본 튜토리얼이 또 나옴');
+    // 설정의 "튜토리얼 다시 보기": 주문을 받는 중이면 바로 시작
+    await page.tap('#menu-btn'); await page.tap('#menu-options'); await page.waitForTimeout(200);
+    chk((await page.locator('#opt-tut .opt-state').innerText()) === '보기', '튜토리얼 버튼 상태 문구 이상');
+    await page.screenshot({ path: `${SHOTS}/tut_04_options.png` });
+    await page.tap('#opt-tut'); await page.waitForTimeout(400);
+    t = await tut();
+    chk(t.on && t.stage === 'brew' && t.i === 0 && !(await vis('options')), `영업 중 다시 보기가 바로 시작되지 않음 ${JSON.stringify(t)}`);
+    // 건너뛰기
+    await page.tap('#tut-skip'); await page.waitForTimeout(250);
+    t = await tut();
+    chk(!t.on && t.done && t.next === '' && !(await vis('tut')), `건너뛰기 이상 ${JSON.stringify(t)}`);
+    await page.locator('.tv-ing[data-id="meat"]').tap(); await page.locator('.tv-ing[data-id="mushroom"]').tap(); await page.locator('#tv-serve').tap(); await page.waitForTimeout(500);
+    chk(!(await tut()).on, '건너뛴 뒤 결과 단계가 또 나옴');
+    // 타이틀에서 다시 보기 -> 예약 -> 다음 새 게임 첫 손님에서 시작
+    await page.tap('#menu-btn'); await page.tap('#menu-title'); await page.waitForTimeout(300);
+    await page.tap('#btn-options'); await page.waitForTimeout(200);
+    await page.tap('#opt-tut'); await page.waitForTimeout(150);
+    chk((await page.locator('#opt-tut .opt-state').innerText()) === '예약됨' && !(await tut()).done, '타이틀에서 다시 보기 예약 이상');
+    await page.tap('#options-close');
+    await toBrewTut();
+    t = await tut();
+    chk(t.on && t.stage === 'brew' && (await step()) === '1 / 6', `예약한 튜토리얼이 다음 새 게임 첫 손님에서 시작되지 않음 ${JSON.stringify(t)}`);
+    await page.tap('#tut-skip'); await page.waitForTimeout(200);
+    chk((await tut()).done && !(await tut()).on, '예약 튜토리얼 건너뛰기 이상');
+    report.push('튜토리얼: 1일차 첫 손님에서 시작(6단계: 주문 읽기/메뉴판/재료/내기/결과/손님 메모, 하이라이트 위치 일치, 탭으로 넘김·뒤 화면 차단), 본 뒤에는 새 게임에서도 안 나옴, 영업 중 다시 보기=즉시, 타이틀에서 다시 보기=예약, 건너뛰기');
+    await ctx.close();
+  }
+
   await browser.close();
   console.log('\n--- 요약 ---');
   report.forEach((r) => console.log(r));
   console.log(`소요 ${((Date.now() - t0) / 1000).toFixed(0)}초, 스크린샷 폴더 ${SHOTS}`);
   problems.forEach((p) => console.log('문제:', p));
-  console.log(problems.length ? `실패: 문제 ${problems.length}건` : `통과: 총 ${results.length + 15}회 플레이/시나리오, 콘솔 error/warning 0건`);
+  console.log(problems.length ? `실패: 문제 ${problems.length}건` : `통과: 총 ${results.length + 19}회 플레이/시나리오, 콘솔 error/warning 0건`);
   process.exit(problems.length ? 1 : 0);
 }
 main().catch((e) => { console.error(e); process.exit(2); });

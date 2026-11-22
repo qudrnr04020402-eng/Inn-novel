@@ -58,7 +58,9 @@ Object.assign(STORY.scenes, {
   ],
 
   // ================= 낮 =================
-  d2_pick: [
+  // 아침 랜덤 사건 (story/random-events.js): 확률로 짧은 돌발 사건을 거친 뒤 낮으로 이어진다
+  d2_pick: [{ rand: 'morning', then: 'd2_pick_day' }],
+  d2_pick_day: [
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
     { narr: '아침 장사가 끝나고 잠깐 틈이 났다. 오늘 오후는 누구와 시간을 보낼까?' },
     { goto: 'pick' }

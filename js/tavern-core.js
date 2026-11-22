@@ -44,9 +44,31 @@
     var d = T.days[dayId];
     if (!d) return [];
     var q = d.customers.filter(function (c) { return !c.if || evalCond(c.if, vars); });
+    // 아침 랜덤 사건의 영업 보정 (vars.today.cust): 음수면 일반 손님을 줄이고(히로인/레시피를 전수하는 손님은 남김), 양수면 단골을 더 부른다
+    var cust = ((vars && vars.today && vars.today.cust) | 0);
+    if (cust < 0) {
+      for (var n = 0; n < -cust; n++) {
+        for (var i = q.length - 1; i >= 0; i--) {
+          var cd = T.customers[q[i].who] || {};
+          if (!cd.heroine && !q[i].gain) { q.splice(i, 1); break; }
+        }
+      }
+    } else if (cust > 0 && T.extras && T.extras.length) {
+      var start = (vars.day || 0) % T.extras.length, added = 0;
+      for (var k = 0; k < T.extras.length && added < cust; k++) {
+        var ex = T.extras[(start + k) % T.extras.length];
+        if (q.some(function (c) { return c.who === ex.who; })) continue;
+        q.push(ex); added++;
+      }
+    }
     var sp = T.specials && T.specials[dayId];
     if (sp) sp.units.forEach(function (u, i) { q.push(Object.assign({}, u, { sp: { day: dayId, i: i, n: sp.units.length, title: sp.title } })); });
     return q;
+  };
+  // 장보기 재료 값 (아침 랜덤 사건의 오늘 가격 보정 vars.today.price % 반영, 최소 1G)
+  C.price = function (T, vars, id) {
+    var base = T.ingredients[id].price, pct = ((vars && vars.today && vars.today.price) | 0);
+    return pct ? Math.max(1, Math.round(base * (100 + pct) / 100)) : base;
   };
   // 특별 주문 판정: 모든 손님이 대성공(재료 조건 포함)이어야 성공. results = 그 특별 주문의 serve/skip 결과들
   C.specialVerdict = function (T, dayId, results) {
@@ -130,6 +152,8 @@
     var tip = 0;
     if (result === 'perfect') tip = Math.max(1, Math.round(price * R.tipRate)) + (out.fav ? (R.favTip || 0) : 0);
     if (tip && t.upg.barrel) tip = Math.ceil(tip * R.barrelTip);
+    var tipPct = ((vars.today && vars.today.tip) | 0);   // 아침 랜덤 사건: 오늘 팁 보정 % (예: 비 오는 날 +50)
+    if (tip && tipPct) tip = Math.ceil(tip * (100 + tipPct) / 100);
     if (t.upg.stove && (order.want || []).indexOf('따뜻함') >= 0 && (result === 'perfect' || result === 'good')) { tip += R.stoveBonus; out.stove = true; }
     // 단골 보너스: 주문을 (대성공/보통으로) 맞히면서 숨은 취향까지 맞췄을 때 팁과 평판이 조금 더
     var note = C.note(vars, who);

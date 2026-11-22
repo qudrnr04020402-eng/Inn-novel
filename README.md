@@ -185,6 +185,7 @@ css/style.css           모든 스타일
 js/sfx.js               효과음 (WebAudio 합성, 파일 없음). 첫 사용자 입력 뒤에 AudioContext 를 만들어 모바일 정책을 지킴
 js/bgm.js               BGM 재생기 (story/audio.js 의 트랙 정의를 읽음, 크로스페이드, 탭이 백그라운드면 일시정지, 파일 없으면 조용히 무시)
 js/tavern-core.js       영업 규칙(판정/보상 계산, DOM 무관 순수 함수). 엔진과 검사 시뮬레이션이 같이 사용
+js/event-core.js        랜덤 사건 핵심(시드 해시로 결정적 추첨, 중복 방지, 일일 보정 초기화). DOM 무관, 시뮬레이션과 공용
 js/engine.js            엔진 (보통 수정할 필요 없음). 영업 화면(장보기/재료 고르기/결산/업그레이드/메뉴판), 자유 대화 화면도 여기
 js/llm-core.js          자유 대화 핵심 로직(프롬프트 조립, 응답 파서, 하루 턴/호감도 상한, PC 서버 호출). DOM 무관
 story/
@@ -194,6 +195,8 @@ story/
   common.js             시작 변수, 히로인 목록, 낮 "누구와 시간을 보낼까" 메뉴(pick), 일차 연결
   day1.js ~ day5.js     일차별 스크립트 (아침 / 히로인 이벤트 / 저녁 / 밤)   <- 여기를 고쳐서 이야기를 늘립니다
   tavern.js             저녁 영업 데이터: 규칙 수치, 재료, 레시피, 손님(반응 대사), 일차별 손님/주문, 업그레이드  <- 영업 내용은 여기만 고치면 됨
+  cg.js                 이벤트 CG 정의(CG_DEFS): id -> 제목/파일/힌트 (file:null 이면 임시 CG)  <- CG 는 여기만 고치면 됨
+  random-events.js      아침 랜덤 사건 10종(RANDOM_EVENTS) + 사건 장면(rev_*) + 오늘의 영업 보정용 추가 손님(TAVERN.extras)
   endings.js            엔딩 6종 정의(ENDINGS) + 엔딩 판정(end_judge) + 엔딩 장면
   llm-persona.js        자유 대화(로컬 LLM) 설정: 공통 지시, 히로인별 성격/말투/비밀 공개 범위, 턴/호감도 상한   <- 말투는 여기만 고치면 됨
 assets/
@@ -201,6 +204,7 @@ assets/
   char/<id>/face.webp                                     히로인 얼굴 동그라미용 썸네일 (256x256)
   (히로인 4명 폴더의 옛 .svg 는 더 이상 쓰지 않는 임시 그림)
   char/{baron,tobi,greta,marta,fin,chief}/               영업 단골/손님 (같은 6표정 규격)
+  cg/<id>.webp                                            이벤트 CG (세로 일러스트, 선택. 없으면 임시 CG 화면 — 아래 "CG 넣는 법")
   bgm/                                                    (직접 만들어 넣는 BGM 폴더. 지금은 비어 있음 — 아래 "BGM 넣는 법")
   tavern/*.svg                                            재료 아이콘 8종 (tools/gen-tavern-art.js 로 재생성)
   bg/*.svg                                                배경 (720x1280)
@@ -211,6 +215,7 @@ tools/
   test-play.js          Playwright 자동 플레이 테스트 (히로인별/노멀/배드/무작위, 저장/로드, 엔딩 목록, 스크린샷)
   test-llm.js           자유 대화 Playwright 통합 테스트 (PC 서버 + 가짜 LLM 을 직접 띄움)
   test-llm-core.js      자유 대화 파서/프롬프트/상한 단위 테스트 (node)
+  process-cg.py         CG 원본 PNG -> 리사이즈 + webp (배경 제거 없음). 아래 "CG 넣는 법"
   process-sprites.py    히로인 원본 PNG -> 배경 제거(rembg isnet-anime) + 투명 WebP + 얼굴 썸네일 변환기
   gen-chars.js          손님(및 옛 히로인 임시) SVG 일러스트 생성기 (머리색/귀/꼬리/표정을 파라미터로 그림)
   gen-tavern-art.js     재료 아이콘 SVG 생성기
@@ -263,6 +268,9 @@ Object.assign(STORY.scenes, {
 | `{learn: id}` | 레시피를 메뉴판에 추가(이미 알면 무시). 배열도 가능 | `{learn:'mushroom_soup'}` |
 | `{upgrades: true}` | 밤의 여관 업그레이드 구입 화면. "다음 날로" 를 누르면 다음 명령 | `common.js` 의 `dN_upgrade` |
 | `{summary: {title, note}}` | 결과 요약 화면(골드/평판/호감도). 마지막에 "타이틀로" 버튼 | `{summary:{title:'결과'}}` |
+| `{cg: id}` / `{cg: 'hide'}` | **이벤트 CG** 전체 화면 표시 / 걷기. 처음 보면 갤러리에 영구 기록(다른 회차에도 유지). 표시 중에는 대사창만 위에 뜸 | `{cg:'erion_end'}` |
+| `{rand: 'morning', then: 씬}` | **아침 랜덤 사건 추첨**: 사건이 뽑히면 `rev_<id>` 씬으로 가고, 끝나면 `then` 씬으로 돌아옴. 안 뽑히면 바로 `then` | `{rand:'morning', then:'d3_pick_day'}` |
+| `{randret: true}` | 사건 장면 마지막에 두는 복귀 명령 (`rev_end` 씬이 사용) | |
 | `{end: true}` | 즉시 타이틀로 | |
 
 #### 선택지 항목 옵션
@@ -328,6 +336,59 @@ node tools/check-story.js
 - **라이선스 주의**: AI 로 만든 음악(Suno, Udio 등)이나 CC0/무료 음원을 쓸 때는 **상업적 이용, 게임/앱 배포, 재배포 가능 여부와 출처 표기 조건을 반드시 확인**하세요. 서비스 약관이 바뀌거나 무료 플랜은 상업 이용이 안 되는 경우가 있습니다. 출처 표기가 필요한 음원이면 타이틀이나 README 에 크레딧을 남기세요. 라이선스가 불분명한 음원은 넣지 않는 것이 안전합니다.
 - 브라우저/모바일은 **첫 터치 전에는 소리를 낼 수 없어서** 타이틀 음악은 첫 탭 뒤에 시작합니다. 탭이 백그라운드로 가면 BGM 이 멈췄다가 돌아오면 이어집니다.
 
+## CG 넣는 법
+
+이벤트 CG 14장(히로인별 3장 + 공용 2장)은 `story/cg.js` 에 정의되어 있고, 지금은 모두 `file: null` — 그림 없이도 **임시 CG**(배경 + 확대된 스탠딩 + 비네트/빛, 글자 없음, 이미지 요청 없음)로 보입니다. 진짜 그림은 파일만 넣으면 바뀝니다.
+
+1. ComfyUI 로 뽑기: `/home/user/comfy-batch/presets_cg.json` 프리셋(14장, 832x1216)을 불러 실행하면 `<cgid>.png` 로 저장됩니다(프리셋의 `single_face_no_suffix: true` 덕분에 `_scene` 같은 꼬리표가 안 붙음). 프롬프트는 프리셋 안에서 다듬으세요.
+2. 변환: `python3 tools/process-cg.py <PNG 폴더> [--h 1280] [--q 82]` — 리사이즈(줄이기만) + webp 변환만 하며 `assets/cg/<id>.webp` 로 저장합니다. `<id>_scene.png` 이름도 받습니다.
+3. 연결: `story/cg.js` 에서 해당 id 의 `file: null` 을 `file: 'assets/cg/<id>.webp'` 로 바꿉니다. 파일이 없거나 깨지면 자동으로 임시 CG 로 대체됩니다.
+4. `sw.js` 의 `ASSETS` 에 경로를 추가하고 `VERSION` 을 올립니다(오프라인 캐시). 새 CG 를 스크립트에 쓰려면 `CG_DEFS` 에 항목을 추가하고 장면에 `{cg:'id'}` ... `{cg:'hide'}` 를 넣습니다. 갤러리 칸 수와 수집 화면의 "CG n/14" 는 정의 개수를 따라갑니다.
+
+| id | 장면 | 위치 |
+|---|---|---|
+| erion_cave / kaela_tag / miho_letter | 3번째 낮 이벤트(동굴 앞의 붕대 / 가격표 갑옷 / 우물가 편지) | day3 |
+| lia_charm | 리아 4번째 낮 이벤트 | day4 |
+| erion_lantern / kaela_lantern / miho_lantern / lia_lantern | 3일차 저녁 소원 등불 | day3 |
+| erion_end / kaela_end / miho_end / lia_end | 히로인별 개별 엔딩 | endings |
+| festival_all | 달맞이 장터의 밤 | day3 |
+| cave_seal | 동굴 결전의 봉인 | day5 |
+
+## 아침 랜덤 사건 (`story/random-events.js`)
+
+2~5일차 아침마다 약 60% 확률로 사건이 하나 일어납니다. 추첨은 세이브에 든 시드(`vars.rev.seed`)와 일차로 정해지는 **결정적 해시**라, 저장/불러오기를 반복해도 결과가 바뀌지 않고, 한 회차에서 같은 사건은 두 번 나오지 않습니다(`vars.rev.used`). 사건은 `days`(일차)/`weight`(상대 확률)/`if`(조건식)로 후보를 거릅니다.
+
+| 사건 | 효과 요약 |
+|---|---|
+| lost_purse 분실물 | 돌려주기 평판+1 +4G / 챙기기 +8G 평판-1 |
+| rowdy_guest 진상 손님 | 사과(-3G, 평판+1) / 단호히 / 카엘라 호감 3+ 면 도움(호감+1, 평판+1) / 숨기 평판-1 |
+| rainy_day 비 오는 날 (3~5일) | 손님 -1, 팁 +50% (오늘만) |
+| bard 음유시인 | 사례 5G 로 공연 -> 평판+1, 손님 +1(단골 추가) |
+| rats 쥐 소동 (2~4일) | 직접 쫓으면 장보기 +15% / 고양이(-2G, 평판+1) / 리아 호감 3+ 면 호감+1 |
+| merchant_sale 재료 상인 | 재료 값 -25% / 미호 호감 2+ 면 흥정 -40%, 호감+1 |
+| errand_child 아이의 심부름 | 선물(-3G, 평판+1) / 정가(+1G) |
+| strange_letter 수상한 편지 (2~4일) | 촌장과 열기 평판+1 / 열어 보기 +6G / 태우기 |
+| heroine_meet 뜻밖의 마주침 | 호감 2+ 인 히로인 중 가장 높은 쪽과 대화, 호감 +2 |
+| hungry_traveler 배고픈 나그네 | 나눠 주기(-3G, 평판+1) / 일 시키기 +3G / 거절 평판-1 |
+
+오늘의 영업 보정은 `vars.today.*`(`cust` 손님 수, `price` 장보기 %, `tip` 팁 %, `note` 안내 문구)에 들어가며 `{day}` 로 일차가 바뀔 때 초기화됩니다. 새 사건은 `RANDOM_EVENTS.events` 에 한 줄 + `rev_<id>` 씬(마지막은 `{goto:'rev_end'}`)을 추가하면 됩니다. 스킵은 안 읽은 사건 대사에서 멈춥니다. `check-story.js` 시뮬레이션도 사건을 포함해 엔딩 분포를 검증합니다.
+
+## 수집 화면과 보상
+
+타이틀의 "수집" 에서 엔딩 n/6, CG n/14, 레시피 도감 n/15, 손님 메모 n/10(단골 6명 취향 + 히로인 4명 최애 메뉴)과 전체 % 를 봅니다. 기록은 `localStorage`(`inn_vn_v3_*`)에 회차와 상관없이 쌓입니다.
+
+| 보상 | 조건 | 효과 |
+|---|---|---|
+| 시작 골드 | 엔딩 3개 이상 | 새 게임 시작 골드 +30 |
+| 전체 레시피 공개 | 레시피 도감 15/15 | 설정에 옵션이 열리고, 켜면 새 게임에서 레시피 15개를 처음부터 공개 |
+| 타이틀 특별 연출 | 전체 100% | 타이틀에 별빛 + 히로인 4명 웃는 얼굴 |
+
+보상은 수집 화면에 잠김/해금으로 표시됩니다.
+
+## 첫 영업 튜토리얼
+
+1일차 첫 손님에서 한 번만(회차와 무관) 리아가 6단계로 안내합니다: 주문 읽기 -> 메뉴판 열기 -> 재료 2~3개 고르기 -> 내기 -> 결과 보기 -> 손님 메모. 탭으로 넘기고 "건너뛰기" 가 있습니다. 설정의 "튜토리얼 다시 보기" 는 영업 중이면 즉시, 타이틀이면 다음 새 게임 첫 손님에서 다시 보여 줍니다.
+
 ## 이미지 교체 방법
 
 히로인 4명은 ComfyUI 로 만든 일러스트(투명 WebP)이고, 손님(baron 등)은 `tools/gen-chars.js` 가 만든 임시 SVG 입니다. 히로인 그림을 바꾸려면:
@@ -350,7 +411,9 @@ SVG 를 계속 쓰면서 그림을 다듬고 싶다면 `node tools/gen-chars.js`
 ```bash
 node tools/check-story.js                 # 스크립트 검사 + 시뮬레이션 (1초)
 python3 -m http.server 8765 &
-node tools/test-play.js [스크린샷 폴더]   # Playwright 390x844 모바일: 히로인 4명/노멀/배드/무작위 플레이(영업 포함), 영업 UI 탭 테스트, 스킵/오토/설정/음소거/BGM, 미리보기 숨김, 손님 메모, 특별 주문, 저장/로드, 엔딩 목록, 스크린샷 (3~4분 소요)
+node tools/test-play.js [스크린샷 폴더]   # Playwright 390x844 모바일: 히로인 4명/노멀/배드/무작위 플레이(영업 포함), 영업 UI 탭 테스트, 스킵/오토/설정/음소거/BGM, 미리보기 숨김, 손님 메모, 특별 주문, CG/갤러리, 랜덤 사건(시드 300x4일 발생률/중복/결정성/보정), 수집/보상, 튜토리얼, 저장/로드, 엔딩 목록, 스크린샷 (4~5분 소요)
+node tools/test-llm.js                    # 자유 대화 통합 테스트
+python3 tools/process-cg.py <PNG 폴더>    # CG 원본 PNG -> assets/cg/<id>.webp (리사이즈 + webp 만)
 node tools/gen-chars.js                   # 손님 SVG 일러스트 재생성
 python3 tools/process-sprites.py <원본폴더>   # 히로인 PNG -> 투명 WebP (배경 제거)
 node tools/gen-icons.js                   # icons/icon.svg 에서 PNG 아이콘 재생성

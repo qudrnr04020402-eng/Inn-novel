@@ -14,21 +14,24 @@ const load = (f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'),
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 scripts.forEach(load);
-const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX } = ctx;
+const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX, CG_DEFS, RANDOM_EVENTS, EventCore } = ctx;
 
 const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
 const scenes = STORY.scenes;
 const edges = {};
-const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx'];
-const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending'];
+const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx', 'cg', 'rand', 'randret'];
+const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending', 'rand', 'randret'];
 const files = new Set();
 let lines = 0, choices = 0;
 
 if (!scenes[STORY.start]) err(`시작 씬 없음: ${STORY.start}`);
 if (!TAVERN || !TavernCore) err('story/tavern.js 또는 js/tavern-core.js 가 index.html 에서 로드되지 않음');
 if (!STORY.init.tavern) err('STORY.init.tavern 없음 (story/tavern.js 맨 아래)');
-const tavernDaysUsed = new Set(), upgradeCmds = [], bgmUsed = new Set();
+const tavernDaysUsed = new Set(), upgradeCmds = [], bgmUsed = new Set(), cgUsed = new Set();
+const cgScenes = {};   // 씬 id -> 그 씬 안의 cg 명령 순서 (보이기/걷기 짝 검사)
+if (!CG_DEFS) err('story/cg.js (CG_DEFS) 가 index.html 에서 로드되지 않음');
+if (!RANDOM_EVENTS || !EventCore) err('story/random-events.js 또는 js/event-core.js 가 index.html 에서 로드되지 않음');
 if (!Array.isArray(ENDINGS) || !ENDINGS.length) err('ENDINGS 가 없음 (story/endings.js)');
 (STORY.cast || []).forEach((c) => { if (!CHARACTERS[c]) err(`STORY.cast 에 없는 캐릭터: ${c}`); });
 
@@ -64,6 +67,15 @@ for (const [id, cmds] of Object.entries(scenes)) {
     if (key === 'tavern') { tavernDaysUsed.add(c.tavern); if (!TAVERN.days[c.tavern]) err(`[${id}] ${w}: TAVERN.days 에 없는 영업 id ${c.tavern}`); }
     if (key === 'learn') [].concat(c.learn).forEach((r) => { if (!TAVERN.recipes[r]) err(`[${id}] ${w}: 없는 레시피 ${r}`); });
     if (key === 'upgrades') upgradeCmds.push(id);
+    if (key === 'cg') {
+      (cgScenes[id] = cgScenes[id] || []).push(c.cg);
+      if (c.cg !== 'hide') { cgUsed.add(c.cg); if (!(CG_DEFS || {})[c.cg]) err(`[${id}] ${w}: story/cg.js 에 없는 CG ${c.cg}`); }
+    }
+    if (key === 'rand') {
+      if (c.rand !== 'morning') err(`[${id}] ${w}: rand 는 'morning' 만 지원`);
+      if (!c.then) err(`[${id}] ${w}: rand 에 then 없음`); else target(c.then, w + ' then');
+      Object.keys((RANDOM_EVENTS || { events: {} }).events).forEach((e) => { if (scenes['rev_' + e]) edges[id].push('rev_' + e); });
+    }
     if (key === 'goto') target(c.goto, w);
     if (key === 'if') {
       try { VN.checkCond(c.if); } catch (e) { err(`[${id}] ${w}: ${e.message}`); }
@@ -90,7 +102,7 @@ for (const [id, cmds] of Object.entries(scenes)) {
   const sets = [];
   cmds.forEach((c) => { if (c.set) sets.push(c.set); if (c.put) sets.push(c.put); (c.choice || []).forEach((o) => o.set && sets.push(o.set)); });
   sets.forEach((s) => Object.keys(s).forEach((k) => {
-    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$/);
+    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^today\.(cust|price|tip|note)$/);
     if (!m) wn(`[${id}] 변수 이름 확인: ${k}`);
     else if (m[2] && !CHARACTERS[m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
   }));
@@ -337,6 +349,129 @@ if (TAVERN && TavernCore) {
   if (upgradeCmds.length < 3) wn(`{upgrades:true} 씬이 ${upgradeCmds.length}개뿐 (밤마다 구입 기회를 주는 것을 권장)`);
 }
 
+// ---------- 이벤트 CG 정의/사용 검사 (story/cg.js) ----------
+const cgStats = { n: 0, temp: 0, file: 0 };
+if (CG_DEFS) {
+  const ids = Object.keys(CG_DEFS);
+  cgStats.n = ids.length;
+  if (ids.length !== 14) wn(`CG 는 14장이 목표 (현재 ${ids.length}장: 히로인별 3장 x 4 + 공용 2장)`);
+  ids.forEach((id) => {
+    const d = CG_DEFS[id], w = `CG ${id}`;
+    if (id === 'hide') err(`${w}: 'hide' 는 예약어`);
+    if (!/^[a-z][a-z0-9_]*$/.test(id)) err(`${w}: id 는 영문 소문자/숫자/밑줄`);
+    if (!d.title) err(`${w}: title 없음`);
+    if (!d.hint) err(`${w}: hint 없음`);
+    if (!(d.file === null || typeof d.file === 'string')) err(`${w}: file 은 null(임시 CG) 또는 경로 문자열`);
+    if (typeof d.file === 'string') {
+      cgStats.file++;
+      files.add(d.file);
+      if (d.file !== `assets/cg/${id}.webp`) wn(`${w}: 경로는 assets/cg/${id}.webp 를 권장 (${d.file})`);
+      if (!fs.existsSync(path.join(root, d.file))) wn(`${w}: 파일이 없음 (${d.file}) — 로드 실패 시 임시 CG 로 표시됨`);
+    } else cgStats.temp++;
+    if (!BACKGROUNDS[d.bg]) err(`${w}: 임시 CG 배경 bg 가 없음/잘못됨 (${d.bg})`);
+    if (!Array.isArray(d.who) || !d.who.length || d.who.length > 4) err(`${w}: who 는 1~4명의 캐릭터 id 배열`);
+    (d.who || []).forEach((x) => { if (!CHARACTERS[x]) err(`${w}: who 에 없는 캐릭터 ${x}`); else if (!CHARACTERS[x].faces[d.face || 'smile']) err(`${w}: ${x} 에 없는 표정 ${d.face}`); });
+    if (!cgUsed.has(id)) err(`${w}: 정의만 있고 스크립트에 {cg:'${id}'} 가 없음`);
+    else if (![...seen].some((sc) => (cgScenes[sc] || []).includes(id))) err(`${w}: 도달 가능한 씬에서 쓰이지 않음`);
+  });
+  // 보이기/걷기 짝: CG 를 띄운 씬 안에서 그 뒤에 {cg:'hide'} 가 있어야 함 (낮 이벤트는 after_pick 에서도 걷지만 씬 안에서 걷는 것을 원칙으로)
+  Object.entries(cgScenes).forEach(([sc, seq]) => {
+    const last = seq.lastIndexOf('hide');
+    seq.forEach((x, i) => { if (x !== 'hide' && !seq.slice(i + 1).includes('hide')) err(`[${sc}] CG ${x} 를 띄운 뒤 같은 씬에서 {cg:'hide'} 로 걷지 않음`); });
+  });
+}
+
+// ---------- 아침 랜덤 사건 데이터 검사 (story/random-events.js) ----------
+const evStats = { n: 0 };
+if (RANDOM_EVENTS && EventCore) {
+  const R = RANDOM_EVENTS, ids = Object.keys(R.events || {});
+  evStats.n = ids.length;
+  if (!(R.chance > 0 && R.chance <= 1)) err('RANDOM_EVENTS.chance 는 0 초과 1 이하');
+  if (!Array.isArray(R.days) || !R.days.length || R.days.some((d) => !(d >= 2 && d <= 5))) err('RANDOM_EVENTS.days 는 2~5 사이의 일차 배열');
+  if (ids.length < 8 || ids.length > 10) wn(`랜덤 사건은 8~10개가 목표 (현재 ${ids.length}개)`);
+  const dayUse = {}, evScenes = new Set();
+  ids.forEach((id) => {
+    const e = R.events[id], w = `랜덤 사건 ${id}`, sc = scenes['rev_' + id];
+    if (!e.title) err(`${w}: title 없음`);
+    if (!Array.isArray(e.days) || !e.days.length || e.days.some((d) => !R.days.includes(d))) err(`${w}: days 는 RANDOM_EVENTS.days 의 부분집합`);
+    if (e.weight != null && !(e.weight > 0)) err(`${w}: weight 는 양수`);
+    if (e.if) { try { VN.checkCond(e.if); } catch (x) { err(`${w}: if ${x.message}`); } }
+    if (!sc) { err(`${w}: 씬 rev_${id} 가 없음`); return; }
+    (e.days || []).forEach((d) => { dayUse[d] = (dayUse[d] || 0) + 1; });
+    // rev_<id> 에서 시작해 rev_end 에 도달해야 하고, 선택지 효과가 소폭이어야 함
+    const stack = ['rev_' + id], vis = new Set(); let reachEnd = false, hasChoice = false;
+    while (stack.length) {
+      const sid = stack.pop(); if (vis.has(sid)) continue; vis.add(sid);
+      if (sid === 'rev_end') { reachEnd = true; continue; }
+      (edges[sid] || []).forEach((t) => stack.push(t));
+      (scenes[sid] || []).forEach((c, i) => {
+        if ('ending' in c || 'tavern' in c || 'day' in c) err(`${w} [${sid}] #${i}: 사건 장면에서 쓸 수 없는 명령`);
+        const lim = (set, where) => Object.entries(set || {}).forEach(([k, v]) => {
+          if (k === 'gold' && !(Math.abs(v) <= 15)) err(`${w} ${where}: 골드 변화는 ±15 이하 (${v})`);
+          if (k === 'rep' && !(Math.abs(v) <= 2)) err(`${w} ${where}: 평판 변화는 ±2 이하 (${v})`);
+          if (/^aff\./.test(k) && !(v >= 0 && v <= 2)) err(`${w} ${where}: 호감도는 0~2 증가만 (${k} ${v})`);
+          if (k === 'today.cust' && !(Math.abs(v) <= 1)) err(`${w} ${where}: today.cust 는 ±1`);
+          if (k === 'today.price' && !(Math.abs(v) <= 50)) err(`${w} ${where}: today.price 는 ±50%`);
+          if (k === 'today.tip' && !(v >= 0 && v <= 100)) err(`${w} ${where}: today.tip 은 0~100%`);
+          if (k === 'today.note' && !(typeof v === 'string' && v)) err(`${w} ${where}: today.note 는 문자열`);
+          if (/^(flag|ev|tavern|llm)\./.test(k)) err(`${w} ${where}: 사건에서 ${k} 를 바꾸지 않음 (스토리/영업 진행 보호)`);
+        });
+        lim(c.set, `[${sid}] #${i}`);
+        if (c.choice) {
+          hasChoice = true;
+          c.choice.forEach((o, j) => { lim(o.set, `[${sid}] 선택지${j + 1}`); if (o.cost && o.cost > 10) err(`${w}: 선택지 비용은 10G 이하`); });
+          const reps = c.choice.filter((o) => !o.if).map((o) => (o.set && o.set.rep) || 0);
+          if (reps.length && Math.min(...reps) > 0) err(`${w}: 평판이 오르기만 하는 선택지뿐임 (평판 최저 전략 보호: 0 이하 선택지 필요)`);
+        }
+      });
+    }
+    vis.forEach((x) => evScenes.add(x));
+    if (!reachEnd) err(`${w}: rev_end(아침 복귀)에 도달하지 못함`);
+    if (!hasChoice) err(`${w}: 선택지가 없음 (1~2개 이상의 선택지)`);
+  });
+  Object.keys(scenes).filter((x) => /^rev_/.test(x) && x !== 'rev_end').forEach((x) => { if (!evScenes.has(x)) wn(`씬 ${x}: 어느 랜덤 사건에서도 도달할 수 없음`); });
+  if (!scenes.rev_end) err('공용 씬 rev_end 없음');
+  R.days.forEach((d) => { if (!dayUse[d]) err(`랜덤 사건: ${d}일차에 나올 수 있는 사건이 없음`); });
+  // rand 명령은 2~5일차 아침마다 정확히 한 번
+  const randDays = [];
+  Object.entries(scenes).forEach(([sid, cmds]) => cmds.forEach((c) => { if ('rand' in c) randDays.push(sid); }));
+  if (randDays.length !== R.days.length) err(`rand 명령이 ${randDays.length}개 (일차마다 하나씩, ${R.days.length}개여야 함): ${randDays}`);
+  // 영업 보정 사건이 실제로 작동하는가: 손님 -1 / +1, 재료 값
+  const T = TAVERN;
+  Object.entries(R.events).forEach(([id, e]) => {
+    const allSets = []; (function walk(sid, vis) { if (vis.has(sid) || sid === 'rev_end') return; vis.add(sid); (scenes[sid] || []).forEach((c) => { [c.set].concat((c.choice || []).map((o) => o.set)).forEach((x) => x && allSets.push(x)); }); (edges[sid] || []).forEach((t) => walk(t, vis)); })('rev_' + id, new Set());
+    const cust = allSets.map((x) => x['today.cust'] || 0).filter(Boolean);
+    cust.forEach((cv) => (e.days || []).forEach((d) => {
+      const base = TavernCore.queue(T, 'day' + d, { day: d, today: { cust: 0 }, tavern: { upg: {} } }, VN.evalCond).length;
+      const mod = TavernCore.queue(T, 'day' + d, { day: d, today: { cust: cv }, tavern: { upg: {} } }, VN.evalCond).length;
+      if (mod !== base + cv) err(`랜덤 사건 ${id}: ${d}일차에 손님 ${cv > 0 ? '+' : ''}${cv} 가 적용되지 않음 (줄일 수 있는 일반 손님이 없거나 추가 손님이 없음: ${base} -> ${mod})`);
+    }));
+  });
+  // 결정성: 같은 시드/일차/사용 기록이면 항상 같은 결과, 시드가 다르면 분포가 비슷한 확률
+  const mk = (seed) => { const v = { day: 3, aff: { erion: 3, kaela: 0, miho: 0, lia: 0 }, rev: { seed, used: [] } }; EventCore.ensure(v); return v; };
+  let det = true, hit = 0, N = 4000;
+  for (let i = 0; i < N; i++) {
+    const a = EventCore.pick(R, mk(i * 7919), 3, VN.evalCond), b = EventCore.pick(R, mk(i * 7919), 3, VN.evalCond);
+    if (a !== b) det = false;
+    if (a) hit++;
+  }
+  if (!det) err('EventCore.pick 가 결정적이지 않음 (같은 입력에 다른 결과)');
+  if (Math.abs(hit / N - R.chance) > 0.05) err(`랜덤 사건 발생률이 설정(${R.chance})과 다름: ${(hit / N).toFixed(3)}`);
+  evStats.rate = (hit / N).toFixed(3);
+  // 추가 손님 (TAVERN.extras)
+  const ex = T.extras || [];
+  if (ex.length < 3) err('TAVERN.extras(음유시인 등으로 늘어나는 단골) 가 3명 미만');
+  ex.forEach((c, i) => {
+    const w = `TAVERN.extras[${i}] (${c.who})`;
+    if (!CHARACTERS[c.who] || !T.customers[c.who]) { err(`${w}: 없는 손님`); return; }
+    if (T.customers[c.who].heroine) err(`${w}: 히로인이 아님 (호감도 밸런스 보호)`);
+    if (!c.order || !c.order.text || !Array.isArray(c.order.want) || !c.order.want.length) { err(`${w}: order.text/want 확인`); return; }
+    c.order.want.concat(c.order.avoid || []).forEach((t) => { if (!T.tags[t]) err(`${w}: 정의되지 않은 태그 ${t}`); });
+    if (!Object.keys(T.recipes).some((x) => T.recipes[x].basic && TavernCore.judge(c.order, Object.assign({ id: x }, T.recipes[x])) === 'perfect')) wn(`${w}: 기본 레시피로는 대성공 불가`);
+    (c.say || []).forEach((l) => { if (l && l.text && l.face && !CHARACTERS[c.who].faces[l.face]) err(`${w}: 없는 표정 ${l.face}`); });
+  });
+}
+
 // sw.js 캐시 목록 / index.html 스크립트 목록
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const list = [...sw.match(/const ASSETS = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
@@ -390,11 +525,11 @@ function tavernService(v, dayId, pol, acc) {
       cands.sort((a, b) => TAVERN.recipes[a].ing.reduce((x, i) => x + TAVERN.ingredients[i].price, 0) - TAVERN.recipes[b].ing.reduce((x, i) => x + TAVERN.ingredients[i].price, 0));
       if (cands.length) { planned.push(TAVERN.recipes[cands[0]].ing.slice()); TAVERN.recipes[cands[0]].ing.forEach((i) => { reserved[i] = (reserved[i] || 0) + 1; }); } else planned.push(null);
     });
-    Object.keys(reserved).forEach((i) => { const pr = TAVERN.ingredients[i].price; while ((t.stock[i] || 0) < reserved[i] && v.gold - pr >= 0) { v.gold -= pr; t.stock[i] = (t.stock[i] || 0) + 1; acc.spent += pr; } });
+    Object.keys(reserved).forEach((i) => { const pr = TavernCore.price(TAVERN, v, i); while ((t.stock[i] || 0) < reserved[i] && v.gold - pr >= 0) { v.gold -= pr; t.stock[i] = (t.stock[i] || 0) + 1; acc.spent += pr; } });
   }
   const unreserved = (fn) => { const sv = {}; Object.keys(reserved).forEach((i) => { sv[i] = t.stock[i]; t.stock[i] = Math.max(0, (t.stock[i] || 0) - reserved[i]); }); try { return fn(); } finally { Object.keys(sv).forEach((i) => { t.stock[i] = sv[i]; }); } };
   Object.keys(TAVERN.ingredients).sort((a, b) => TAVERN.ingredients[a].price - TAVERN.ingredients[b].price).forEach((id) => {
-    const pr = TAVERN.ingredients[id].price;
+    const pr = TavernCore.price(TAVERN, v, id);
     while ((t.stock[id] || 0) < pol.stock && v.gold - pr >= pol.reserve) { v.gold -= pr; t.stock[id] = (t.stock[id] || 0) + 1; acc.spent += pr; }
   });
   const ctx = { repSum: 0 }, spRes = [];
@@ -441,9 +576,10 @@ function buyUpgrades(v, pol, acc) {
 function simulate(pickFn, pol) {
   pol = pol || POL.decent;
   const v = JSON.parse(JSON.stringify(STORY.init));
-  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [] };
+  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [], events: [] };
   let sc = STORY.start, pc = 0, steps = 0, ending = null, read = 0;
   const visit = new Set(), snapRep = {};
+  EventCore.ensure(v, () => Math.floor(rnd() * 4294967296));   // 이번 회차 랜덤 사건 시드
   while (steps++ < 20000) {
     const c = scenes[sc][pc];
     if (!c) return { error: `씬 끝: ${sc}`, v };
@@ -461,7 +597,14 @@ function simulate(pickFn, pol) {
     }
     if ('if' in c) { const ok = VN.evalCond(c.if, v); if (ok && c.goto) { sc = c.goto; pc = 0; } else if (!ok && c.else) { sc = c.else; pc = 0; } else pc++; continue; }
     if ('goto' in c) { sc = c.goto; pc = 0; continue; }
-    if ('day' in c) { v.day = c.day; v.time = c.time || '아침'; pc++; continue; }
+    if ('day' in c) { v.day = c.day; v.time = c.time || '아침'; EventCore.newDay(v); pc++; continue; }
+    if ('rand' in c) {
+      const ev = EventCore.pick(RANDOM_EVENTS, v, v.day, VN.evalCond);
+      EventCore.begin(v, ev, c.then);
+      if (ev) { acc.events.push(ev); sc = 'rev_' + ev; } else sc = c.then;
+      pc = 0; continue;
+    }
+    if ('randret' in c) { sc = v.rev.ret; pc = 0; continue; }
     if ('time' in c) { v.time = c.time; pc++; continue; }
     if ('tavern' in c) { tavernService(v, c.tavern, pol, acc); pc++; continue; }
     if ('learn' in c) { [].concat(c.learn).forEach((r) => TavernCore.learn(v, r)); pc++; continue; }

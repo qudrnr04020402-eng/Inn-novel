@@ -41,7 +41,9 @@ Object.assign(STORY.scenes, {
   ],
 
   // ================= 낮 =================
-  d3_pick: [
+  // 아침 랜덤 사건 (story/random-events.js): 확률로 짧은 돌발 사건을 거친 뒤 낮으로 이어진다
+  d3_pick: [{ rand: 'morning', then: 'd3_pick_day' }],
+  d3_pick_day: [
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
     { narr: '노점 준비가 거의 끝났다. 저녁 축제까지 시간이 남았다. 누구와 시간을 보낼까?' },
     { goto: 'pick' }
@@ -55,8 +57,10 @@ Object.assign(STORY.scenes, {
     { show: 'erion', face: 'normal', pos: 'center' },
     { say: 'erion', text: '…따라왔어? 정말 눈치 없는 인간이네.' },
     { narr: '붕대 아래로 붉게 번진 화상이 보인다. 어젯밤 봉인을 다지다 마력이 역류한 모양이다.' },
+    { cg: 'erion_cave' },
     { show: 'erion', face: 'angry' },
     { say: 'erion', text: '이건 내 일이야. 인간 따위가 낄 일이 아니라고. 사흘 후 이 마을이 어떻게 되든, 내가 어떻게든 해.' },
+    { cg: 'hide' },
     { choice: [
       { text: '말없이 붕대를 풀고 상처를 다시 정성껏 감아 준다', set: { 'aff.erion': 2 }, goto: 'erion_3_bandage' },
       { text: '"…걱정돼서 따라왔어요."', set: { 'aff.erion': 1 }, goto: 'erion_3_worry' },
@@ -100,8 +104,10 @@ Object.assign(STORY.scenes, {
     { say: 'kaela', text: '…주인장인가. 마침 잘 왔다. 한 가지, 고백할 것이 있다.' },
     { say: 'kaela', text: '나는… 정식 기사가 아니다. 왕국 기사 시험에 세 번 떨어졌다. 이 갑옷은 할부로 샀고, 오우거는… 멀리서 본 게 전부다.' },
     { narr: '갑옷 옆구리의 가격표가 아직도 달랑거린다. 그녀는 그것을 손으로 감싸 쥐었다.' },
+    { cg: 'kaela_tag' },
     { say: 'kaela', text: '그래도 영웅이 되고 싶었다. 진짜 누군가를 구하는 사람이. …웃어도 좋다. 이럴 줄 알았다.' },
     { say: 'kaela', face: 'normal', text: '…세 번째로 떨어진 날, 왕도 주점에서 먹은 게 있다. 고기를 에일에 푹 졸여서 갓 구운 빵에 올린 건데, 그걸 먹으면서 처음으로 \'다음엔 붙자\'고 생각했지. 그 맛이 아직도 혀끝에 남아 있다.' },
+    { cg: 'hide' },
     { choice: [
       { text: '"지금 이 마을에서 제일 기사다운 사람은 당신이에요."', set: { 'aff.kaela': 2 }, goto: 'kaela_3_knight' },
       { text: '"시험은 또 보면 되죠. 연습은 제가 같이 할게요."', set: { 'aff.kaela': 2 }, goto: 'kaela_3_train' },
@@ -144,9 +150,11 @@ Object.assign(STORY.scenes, {
     { show: 'miho', face: 'normal', pos: 'center' },
     { say: 'miho', text: '…아, 사장님. 아무것도 아니에요. 그냥 고향에서 온 편지요. 글자 틀린 게 웃겨서 보고 있었어요.' },
     { narr: '편지에는 삐뚤빼뚤한 글씨가 가득하다. \'미호 언니, 겨울이 와요. 석탄이 모자라요.\'' },
+    { cg: 'miho_letter' },
     { say: 'miho', face: 'sad', text: '…보육원 아이들이에요. 일곱 명. 제가 훔친 돈의 행방, 궁금하셨죠? 부자 상인이랑 못된 징세관한테서만 훔쳐서, 전부 거기로 보내요.' },
     { say: 'miho', face: 'sad', text: '겨울이면 원장님이 산에서 따 온 버섯을 꿀술에 졸여서 빵에 얹어 주셨어요. 달고 따끈해서, 그거 먹을 때만큼은 아무도 안 울었는데…' },
     { say: 'miho', face: 'smile', text: '돈 밝히는 도적이라는 건 거짓말 아니에요. 그래야 아이들을 먹이니까요. 헤헤, 실망했죠?' },
+    { cg: 'hide' },
     { choice: [
       { text: '(말없이 곁에 앉아 어깨를 빌려준다)', set: { 'aff.miho': 2 }, goto: 'miho_3_shoulder' },
       { text: '"아이들 몫이면 도울게요." 20골드를 건넨다 (20G)', cost: 20, set: { 'aff.miho': 3, rep: 1 }, goto: 'miho_3_money' },
@@ -270,6 +278,7 @@ Object.assign(STORY.scenes, {
   d3_ev_walk: [
     { bg: 'square_festival' }, { hide: 'all' },
     { narr: '노점을 닫을 시간이 되자 단골들이 "이제 가서 놀다 와" 하며 등을 떠밀었다. 다 같이 광장으로 나섰다.' },
+    { cg: 'festival_all' },
     { show: 'kaela', face: 'smile', pos: 'left' },
     { show: 'lia', face: 'smile', pos: 'center' },
     { show: 'miho', face: 'smile', pos: 'right' },
@@ -278,6 +287,7 @@ Object.assign(STORY.scenes, {
     { show: 'erion', face: 'normal', pos: 'center' },
     { say: 'lia', text: '에리온 씨도 오셨네요! 아까 제가 억지로 끌고 왔는데… 화나진 않으셨죠?' },
     { say: 'erion', text: '…시끄러워. 하지만 등불은 예쁘네.' },
+    { cg: 'hide' },
     { narr: '다 같이 광장을 거닐다가, 문득 한 사람과 함께 걷고 싶어졌다.' },
     { choice: [
       { who: 'erion', text: '"에리온, 같이 둘러봐요. 별꽃 사탕이 있는지 찾아봐요."', set: { 'aff.erion': 1 }, goto: 'd3_walk_erion' },
@@ -340,32 +350,40 @@ Object.assign(STORY.scenes, {
     { show: 'erion', face: 'surprised', pos: 'center' },
     { say: 'erion', text: '…내가? 인간의 풍습 같은 건…' },
     { narr: '말은 그래도 에리온은 등불의 한쪽 끝을 조용히 붙잡았다. 둘이 함께 손을 놓자 등불이 천천히 떠올랐다.' },
+    { cg: 'erion_lantern' },
     { say: 'erion', face: 'shy', text: '…소원은 말하면 안 이루어진대. 그러니까 묻지 마. …다만, 이 마을이 무사하길. 그리고, 아니. 더는 안 말해.' },
     { narr: '푸른 책이 그녀의 품 안에서 아주 작게 빛났다. 마치 등불에 답하듯.' },
+    { cg: 'hide' },
     { goto: 'd3_ev_quake' }
   ],
   d3_lantern_kaela: [
     { show: 'kaela', face: 'smile', pos: 'center' },
     { say: 'kaela', text: '소원이라! 영웅의 소원은 하나뿐이다! 이 손으로 진짜 누군가를 구하는 것!' },
     { narr: '카엘라는 두 손으로 등불을 받치고 눈을 감았다. 평소의 큰 목소리와 달리 작게 속삭였다.' },
+    { cg: 'kaela_lantern' },
     { say: 'kaela', face: 'shy', text: '…그리고 한 가지 더. 이 여관에서 지낸 시간이, 오래오래 이어졌으면 좋겠다. …이건 비밀이다! 들었으면 잊어라!' },
     { narr: '등불이 하늘로 올라가는 동안 카엘라의 손이 내 소매를 살짝 쥐고 있었다.' },
+    { cg: 'hide' },
     { goto: 'd3_ev_quake' }
   ],
   d3_lantern_miho: [
     { show: 'miho', face: 'surprised', pos: 'center' },
     { say: 'miho', text: '돈 말고요? 제 소원은 늘 돈이었는데… 음, 잠깐만요, 생각 좀 해 볼게요.' },
     { narr: '미호는 등불에 한참 글씨를 썼다가 지우고, 또 썼다. 그리고 내가 못 보게 손으로 가렸다.' },
+    { cg: 'miho_lantern' },
     { say: 'miho', face: 'shy', text: '…아이들이 따뜻한 겨울을 보내게 해 주세요. 그리고 이 여관에, 오래 있게 해 주세요. 뭐, 월세 안 내고요!' },
     { narr: '웃으며 말하는 목소리가 아주 조금 떨렸다. 꼬리가 천천히 내 팔을 감았다.' },
+    { cg: 'hide' },
     { goto: 'd3_ev_quake' }
   ],
   d3_lantern_lia: [
     { show: 'lia', face: 'smile', pos: 'center' },
     { say: 'lia', text: '응, 올해도 같이 띄우자. 우린 늘 그랬으니까.' },
     { narr: '리아가 등불에 조심스레 글씨를 썼다. 어릴 때는 \'과자 많이 먹게 해 주세요\'였다. 이번에는 내가 못 보게 소매로 가렸다.' },
+    { cg: 'lia_lantern' },
     { say: 'lia', face: 'shy', text: '…내가 뭘 적었는지는 비밀이야. 하지만 있잖아, 내년에도, 그다음 해에도 이렇게 같이 띄우면 좋겠다.' },
     { narr: '등불이 떠오르는 순간, 리아의 손이 내 손을 살며시 잡았다. 놓지 않았다. 한참을.' },
+    { cg: 'hide' },
     { goto: 'd3_ev_quake' }
   ],
   d3_ev_quake: [

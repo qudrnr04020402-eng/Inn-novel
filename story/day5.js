@@ -54,7 +54,9 @@ Object.assign(STORY.scenes, {
   ],
 
   // ================= 낮: 함께 갈 사람 =================
-  d5_pick: [
+  // 아침 랜덤 사건 (story/random-events.js): 확률로 짧은 돌발 사건을 거친 뒤 낮으로 이어진다
+  d5_pick: [{ rand: 'morning', then: 'd5_pick_day' }],
+  d5_pick_day: [
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
     { narr: '해 질 녘까지 몇 시간이 남았다. 동굴로 가는 길에 가장 곁에 있어 주었으면 하는 사람은 누구일까?' },
     { narr: '이 선택이 결전의 분위기를 바꿀 것이다. 그리고 마음도.' },
@@ -290,8 +292,10 @@ Object.assign(STORY.scenes, {
   d5_win: [
     { bgm: 'inn_day' },
     { sfx: 'mystery' }, { fx: 'flash' },
+    { cg: 'cave_seal' },
     { narr: '푸른 빛과 금빛이 폭발하듯 동굴을 가득 채웠다. 문지기의 거대한 몸이 빛 속에서 서서히 부서지며 먼지처럼 흩어졌다.' },
     { narr: '쿠르릉— 마지막 진동이 지나가고, 균열이 아물었다. 봉인의 문양이 푸른 수정 위에 선명하게 새겨졌다. 동굴이 고요해졌다.' },
+    { cg: 'hide' },
     { hide: 'all' },
     { show: 'erion', face: 'surprised', pos: 'center' },
     { say: 'erion', text: '…이름이, 사라지지 않았어. 나, 스승님의 이름을… 기억하고 있어. 그리고 너희들의 이름도.' },

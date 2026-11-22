@@ -20,6 +20,7 @@
   <!-- 타이틀 화면 -->
   <section id="title" class="screen">
     <div class="title-shade"></div>
+    <div id="title-stars"></div>
     <div id="title-cast"></div>
     <div class="title-box">
       <h1 id="title-name"></h1>
@@ -31,8 +32,12 @@
           <button id="btn-continue" class="btn" type="button">이어하기</button>
           <button id="btn-title-load" class="btn" type="button">불러오기</button>
         </div>
-        <div class="btn-row title-last">
+        <div class="btn-row">
           <button id="btn-endings" class="btn" type="button">엔딩 목록</button>
+          <button id="btn-gallery" class="btn" type="button">갤러리</button>
+        </div>
+        <div class="btn-row title-last">
+          <button id="btn-collect" class="btn" type="button">수집</button>
           <button id="btn-options" class="btn" type="button">설정</button>
         </div>
       </div>
@@ -53,6 +58,7 @@
       <span class="hud-item"><i class="star">★</i><b id="hud-rep">0</b></span>
     </div>
     <button id="menu-btn" type="button" aria-label="메뉴">메뉴</button>
+    <div id="cg" class="hidden"></div>
     <div id="fx"></div>
     <div id="flash"></div>
     <div id="toasts"></div>
@@ -185,6 +191,38 @@
     </div>
   </section>
 
+  <!-- 갤러리 (타이틀): 본 CG 썸네일 / 미획득은 ??? + 힌트 -->
+  <section id="gallery" class="overlay hidden">
+    <div class="panel tall">
+      <h2>갤러리 <small id="gallery-count"></small></h2>
+      <div id="gallery-grid"></div>
+      <button id="gallery-close" class="btn primary" type="button">닫기</button>
+    </div>
+  </section>
+
+  <!-- CG 전체 화면 보기 (좌우 넘김) -->
+  <section id="cgview" class="overlay hidden">
+    <div id="cgview-pic"></div>
+    <div id="cgview-top"><b id="cgview-title"></b><span id="cgview-n"></span></div>
+    <button id="cgview-prev" class="cgv-nav" type="button" aria-label="이전">‹</button>
+    <button id="cgview-next" class="cgv-nav" type="button" aria-label="다음">›</button>
+    <button id="cgview-close" class="btn" type="button">닫기</button>
+  </section>
+
+  <!-- 수집 (타이틀): 엔딩 / CG / 레시피 도감 / 손님 메모 달성률과 보상 -->
+  <section id="collect" class="overlay hidden">
+    <div class="panel tall">
+      <h2>수집</h2>
+      <div id="collect-total"><b id="collect-pct"></b><i id="collect-barbg"><u id="collect-bar"></u></i><small>전체 달성률</small></div>
+      <div id="collect-body">
+        <div id="collect-cats"></div>
+        <h3>수집 보상</h3>
+        <div id="collect-rewards"></div>
+      </div>
+      <button id="collect-close" class="btn primary" type="button">닫기</button>
+    </div>
+  </section>
+
   <!-- 결과 화면 -->
   <section id="summary" class="overlay hidden">
     <div class="panel summary-panel">
@@ -226,6 +264,8 @@
         <button id="opt-mute" class="opt-toggle" type="button" aria-pressed="false"><span>전체 음소거<small>BGM과 효과음을 모두 끕니다</small></span><b class="opt-state"></b></button>
         <button id="opt-unread" class="opt-toggle" type="button" aria-pressed="false"><span>안 읽은 대사도 스킵<small>꺼두면 처음 보는 대사에서 스킵이 멈춥니다</small></span><b class="opt-state"></b></button>
         <button id="opt-easy" class="opt-toggle" type="button" aria-pressed="false"><span>쉬운 모드 (미리보기 표시)<small>영업에서 재료를 고르면 완성될 요리 이름과 속성을 보여 줍니다</small></span><b class="opt-state"></b></button>
+        <button id="opt-allrecipes" class="opt-toggle" type="button" aria-pressed="false"><span>수집 보상: 모든 레시피 공개<small>레시피 도감을 완성하면 쓸 수 있어요. 새 게임을 시작할 때 메뉴판에 전부 공개됩니다</small></span><b class="opt-state"></b></button>
+        <button id="opt-tut" class="opt-toggle opt-action" type="button"><span>튜토리얼 다시 보기<small>첫 영업 설명을 다시 봅니다. 주문을 받는 중이면 바로, 아니면 다음 1일차 첫 손님 때 나와요</small></span><b class="opt-state">보기</b></button>
       </div>
       <button id="options-close" class="btn primary" type="button">닫기</button>
     </div>
@@ -270,11 +310,22 @@
     </div>
   </section>
 
+  <!-- 첫 영업 튜토리얼: 하이라이트 + 리아의 말풍선 (탭으로 넘김) -->
+  <div id="tut" class="hidden">
+    <div id="tut-hole"></div>
+    <div id="tut-bubble">
+      <div class="tut-head"><span class="tut-pic"><img id="tut-pic" alt=""></span><b>리아</b><span id="tut-step"></span><button id="tut-skip" type="button">건너뛰기</button></div>
+      <p id="tut-text"></p>
+      <div class="tut-tap">화면을 탭하면 다음 ▶</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 스토리 데이터 -> 엔진 순서로 로드 (fetch 를 쓰지 않아 file:// 에서도 동작) -->
 <script src="story/characters.js"></script>
 <script src="story/backgrounds.js"></script>
+<script src="story/cg.js"></script>
 <script src="story/audio.js"></script>
 <script src="story/common.js"></script>
 <script src="story/tavern.js"></script>
@@ -284,11 +335,13 @@
 <script src="story/day4.js"></script>
 <script src="story/day5.js"></script>
 <script src="story/endings.js"></script>
+<script src="story/random-events.js"></script>
 <script src="story/llm-persona.js"></script>
 <script src="js/llm-core.js"></script>
 <script src="js/sfx.js"></script>
 <script src="js/bgm.js"></script>
 <script src="js/tavern-core.js"></script>
+<script src="js/event-core.js"></script>
 <script src="js/engine.js"></script>
 </body>
 </html>

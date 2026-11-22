@@ -14,6 +14,7 @@ window.STORY = {
     aff: { erion: 0, kaela: 0, miho: 0, lia: 0 },   // 호감도
     ev: { erion: 0, kaela: 0, miho: 0, lia: 0 },    // 각 히로인과 낮 이벤트를 본 횟수
     flag: {},
+    today: { cust: 0, price: 0, tip: 0, note: '' },   // 오늘의 영업 보정 (아침 랜덤 사건: story/random-events.js, 새 일차마다 초기화)
     llm: { day: 0, used: {}, gain: {}, loss: {}, last: '', met: [] }   // 자유 대화(로컬 LLM) 하루 사용량 (story/llm-persona.js)
   },
   scenes: {}
@@ -82,6 +83,7 @@ Object.assign(STORY.scenes, {
 
   // 낮 이벤트가 끝나면 날짜에 맞는 저녁으로 이동
   after_pick: [
+    { cg: 'hide' },       // 낮 이벤트의 CG 는 여기서 확실히 걷는다
     { talkoffer: true },   // PC 서버 + 로컬 LLM 이 있을 때만 "조금 더 이야기하기" 제안 (없으면 그냥 지나감)
     { if: 'day==1', goto: 'd1_evening' },
     { if: 'day==2', goto: 'd2_evening' },

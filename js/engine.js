@@ -106,9 +106,59 @@
   }
   function endingDefs() { return globalThis.ENDINGS || []; }
 
+  // ---------- 수집 기록 (회차 공통, localStorage) ----------
+  // 'cg' { CG id: 시각 }, 'recipes' { 레시피 id: 시각 }, 'notes' { 손님 id: 시각 (단골=취향을 알아냄 / 히로인=최애를 알아냄) }, 'tut' 튜토리얼을 봤으면 '1'
+  function readRec(k) {
+    try { var o = JSON.parse(store.get(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; }
+  }
+  function markRec(k, id) {
+    var r = readRec(k);
+    if (r[id]) return false;
+    r[id] = Date.now(); store.set(k, JSON.stringify(r));
+    return true;
+  }
+  function cgDefs() { return globalThis.CG_DEFS || {}; }
+  // 지금 아는 레시피 / 알아낸 손님 취향을 회차 공통 기록에 추가
+  function recordKnown() {
+    if (!S || !S.vars || !S.vars.tavern) return;
+    var known = S.vars.tavern.known || {}, rec = readRec('recipes'), ch = false;
+    Object.keys(known).forEach(function (id) { if (known[id] && TAVERN.recipes[id] && !rec[id]) { rec[id] = Date.now(); ch = true; } });
+    if (ch) store.set('recipes', JSON.stringify(rec));
+  }
+  function recordNotes() {
+    if (!S || !S.vars || !S.vars.tavern) return;
+    var notes = S.vars.tavern.notes || {}, rec = readRec('notes'), ch = false;
+    Object.keys(TAVERN.customers).forEach(function (id) {
+      var nt = notes[id], def = TAVERN.customers[id];
+      if (nt && (def.heroine ? nt.fav : nt.taste) && !rec[id]) { rec[id] = Date.now(); ch = true; }
+    });
+    if (ch) store.set('notes', JSON.stringify(rec));
+  }
+  // 수집 현황: 엔딩 / CG / 레시피 도감 / 손님 메모, 전체 %, 보상 해금 여부
+  var REWARD_GOLD = 30, REWARD_ENDINGS = 3;
+  function collectStats() {
+    var en = readRec('endings'), cg = readRec('cg'), rc = readRec('recipes'), nt = readRec('notes');
+    var cnt = function (rec, ids) { return ids.filter(function (id) { return !!rec[id]; }).length; };
+    var eIds = endingDefs().map(function (d) { return d.id; }), cIds = Object.keys(cgDefs()), rIds = Object.keys(TAVERN.recipes), nIds = Object.keys(TAVERN.customers);
+    var cats = [
+      { id: 'endings', name: '엔딩', n: cnt(en, eIds), total: eIds.length },
+      { id: 'cg', name: 'CG', n: cnt(cg, cIds), total: cIds.length },
+      { id: 'recipes', name: '레시피 도감', n: cnt(rc, rIds), total: rIds.length },
+      { id: 'notes', name: '손님 메모', n: cnt(nt, nIds), total: nIds.length }
+    ];
+    var sn = 0, st = 0;
+    cats.forEach(function (c) { sn += c.n; st += c.total; });
+    var pct = st ? Math.floor(sn * 100 / st) : 0;
+    if (sn === st && st) pct = 100;
+    return {
+      cats: cats, n: sn, total: st, pct: pct,
+      rewards: { allRecipes: cats[2].n === cats[2].total && cats[2].total > 0, gold: cats[0].n >= REWARD_ENDINGS, perfect: sn === st && st > 0 }
+    };
+  }
+
   // ---------- 설정 (옵션 화면) ----------
   // localStorage 'inn_vn_v3_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
-  var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false };
+  var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false, allRecipes: false };
   var OPT = Object.assign({}, OPT_DEF);
   var TYPE_TABLE = [70, 45, 28, 16, 7];           // 글자 속도 1~5 -> 글자당 ms
   var AUTO_BASE = [1400, 1100, 800, 550, 350];    // 오토 속도 1~5: 기본 지연(ms)
@@ -121,7 +171,7 @@
     OPT = {
       textSpeed: clampNum(o.textSpeed, 1, 5, OPT_DEF.textSpeed), autoSpeed: clampNum(o.autoSpeed, 1, 5, OPT_DEF.autoSpeed),
       bgm: clampNum(o.bgm, 0, 100, OPT_DEF.bgm), sfx: clampNum(o.sfx, 0, 100, OPT_DEF.sfx),
-      mute: !!o.mute, skipUnread: !!o.skipUnread, easy: !!o.easy
+      mute: !!o.mute, skipUnread: !!o.skipUnread, easy: !!o.easy, allRecipes: !!o.allRecipes
     };
   }
   function saveOpt() { store.set('opt', JSON.stringify(OPT)); }
@@ -231,6 +281,7 @@
       vars: clone(STORY.init || {}),
       bg: null,
       sprites: { left: null, center: null, right: null },
+      cg: null,    // 지금 떠 있는 이벤트 CG id (세이브에 같이 저장됨)
       bgm: null,   // 지금 틀어 둔 BGM 트랙 id (세이브에 같이 저장되어 불러오면 이어서 재생)
       log: []
     };
@@ -258,7 +309,8 @@
   }
   function closeOverlay(el) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); modal--; } }
   function closeAllOverlays() {
-    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options].forEach(closeOverlay);
+    tutHide();   // 아래에서 modal 을 0 으로 되돌리므로 튜토리얼은 카운트 없이 닫는다
+    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options, E.gallery, E.cgview, E.collect].forEach(closeOverlay);
     modal = 0;
   }
 
@@ -271,6 +323,7 @@
     E.summary.classList.add('hidden');
     E.ending.classList.add('hidden');
     E.card.classList.add('hidden');
+    renderCg(null);
     mode = 'title';
     if (globalThis.BGM) BGM.play('title');
     refreshTitle();
@@ -281,6 +334,145 @@
     var any = [1, 2, 3].some(function (i) { return readSlot('s' + i); }) || !!readSlot('auto');
     E.btnTitleLoad.disabled = !any;
     E.btnEndings.textContent = '엔딩 목록 (' + Object.keys(readEndings()).length + '/' + endingDefs().length + ')';
+    var st = collectStats();
+    E.btnGallery.textContent = '갤러리 (' + st.cats[1].n + '/' + st.cats[1].total + ')';
+    E.btnCollect.textContent = '수집 (' + st.pct + '%)';
+    E.title.classList.toggle('perfect', st.rewards.perfect);   // 수집 100% 보상: 별빛 연출
+  }
+
+  // ---------- 이벤트 CG ----------
+  // 파일이 있으면 <img>, 없으면(null) 배경 + 히로인 스탠딩 확대 + 비네트/빛 효과의 "임시 CG" (이미지 파일 요청 없음)
+  function cgPlaceholder(el, d) {
+    var who = (d.who || []).filter(function (id) { return CHARACTERS[id]; });
+    el.classList.add('cg-ph');
+    el.style.setProperty('--tone', d.tone || (who[0] && CHARACTERS[who[0]].color) || '#ffc27a');
+    var bg = document.createElement('div'); bg.className = 'cg-bg';
+    if (BACKGROUNDS[d.bg]) bg.style.backgroundImage = 'url("' + BACKGROUNDS[d.bg] + '")';
+    el.appendChild(bg);
+    var glow = document.createElement('div'); glow.className = 'cg-glow'; el.appendChild(glow);
+    var figs = document.createElement('div'); figs.className = 'cg-figs'; figs.setAttribute('data-n', who.length);
+    who.forEach(function (id, i) {
+      var f = CHARACTERS[id].faces, im = document.createElement('img');
+      im.className = 'cg-fig f' + i; im.alt = '';
+      im.src = f[d.face] || f.smile || f[Object.keys(f)[0]];
+      figs.appendChild(im);
+    });
+    el.appendChild(figs);
+    var sp = document.createElement('div'); sp.className = 'cg-sparks'; el.appendChild(sp);
+    var vg = document.createElement('div'); vg.className = 'cg-vig'; el.appendChild(vg);
+  }
+  function cgNode(id) {
+    var d = cgDefs()[id], el = document.createElement('div');
+    el.className = 'cg-pic'; el.setAttribute('data-cg', id);
+    if (!d) return el;
+    if (d.file) {
+      var im = document.createElement('img');
+      im.className = 'cg-img'; im.alt = d.title;
+      im.onerror = function () { if (im.parentNode) im.parentNode.removeChild(im); cgPlaceholder(el, d); };   // 파일이 없으면 임시 CG 로
+      im.src = d.file; el.appendChild(im);
+    } else cgPlaceholder(el, d);
+    return el;
+  }
+  function renderCg(id, animate) {
+    E.cg.innerHTML = '';
+    E.cg.classList.remove('fadein');
+    if (!id || !cgDefs()[id]) { E.cg.classList.add('hidden'); return; }
+    E.cg.appendChild(cgNode(id));
+    E.cg.classList.remove('hidden');
+    if (animate) { void E.cg.offsetWidth; E.cg.classList.add('fadein'); }
+  }
+  function clearCg() { if (S) S.cg = null; if (E.cg) renderCg(null); }
+
+  // ----- 갤러리 / 전체 화면 보기 -----
+  var CGV = { list: [], i: 0 };
+  function openGallery() {
+    var seen = readRec('cg'), ids = Object.keys(cgDefs()), got = [];
+    ids.forEach(function (id) { if (seen[id]) got.push(id); });
+    E.galleryGrid.innerHTML = '';
+    ids.forEach(function (id) {
+      var d = cgDefs()[id], have = !!seen[id];
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'gal-item' + (have ? ' got' : ' lock'); b.setAttribute('data-cg', id);
+      var th = document.createElement('span'); th.className = 'gal-thumb';
+      if (have) th.appendChild(cgNode(id)); else { th.textContent = '?'; }
+      var tt = document.createElement('b'); tt.textContent = have ? d.title : '???';
+      var hn = document.createElement('small'); hn.textContent = have ? '' : d.hint;
+      b.appendChild(th); b.appendChild(tt); if (!have) b.appendChild(hn);
+      b.addEventListener('click', function () {
+        if (!have) { sfx('select'); return; }
+        openCgView(got, got.indexOf(id));
+      });
+      E.galleryGrid.appendChild(b);
+    });
+    E.galleryCount.textContent = got.length + ' / ' + ids.length;
+    openOverlay(E.gallery);
+  }
+  function renderCgView() {
+    var id = CGV.list[CGV.i], d = cgDefs()[id] || {};
+    E.cgviewPic.innerHTML = '';
+    E.cgviewPic.appendChild(cgNode(id));
+    E.cgviewTitle.textContent = d.title || '';
+    E.cgviewN.textContent = (CGV.i + 1) + ' / ' + CGV.list.length;
+    var one = CGV.list.length < 2;
+    E.cgviewPrev.disabled = one; E.cgviewNext.disabled = one;
+  }
+  function openCgView(list, i) {
+    CGV.list = list; CGV.i = i;
+    renderCgView();
+    openOverlay(E.cgview);
+  }
+  function cgViewMove(d) {
+    if (CGV.list.length < 2) return;
+    CGV.i = (CGV.i + d + CGV.list.length) % CGV.list.length;
+    sfx('page');
+    renderCgView();
+  }
+
+  // ----- 수집 화면: 엔딩 / CG / 레시피 도감 / 손님 메모 달성률과 보상 -----
+  function rewardRows(st) {
+    var cs = st.cats;
+    return [
+      { id: 'allRecipes', ok: st.rewards.allRecipes, name: '레시피 도감 완성', prog: cs[2].n + ' / ' + cs[2].total,
+        desc: '새 게임을 시작할 때 메뉴판에 모든 레시피를 공개하는 옵션을 쓸 수 있어요.' },
+      { id: 'gold', ok: st.rewards.gold, name: '엔딩 ' + REWARD_ENDINGS + '개 달성', prog: Math.min(cs[0].n, REWARD_ENDINGS) + ' / ' + REWARD_ENDINGS,
+        desc: '새 게임 시작 골드 +' + REWARD_GOLD + 'G (자동 적용)' },
+      { id: 'perfect', ok: st.rewards.perfect, name: '모든 수집 100%', prog: st.pct + '%',
+        desc: '타이틀 화면에 네 사람의 미소와 별빛 특별 연출이 나타나요.' }
+    ];
+  }
+  function openCollect() {
+    var st = collectStats();
+    E.collectPct.textContent = st.pct + '%';
+    E.collectBar.style.width = st.pct + '%';
+    E.collectCats.innerHTML = '';
+    st.cats.forEach(function (c) {
+      var row = document.createElement('div');
+      row.className = 'col-row' + (c.n === c.total ? ' full' : ''); row.setAttribute('data-cat', c.id);
+      var pc = c.total ? Math.round(c.n * 100 / c.total) : 0;
+      row.innerHTML = '<span class="col-name"></span><b class="col-n"></b><i class="col-bar"><u></u></i>';
+      row.querySelector('.col-name').textContent = c.name;
+      row.querySelector('.col-n').textContent = c.n + ' / ' + c.total;
+      row.querySelector('u').style.width = pc + '%';
+      E.collectCats.appendChild(row);
+    });
+    E.collectRewards.innerHTML = '';
+    rewardRows(st).forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'col-reward' + (r.ok ? ' ok' : ''); row.setAttribute('data-reward', r.id);
+      row.innerHTML = '<span class="col-lock"></span><span class="col-rtx"><b></b><small></small></span><em></em>';
+      row.querySelector('.col-lock').textContent = r.ok ? '★' : '잠김';
+      row.querySelector('b').textContent = r.name;
+      row.querySelector('small').textContent = r.desc;
+      row.querySelector('em').textContent = r.ok ? '해금' : r.prog;
+      if (r.id === 'allRecipes' && r.ok) {
+        var tg = document.createElement('button');
+        tg.type = 'button'; tg.className = 'col-toggle' + (OPT.allRecipes ? ' on' : ''); tg.textContent = OPT.allRecipes ? '켜짐' : '꺼짐';
+        tg.addEventListener('click', function () { OPT.allRecipes = !OPT.allRecipes; saveOpt(); sfx('select'); tg.classList.toggle('on', OPT.allRecipes); tg.textContent = OPT.allRecipes ? '켜짐' : '꺼짐'; });
+        row.appendChild(tg);
+      }
+      E.collectRewards.appendChild(row);
+    });
+    openOverlay(E.collect);
   }
 
   // ---------- 배경 / 스프라이트 ----------
@@ -490,6 +682,7 @@
     }
     if ('day' in c) { // 일차 전환 화면: {day:2, time:'아침', tip:'...'}
       S.vars.day = c.day; S.vars.time = c.time || '아침';
+      EventCore.newDay(S.vars);   // 오늘의 영업 보정(랜덤 사건)을 새로 시작
       updateHud();
       refreshLlm();
       var dl = c.day + '일차 ' + S.vars.time;
@@ -498,6 +691,25 @@
       showCard(c.day + '일차', S.vars.time, c.tip);
       return true;
     }
+    if ('cg' in c) { // 이벤트 CG: {cg:'id'} 전체 화면 일러스트(대사창은 그 위에 계속) / {cg:'hide'} 걷기. 본 CG 는 회차 공통으로 기록
+      var cdef = cgDefs()[c.cg];
+      if (c.cg === 'hide') { S.cg = null; renderCg(null); }
+      else if (!cdef) warn('없는 CG: ' + c.cg);
+      else {
+        S.cg = c.cg; renderCg(c.cg, !replay);
+        if (markRec('cg', c.cg)) { toast('★ CG 획득: ' + cdef.title, 'up'); sfx('discover'); pushLog({ name: '', color: '', text: '★ CG 획득: ' + cdef.title }); }
+      }
+      next(); return false;
+    }
+    if ('rand' in c) { // 아침 랜덤 사건: {rand:'morning', then:'다음씬'} — 확률로 rev_<id> 씬을 거쳐 then 으로 이어진다 (story/random-events.js)
+      var RE = globalThis.RANDOM_EVENTS, evid = null;
+      try { evid = EventCore.pick(RE, S.vars, S.vars.day || 1, evalCond); } catch (e) { warn(e.message); }
+      if (evid && !STORY.scenes['rev_' + evid]) { warn('없는 사건 씬: rev_' + evid); evid = null; }
+      EventCore.begin(S.vars, evid, c.then);
+      if (evid) { toast('돌발 사건: ' + RE.events[evid].title, 'up'); return !gotoScene('rev_' + evid); }
+      return !gotoScene(c.then);
+    }
+    if ('randret' in c) { return !gotoScene((S.vars.rev && S.vars.rev.ret) || ''); }   // 사건이 끝나면 아침 장면으로 복귀
     if ('time' in c) { // 시간대 표시만 바꿈: {time:'낮'}
       S.vars.time = c.time; updateHud(); next(); return false;
     }
@@ -527,6 +739,7 @@
     if ('upgrades' in c) { openUpgrades(); return true; }          // 밤의 여관 업그레이드 화면: {upgrades:true}
     if ('__tv' in c) {                                             // 영업 내부 진행용 (스토리에서 쓰지 않음)
       if (c.__tv === 'brew') { openBrew(); return true; }
+      if (TUT.next === 'notes') { tutNotes(); return true; }   // 튜토리얼 마지막 단계: 손님 메모장을 열어 보여 준다
       tvNextCustomer(); return true;
     }
     if ('if' in c) {
@@ -670,6 +883,7 @@
   function showCard(title, sub, tip) {
     stopFast();
     stopTyping();
+    clearCg();
     E.dialog.classList.add('hidden');
     E.choices.classList.add('hidden');
     E.cardTitle.textContent = title;
@@ -711,6 +925,7 @@
   function showEnding(id, isNew) {
     stopFast();
     stopTyping();
+    clearCg();
     E.dialog.classList.add('hidden');
     E.choices.classList.add('hidden');
     var def = endingDef(id) || { id: id, title: id, desc: '' };
@@ -785,6 +1000,13 @@
   function startNew() {
     stopFast();
     S = freshState();
+    EventCore.ensure(S.vars, function () { return Math.floor(Math.random() * 4294967296); });   // 이번 회차의 랜덤 사건 시드 (세이브에 저장됨)
+    var rw = collectStats().rewards, bonus = 0;
+    if (rw.gold) { bonus = REWARD_GOLD; S.vars.gold = (S.vars.gold || 0) + bonus; }   // 수집 보상: 엔딩 3개 이상이면 시작 골드 +30
+    if (rw.allRecipes && OPT.allRecipes) {                                            // 수집 보상: 레시피 도감 완성 -> 메뉴판 전부 공개 (설정에서 켠 경우)
+      TavernCore.ensure(TAVERN, S.vars);
+      Object.keys(TAVERN.recipes).forEach(function (id) { S.vars.tavern.known[id] = true; });
+    }
     if (globalThis.BGM) BGM.play('stop');
     chatReset();
     tvReset();
@@ -792,11 +1014,13 @@
     E.summary.classList.add('hidden');
     E.ending.classList.add('hidden');
     E.card.classList.add('hidden');
+    renderCg(null);
     POS.forEach(function (p) { E.sprites[p].classList.remove('on'); });
     showScreen('game');
     updateHud();
     renderBg(null);
     run();
+    if (bonus && mode === 'card') E.cardTip.textContent = (E.cardTip.textContent ? E.cardTip.textContent + '\n' : '') + '★ 수집 보상: 시작 골드 +' + bonus + 'G';
   }
   function loadSnap(sn) {
     if (!sn || !STORY.scenes[sn.scene]) { toTitle(); return; }
@@ -814,6 +1038,7 @@
     updateHud();
     renderBg(S.bg, false);
     renderSprites(null);
+    renderCg(S.cg || null, false);
     run();
   }
 
@@ -889,6 +1114,7 @@
 
   function tvReset() { // 타이틀/불러오기/새 게임 때 영업 상태 정리
     TV = null; snapLocked = false;
+    TUT.next = ''; tutHide();
     if (TVE.root) {
       TVE.root.classList.add('hidden');
       ['brew', 'shop', 'sum', 'upg', 'menu', 'notes', 'found', 'stamp'].forEach(function (k) { TVE[k].classList.add('hidden'); });
@@ -924,6 +1150,7 @@
         pushLog({ name: '', color: '', text: '★ 레시피 해금: ' + r.name });
       }
     });
+    recordKnown();
   }
 
   function startTavern(dayId) {
@@ -932,6 +1159,8 @@
     TavernCore.ensure(TAVERN, S.vars);
     TavernCore.resetToday(S.vars);
     stopFast();
+    clearCg();
+    recordKnown();
     takeSnap('저녁 영업');            // 영업 중 저장은 이 시점으로 되돌아간다
     snapLocked = true;
     TV = {
@@ -969,20 +1198,22 @@
     var st = S.vars.tavern.stock;
     TVE.shopGold.textContent = tvGold();
     var sp = TAVERN.specials && TAVERN.specials[TV.id];
+    var tdn = (S.vars.today && S.vars.today.note) || '';   // 아침 랜덤 사건이 남긴 오늘의 사정
     TVE.shopInfo.textContent = '오늘 손님 ' + TV.queue.length + '명. 요리 하나에 재료가 2~3개 들어요. 모자라면 영업 중에 정중히 거절할 수 있지만 평판이 조금 깎입니다.' +
+      (tdn ? '\n☆ 오늘의 사정 — ' + tdn : '') +
       (sp ? '\n★ 특별 주문 예고 — ' + sp.title + ': ' + sp.brief : '');
     TVE.shopList.innerHTML = '';
     Object.keys(TAVERN.ingredients).forEach(function (id) {
-      var g = TAVERN.ingredients[id];
+      var g = TAVERN.ingredients[id], pr = TavernCore.price(TAVERN, S.vars, id);
       var row = tvEl('div', 'tv-row');
       row.dataset.id = id;
       row.appendChild(tvIcon(id, 'tv-icon'));
-      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + '</b><small>' + g.price + 'G · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span></small>');
+      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + '</b><small>' + (pr !== g.price ? '<s>' + g.price + '</s> <em class="tv-sale' + (pr > g.price ? ' up' : '') + '">' + pr + 'G</em>' : pr + 'G') + ' · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span></small>');
       row.appendChild(mid);
       [1, 3].forEach(function (n) {
-        var b = tvEl('button', 'tv-buy', '+' + n + '<small>' + (g.price * n) + 'G</small>');
+        var b = tvEl('button', 'tv-buy', '+' + n + '<small>' + (pr * n) + 'G</small>');
         b.type = 'button'; b.dataset.n = n;
-        if (tvGold() < g.price * n) b.disabled = true;
+        if (tvGold() < pr * n) b.disabled = true;
         b.addEventListener('click', function () { buyIng(id, n); });
         row.appendChild(b);
       });
@@ -990,7 +1221,7 @@
     });
   }
   function buyIng(id, n) {
-    var g = TAVERN.ingredients[id], cost = g.price * n;
+    var g = TAVERN.ingredients[id], cost = TavernCore.price(TAVERN, S.vars, id) * n;
     if (tvGold() < cost) { toast('골드가 모자라요', 'down'); return; }
     sfx('select');
     S.vars.gold -= cost; TV.spent += cost;
@@ -1049,6 +1280,7 @@
     mode = 'tavern';
     tvPanel('brew');
     renderBrew();
+    if (!TUT.on && TV.id === 'day1' && TV.idx === 0 && !store.get('tut')) tutStart('brew');   // 첫 영업 첫 손님: 튜토리얼 (회차 공통 1회)
   }
   function selRecipe() { return TV.sel.length >= 2 ? TavernCore.recipeFor(TAVERN, TV.sel) : null; }
   function renderBrew() {
@@ -1123,6 +1355,7 @@
     TV.results.push(out);
     TV.sold += out.sale; TV.tips += out.tip;
     if (out.taste) TV.tasteHits++;
+    recordKnown(); recordNotes();   // 회차 공통 수집 기록 (레시피 도감 / 손님 메모)
     var d = {};
     if (out.gold) d.gold = out.gold;
     if (out.rep) d.rep = out.rep;
@@ -1136,6 +1369,7 @@
       if (out.taste) toast('★ 단골 보너스! 팁 +' + TAVERN.rules.tasteTip, 'up');
       if (out.tasteNew) setTimeout(function () { toast('손님 메모에 ' + ((CHARACTERS[cu.who] || {}).name || '') + '의 취향이 적혔어요', 'up'); sfx('discover'); }, 600);
       tvReaction(cu, out);
+      if (TUT.next === 'result') tutStart('result');   // 튜토리얼 5단계: 결과 설명
     };
     if (out.discovered) showFound(out, go); else go();
   }
@@ -1348,6 +1582,7 @@
   }
   function tvClose() { // "영업 종료" -> 스토리로 복귀
     var t = S.vars.tavern;
+    recordKnown(); recordNotes();
     t.days[TV.id] = { sales: TV.sold, tips: TV.tips, spent: TV.spent, rep: TV.repSum, special: TV.spResult ? (TV.spResult.ok ? 'win' : 'lose') : '', spGold: TV.spGold, perfect: t.t.perfect, good: t.t.good, fail: t.t.fail, mystery: t.t.mystery };
     var ret = TV.ret;
     pushLog({ name: '', color: '', text: '— 영업 결산: 매출 ' + TV.sold + 'G, 팁 ' + TV.tips + 'G' + (TV.spGold ? ', 특별 주문 +' + TV.spGold + 'G' : '') + ', 장보기 ' + TV.spent + 'G —' });
@@ -1403,6 +1638,76 @@
     next(); run();
   }
 
+
+  // ---------- 첫 영업 튜토리얼 (리아가 설명) ----------
+  // 1일차 첫 영업 첫 손님에서만(회차 공통 1회, localStorage 'tut'). 설정의 "튜토리얼 다시 보기"로 예약/즉시 재생.
+  // 단계: 주문 읽기 -> 메뉴판 -> 재료 고르기 -> 내기 (재료 고르기 화면) / 결과 (내고 난 뒤 반응 대사) / 손님 메모 (다음 손님으로 넘어가기 전 메모장)
+  var TUT = { on: false, stage: '', i: 0, next: '' };
+  var TUT_TOTAL = 6, TUT_BASE = { brew: 0, result: 4, notes: 5 };
+  var TUT_STEPS = {
+    brew: [
+      { sel: '.tv-order', text: '영업 첫날이네! 내가 간단히 알려 줄게. 먼저 손님의 주문을 잘 읽어 봐. "따뜻한 걸로", "술은 빼고"처럼 말 속에 원하는 맛이 숨어 있어.' },
+      { sel: '#tv-board', text: '뭘 만들지 모르겠으면 "메뉴판"을 열어 봐. 아는 레시피와 속성(따뜻함, 든든함…)이 다 적혀 있어. 메뉴판에서 레시피를 누르면 재료가 바로 들어가기도 해.' },
+      { sel: '#tv-ings', text: '재료는 2~3개를 골라서 슬롯에 넣어. 조합이 맞으면 레시피가 되고, 다시 누르면 뺄 수 있어. 처음 보는 조합은 직접 만들어 봐야 알 수 있지!' },
+      { sel: '#tv-serve', text: '다 골랐으면 "내기"! 주문에 딱 맞으면 대성공, 어긋나면 평판이 깎일 수도 있어. 자신 없으면 "정중히 거절"도 방법이야. 자, 한번 내 볼래?' }
+    ],
+    result: [
+      { sel: '#dialog', text: '결과는 도장과 손님의 반응으로 알 수 있어. 대성공이면 팁도 받고, 히로인 손님이라면 호감도도 올라가. 실패해도 괜찮아, 다음엔 더 잘할 수 있으니까!' }
+    ],
+    notes: [
+      { sel: '#tv-notes-list .tv-note-row', text: '손님마다 숨은 취향이 있어. 반응 속의 힌트가 이 "손님 메모"에 쌓이니까 틈틈이 확인해 봐. 주문을 맞히면서 취향까지 맞히면 단골 보너스! 이제 영업을 이어 가자, 파이팅!' }
+    ]
+  };
+  function tutStart(stage) {
+    if (!TUT_STEPS[stage] || !E.tut) return;
+    stopFast();
+    if (!TUT.on) modal++;
+    TUT.on = true; TUT.stage = stage; TUT.i = 0; TUT.next = '';
+    E.tut.classList.remove('hidden');
+    tutShow();
+  }
+  function tutShow() {
+    var st = TUT_STEPS[TUT.stage][TUT.i], el = document.querySelector(st.sel);
+    var app = E.app.getBoundingClientRect(), r = el ? el.getBoundingClientRect() : null, pad = 6;
+    if (r && r.width > 0 && r.height > 0) {
+      var l = Math.max(2, r.left - app.left - pad), t = Math.max(2, r.top - app.top - pad);
+      E.tutHole.style.cssText = 'left:' + l + 'px;top:' + t + 'px;width:' + Math.min(app.width - l - 2, r.width + pad * 2) + 'px;height:' + (r.height + pad * 2) + 'px';
+      E.tutHole.classList.remove('hidden');
+    } else E.tutHole.classList.add('hidden');
+    E.tut.classList.toggle('nohole', !r || !r.width);
+    E.tutText.textContent = st.text;
+    E.tutStep.textContent = (TUT_BASE[TUT.stage] + TUT.i + 1) + ' / ' + TUT_TOTAL;
+    var b = E.tutBubble, mid = r ? (r.top + r.height / 2 - app.top) : app.height / 2;
+    b.style.top = 'auto'; b.style.bottom = 'auto';
+    if (r && mid < app.height * 0.5) b.style.top = Math.min(app.height - 190, r.bottom - app.top + pad + 12) + 'px';
+    else if (r) b.style.bottom = Math.max(10, app.bottom - r.top + pad + 12) + 'px';
+    else b.style.top = '30%';
+    E.tutBubble.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  }
+  function tutHide() { if (TUT.on) { TUT.on = false; if (E.tut) E.tut.classList.add('hidden'); } }   // modal 카운트는 건드리지 않음 (closeAllOverlays 가 0 으로 초기화)
+  function tutClose() { if (!TUT.on) return; TUT.on = false; E.tut.classList.add('hidden'); modal = Math.max(0, modal - 1); }
+  function tutAdvance() {
+    if (!TUT.on) return;
+    sfx('tap');
+    if (++TUT.i < TUT_STEPS[TUT.stage].length) { tutShow(); return; }
+    tutEnd(false);
+  }
+  function tutEnd(skipped) {
+    var stage = TUT.stage;
+    tutClose();
+    if (skipped) { store.set('tut', '1'); TUT.next = ''; if (stage === 'notes') tutAfterNotes(); return; }
+    if (stage === 'brew') TUT.next = 'result';
+    else if (stage === 'result') TUT.next = 'notes';
+    else { store.set('tut', '1'); TUT.next = ''; tutAfterNotes(); }
+  }
+  function tutNotes() {          // 첫 손님 반응이 끝난 직후, 다음 손님으로 넘어가기 전
+    TUT.next = '';
+    E.dialog.classList.add('hidden'); E.choices.classList.add('hidden');
+    openNotes();
+    tutStart('notes');
+  }
+  function tutAfterNotes() { TVE.notes.classList.add('hidden'); tvNextCustomer(); }
+
   // ---------- 설정 화면 ----------
   var SPEED_NAMES = ['매우 느림', '느림', '보통', '빠름', '매우 빠름'];
   var OPT_TOGGLES = [['opt-mute', 'mute'], ['opt-unread', 'skipUnread'], ['opt-easy', 'easy']];
@@ -1415,6 +1720,11 @@
       b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
       b.querySelector('.opt-state').textContent = on ? '켜짐' : '꺼짐';
     });
+    // 수집 보상: 레시피 도감 완성 시 해금되는 "시작부터 모든 레시피 공개" 옵션
+    var ar = $('opt-allrecipes'), unl = collectStats().rewards.allRecipes, aon = unl && OPT.allRecipes;
+    ar.classList.toggle('on', aon); ar.classList.toggle('locked', !unl); ar.setAttribute('aria-pressed', aon ? 'true' : 'false');
+    ar.querySelector('.opt-state').textContent = !unl ? '잠김' : (aon ? '켜짐' : '꺼짐');
+    $('opt-tut').querySelector('.opt-state').textContent = store.get('tut') ? '보기' : '예약됨';
   }
   function openOptions() { renderOptions(); openOverlay(E.options); }
   function closeOptions() {
@@ -1429,6 +1739,15 @@
     });
     OPT_TOGGLES.forEach(function (p) {
       $(p[0]).addEventListener('click', function () { OPT[p[1]] = !OPT[p[1]]; applyOpt(); renderOptions(); saveOpt(); sfx('select'); });
+    });
+    $('opt-allrecipes').addEventListener('click', function () {
+      if (!collectStats().rewards.allRecipes) return;   // 잠김
+      OPT.allRecipes = !OPT.allRecipes; saveOpt(); renderOptions(); sfx('select');
+    });
+    $('opt-tut').addEventListener('click', function () {
+      sfx('select');
+      if (TV && TV.phase === 'brew' && mode === 'tavern') { closeOptions(); tutStart('brew'); return; }   // 주문을 받는 중이면 지금 바로
+      store.set('tut', ''); renderOptions();                                                              // 아니면 다음 첫 영업(1일차 첫 손님)에서
     });
     $('options-close').addEventListener('click', closeOptions);
     $('menu-options').addEventListener('click', function () { closeOverlay(E.menu); openOptions(); });
@@ -1659,6 +1978,13 @@
     E.nextMark = $('next-mark'); E.options = $('options'); E.btnAuto = $('btn-auto'); E.btnSkip = $('btn-skip');
     E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep'); E.hudDay = $('hud-day');
     E.btnContinue = $('btn-continue'); E.btnTitleLoad = $('btn-title-load');
+    E.cg = $('cg'); E.btnGallery = $('btn-gallery'); E.btnCollect = $('btn-collect');
+    E.gallery = $('gallery'); E.galleryGrid = $('gallery-grid'); E.galleryCount = $('gallery-count');
+    E.cgview = $('cgview'); E.cgviewPic = $('cgview-pic'); E.cgviewTitle = $('cgview-title'); E.cgviewN = $('cgview-n');
+    E.cgviewPrev = $('cgview-prev'); E.cgviewNext = $('cgview-next');
+    E.collect = $('collect'); E.collectPct = $('collect-pct'); E.collectBar = $('collect-bar'); E.collectCats = $('collect-cats'); E.collectRewards = $('collect-rewards');
+    setIcon($('tut-pic'), CHARACTERS.lia);   // 튜토리얼 말풍선의 리아 얼굴
+    E.tut = $('tut'); E.tutHole = $('tut-hole'); E.tutBubble = $('tut-bubble'); E.tutText = $('tut-text'); E.tutStep = $('tut-step');
     E.slotsTitle = $('slots-title'); E.slotList = $('slot-list');
     E.backlogList = $('backlog-list');
     E.summaryTitle = $('summary-title'); E.summaryNote = $('summary-note'); E.summaryBody = $('summary-body');
@@ -1723,6 +2049,16 @@
     var tb = BACKGROUNDS.inn_front || BACKGROUNDS[Object.keys(BACKGROUNDS)[0]];
     if (tb) E.title.style.backgroundImage = 'url("' + tb + '")';
 
+    // 수집 100% 보상 연출용 별빛 (타이틀에 .perfect 가 붙을 때만 보임)
+    var stars = $('title-stars');
+    for (var si = 0; si < 26; si++) {
+      var star = document.createElement('i');
+      star.style.left = ((si * 37 + 11) % 97 + 1) + '%'; star.style.top = ((si * 53 + 7) % 60 + 2) + '%';
+      star.style.animationDelay = ((si % 9) * 0.45) + 's'; star.style.fontSize = (8 + (si % 4) * 4) + 'px';
+      star.textContent = '✦';
+      stars.appendChild(star);
+    }
+
     // 타이틀 히로인 소개 (STORY.cast 의 캐릭터를 포스터처럼 나란히)
     var castBox = $('title-cast'), names = $('title-names');
     (STORY.cast || []).forEach(function (cid, i) {
@@ -1778,6 +2114,28 @@
     $('summary-btn').addEventListener('click', toTitle);
     $('ending-btn').addEventListener('click', toTitle);
     E.btnEndings.addEventListener('click', openEndingList);
+    E.btnGallery.addEventListener('click', openGallery);
+    E.btnCollect.addEventListener('click', openCollect);
+    $('gallery-close').addEventListener('click', function () { closeOverlay(E.gallery); });
+    $('collect-close').addEventListener('click', function () { closeOverlay(E.collect); });
+    $('cgview-close').addEventListener('click', function () { closeOverlay(E.cgview); });
+    E.cgviewPrev.addEventListener('click', function () { cgViewMove(-1); });
+    E.cgviewNext.addEventListener('click', function () { cgViewMove(1); });
+    (function () {   // CG 전체 화면 보기: 좌우로 쓸어 넘기기
+      var x0 = null;
+      E.cgview.addEventListener('touchstart', function (ev) { x0 = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
+      E.cgview.addEventListener('touchend', function (ev) {
+        if (x0 === null) return;
+        var dx = ev.changedTouches[0].clientX - x0; x0 = null;
+        if (Math.abs(dx) > 50) cgViewMove(dx < 0 ? 1 : -1);
+      }, { passive: true });
+    })();
+    E.tut.addEventListener('click', function (ev) { if (!ev.target.closest('#tut-skip')) tutAdvance(); });
+    $('tut-skip').addEventListener('click', function (ev) { ev.stopPropagation(); tutEnd(true); });
+    document.addEventListener('keydown', function (ev) {
+      if (E.cgview.classList.contains('hidden')) return;
+      if (ev.key === 'ArrowLeft') cgViewMove(-1); else if (ev.key === 'ArrowRight') cgViewMove(1); else if (ev.key === 'Escape') closeOverlay(E.cgview);
+    });
     $('endings-close').addEventListener('click', function () { closeOverlay(E.endingList); });
 
     // 키보드(데스크톱 편의): 스페이스/엔터 = 진행
@@ -1804,6 +2162,11 @@
   Object.defineProperty(VN, 'options', { get: function () { return curOpts; } });
   Object.defineProperty(VN, 'llm', { get: function () { return { state: LLM.state, server: LLM.server, chat: CH ? { id: CH.id, entry: CH.entry, busy: CH.busy, hist: CH.hist.length } : null, st: S && S.vars && S.vars.llm }; } });
   Object.defineProperty(VN, 'endings', { get: function () { return readEndings(); } });
+  // 수집 현황 / 본 CG / 랜덤 사건 상태 / 튜토리얼 상태 (테스트/디버그용)
+  Object.defineProperty(VN, 'collect', { get: function () { return collectStats(); } });
+  Object.defineProperty(VN, 'cgSeen', { get: function () { return readRec('cg'); } });
+  Object.defineProperty(VN, 'cgNow', { get: function () { return S ? (S.cg || null) : null; } });
+  Object.defineProperty(VN, 'tut', { get: function () { return { on: TUT.on, stage: TUT.stage, i: TUT.i, next: TUT.next, done: !!store.get('tut') }; } });
   // 설정 / 읽은 대사 / 스킵·오토 상태 (테스트/디버그용)
   Object.defineProperty(VN, 'opt', { get: function () { return Object.assign({}, OPT); } });
   Object.defineProperty(VN, 'fast', { get: function () { return { auto: F.auto, skip: F.skip }; } });
