@@ -8,7 +8,7 @@
 // ============================================================
 (function (root) {
   'use strict';
-  var NAMES = ['tap', 'select', 'heart', 'heartDown', 'coin', 'perfect', 'fail', 'mystery', 'quake', 'door', 'page', 'discover'];
+  var NAMES = ['tap', 'select', 'heart', 'heartDown', 'coin', 'perfect', 'fail', 'mystery', 'quake', 'door', 'page', 'discover', 'rankup'];
   var S = { names: NAMES, vol: 0.7, mute: false, ctx: null, master: null, noiseBuf: null, last: {},
     stats: { created: false, running: false, played: 0, ignored: 0, errors: 0, byName: {} } };
   var noop = function () {};
@@ -86,6 +86,8 @@
     door: function (c, t, o) { [[1319, 0], [1976, 0.02], [2637, 0.04]].forEach(function (p, i) { osc(c, 'sine', p[0], p[0], t + p[1], 0.9 - i * 0.2, 0.13 - i * 0.03, o); }); osc(c, 'sine', 1319, 1319, t + 0.32, 0.7, 0.09, o); },
     // 메뉴/메뉴판: 종이 넘기는 소리
     page: function (c, t, o) { noise(c, 'bandpass', 2400, 0.9, t, 0.12, 0.35, o, 800); },
+    // 여관 등급 상승: 밝고 당당한 팡파르
+    rankup: function (c, t, o) { [[523, 0], [659, 0.1], [784, 0.2], [1047, 0.3], [784, 0.46], [1047, 0.56], [1319, 0.68]].forEach(function (p, i) { var d = i === 6 ? 0.7 : 0.16; osc(c, 'square', p[0], p[0], t + p[1], d, 0.07, o); osc(c, 'triangle', p[0] / 2, p[0] / 2, t + p[1], d, 0.12, o); osc(c, 'sine', p[0] * 2, p[0] * 2, t + p[1], d * 0.8, 0.03, o); }); },
     // 레시피 발견: 올라가는 반짝임
     discover: function (c, t, o) { [523, 659, 784, 988, 1175, 1568].forEach(function (f, i) { osc(c, 'triangle', f, f, t + i * 0.08, 0.35, 0.12, o); osc(c, 'sine', f * 2, f * 2, t + i * 0.08, 0.2, 0.04, o); }); }
   };

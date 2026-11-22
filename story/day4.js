@@ -328,11 +328,12 @@ Object.assign(STORY.scenes, {
     { bgm: 'romance' },
     { hide: 'all' },
     { narr: '회의가 끝나고 각자 흩어졌다. 내일을 위한 마지막 준비 시간이다. 가진 돈으로 누군가에게 도움이 될 물건을 마련할 수 있다.' },
+    // 이 선물도 "하루에 한 사람당 선물 1개" 한도를 씁니다 (gift.given.<id> = 4). 낮에 이미 선물한 사람은 선택지에서 빠집니다.
     { choice: [
-      { who: 'erion', text: '마력 회복 물약을 준비해 준다. "무리하지 마요."', cost: 15, set: { 'aff.erion': 2 }, goto: 'd4_gift_erion' },
-      { who: 'kaela', text: '갑옷을 새로 수리해 주고 가격표를 떼어 준다', cost: 15, set: { 'aff.kaela': 2 }, goto: 'd4_gift_kaela' },
-      { who: 'miho', text: '튼튼한 로프와 도구 세트를 사 준다', cost: 15, set: { 'aff.miho': 2 }, goto: 'd4_gift_miho' },
-      { who: 'lia', text: '신전에서 성수를 사 와서 건넨다', cost: 15, set: { 'aff.lia': 2 }, goto: 'd4_gift_lia' },
+      { who: 'erion', if: 'gift.given.erion!=4', put: { 'gift.given.erion': 4 }, text: '마력 회복 물약을 준비해 준다. "무리하지 마요."', cost: 15, set: { 'aff.erion': 2 }, goto: 'd4_gift_erion' },
+      { who: 'kaela', if: 'gift.given.kaela!=4', put: { 'gift.given.kaela': 4 }, text: '갑옷을 새로 수리해 주고 가격표를 떼어 준다', cost: 15, set: { 'aff.kaela': 2 }, goto: 'd4_gift_kaela' },
+      { who: 'miho', if: 'gift.given.miho!=4', put: { 'gift.given.miho': 4 }, text: '튼튼한 로프와 도구 세트를 사 준다', cost: 15, set: { 'aff.miho': 2 }, goto: 'd4_gift_miho' },
+      { who: 'lia', if: 'gift.given.lia!=4', put: { 'gift.given.lia': 4 }, text: '신전에서 성수를 사 와서 건넨다', cost: 15, set: { 'aff.lia': 2 }, goto: 'd4_gift_lia' },
       { text: '모두에게 따뜻한 야식을 나눠 준다 (무료)', set: { rep: 1 }, goto: 'd4_gift_all' }
     ] }
   ],

@@ -1,13 +1,13 @@
 // 서비스 워커: 오프라인 캐시 (네트워크 우선, 실패하면 캐시)
 // 파일을 추가/수정한 뒤 배포할 때는 아래 VERSION 숫자를 올리면 예전 캐시가 정리됩니다.
-const VERSION = 'v7-cg-collect'; // CG/갤러리/수집/아침 사건/튜토리얼 추가 버전 (이전: v6-opt-sound) (배포 때마다 올려서 폰의 옛 캐시를 정리)
+const VERSION = 'v8-inn-life'; // 숙박/여관 등급/선물/깊은 이벤트/신경전 추가 버전 (이전: v7-cg-collect) (배포 때마다 올려서 폰의 옛 캐시를 정리)
 const CACHE = 'inn-vn-' + VERSION;
 // 미리 캐시할 파일 (tools/check-story.js 가 이 목록과 실제 파일을 비교해 줍니다)
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/style.css', 'js/tavern-core.js', 'js/event-core.js', 'js/llm-core.js', 'js/sfx.js', 'js/bgm.js', 'js/engine.js',
+  'css/style.css', 'js/tavern-core.js', 'js/event-core.js', 'js/inn-core.js', 'js/llm-core.js', 'js/sfx.js', 'js/bgm.js', 'js/engine.js',
   'story/characters.js', 'story/backgrounds.js', 'story/cg.js', 'story/audio.js', 'story/common.js', 'story/tavern.js',
-  'story/day1.js', 'story/day2.js', 'story/day3.js', 'story/day4.js', 'story/day5.js', 'story/endings.js', 'story/random-events.js', 'story/llm-persona.js',
+  'story/gifts.js', 'story/lodging.js', 'story/inn-rank.js', 'story/day1.js', 'story/day2.js', 'story/day3.js', 'story/day4.js', 'story/day5.js', 'story/endings.js', 'story/deep-events.js', 'story/night-events.js', 'story/rivalry.js', 'story/random-events.js', 'story/llm-persona.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'assets/bg/cave_front.svg', 'assets/bg/cave_inside.svg', 'assets/bg/inn_dawn.svg', 'assets/bg/inn_day.svg', 'assets/bg/inn_evening.svg', 'assets/bg/inn_front.svg', 'assets/bg/inn_night.svg', 'assets/bg/roof_night.svg', 'assets/bg/square_day.svg', 'assets/bg/square_festival.svg',
   'assets/char/erion/normal.webp', 'assets/char/erion/smile.webp', 'assets/char/erion/angry.webp', 'assets/char/erion/shy.webp', 'assets/char/erion/surprised.webp', 'assets/char/erion/sad.webp', 'assets/char/erion/face.webp',
@@ -20,6 +20,8 @@ const ASSETS = [
   'assets/char/marta/normal.svg', 'assets/char/marta/smile.svg', 'assets/char/marta/angry.svg', 'assets/char/marta/shy.svg', 'assets/char/marta/surprised.svg', 'assets/char/marta/sad.svg',
   'assets/char/fin/normal.svg', 'assets/char/fin/smile.svg', 'assets/char/fin/angry.svg', 'assets/char/fin/shy.svg', 'assets/char/fin/surprised.svg', 'assets/char/fin/sad.svg',
   'assets/char/chief/normal.svg', 'assets/char/chief/smile.svg', 'assets/char/chief/angry.svg', 'assets/char/chief/shy.svg', 'assets/char/chief/surprised.svg', 'assets/char/chief/sad.svg',
+  'assets/char/rosa/normal.svg', 'assets/char/rosa/smile.svg', 'assets/char/rosa/angry.svg', 'assets/char/rosa/shy.svg', 'assets/char/rosa/surprised.svg', 'assets/char/rosa/sad.svg', 'assets/char/noble/normal.svg', 'assets/char/noble/smile.svg', 'assets/char/noble/angry.svg', 'assets/char/noble/shy.svg', 'assets/char/noble/surprised.svg', 'assets/char/noble/sad.svg',
+  'assets/gifts/flower.svg', 'assets/gifts/sweets.svg', 'assets/gifts/ink.svg', 'assets/gifts/whetstone.svg', 'assets/gifts/trinket.svg', 'assets/gifts/oldbook.svg', 'assets/gifts/scarf.svg', 'assets/gifts/honeywine.svg',
   'assets/tavern/ale.svg', 'assets/tavern/bread.svg', 'assets/tavern/herb.svg', 'assets/tavern/mead.svg', 'assets/tavern/meat.svg', 'assets/tavern/milk.svg', 'assets/tavern/moonberry.svg', 'assets/tavern/mushroom.svg'
 ];
 

@@ -1,5 +1,5 @@
 // 캐릭터 일러스트(SVG) 생성기: node tools/gen-chars.js
-// - 히로인 4명 + 단골 손님 6명 x 표정 6종(normal/smile/angry/shy/surprised/sad)을 assets/char/<id>/<표정>.svg 로 만든다.
+// - 히로인 4명 + 단골 손님 8명(로사, 귀족 미식가 포함) x 표정 6종(normal/smile/angry/shy/surprised/sad)을 assets/char/<id>/<표정>.svg 로 만든다.
 // - 400x600 상반신. 머리색/머리 모양/귀/꼬리/의상으로 구분. PNG 일러스트로 교체할 때는 이 파일은 무시해도 된다.
 const fs = require('fs');
 const path = require('path');
@@ -221,6 +221,46 @@ const CUSTOMERS = {
     defs: '',
     acc: '<path d="M128,176 C160,160 240,160 272,176 L272,194 C240,180 160,180 128,194Z" fill="#e0553a" stroke="#9c2f1c" stroke-width="3"/>'
   },
+  // 로사: 여관 ★2 에 찾아오는 떠돌이 약초 상인. 연둣빛 웨이브 머리, 이파리 머리띠, 약초 다발이 달린 앞치마
+  rosa: {
+    hair: ['#bfe3a0', '#8cc27a', '#4a8a52'], iris: ['#a8741a', '#ffd37a'], brow: '#4a8a52', pupil: '#3a2208',
+    back: 'M120,226 C106,140 150,108 200,108 C250,108 294,140 280,226 L294,404 C298,436 276,456 254,450 L146,450 C124,456 102,436 106,404Z',
+    ears() { return ''; },
+    front: 'M126,244 C118,162 150,122 200,120 C250,122 282,162 274,244 C268,214 254,194 238,184 C224,204 206,208 190,204 C172,206 158,200 146,190 C136,206 130,224 126,244Z',
+    strands: 'M126,244 C120,290 118,334 126,376 C136,340 142,296 150,258Z M274,244 C280,290 282,334 274,376 C264,340 258,296 250,258Z',
+    hl: 'M156,148 C176,132 226,132 246,148',
+    outfit() {
+      return ROBE('#7a9a5a', '#3e5a2e') + `<path d="M150,386 L250,386 L272,600 L128,600Z" fill="#f2e6c8" stroke="#bda878" stroke-width="3"/>` +
+        COLLAR('#e8d8a8') +
+        `<path d="M166,430 H234 M160,480 H240 M154,530 H246" stroke="#d8c898" stroke-width="3"/>` +
+        // 약초 다발 (앞치마 주머니)
+        `<path d="M170,500 L176,560 L224,560 L230,500Z" fill="#d6b27a" stroke="#8a6a3a" stroke-width="3"/>` +
+        `<path d="M186,500 C180,470 172,460 168,448 M200,500 C200,466 200,452 202,438 M214,500 C220,470 230,460 234,450" stroke="#4a9a4a" stroke-width="5" fill="none" stroke-linecap="round"/>` +
+        `<ellipse cx="168" cy="446" rx="8" ry="14" fill="#7be07a" stroke="#2f7a3a" stroke-width="2" transform="rotate(-24 168 446)"/><ellipse cx="202" cy="436" rx="8" ry="15" fill="#5cc05a" stroke="#2f7a3a" stroke-width="2"/><ellipse cx="234" cy="448" rx="8" ry="14" fill="#7be07a" stroke="#2f7a3a" stroke-width="2" transform="rotate(24 234 448)"/>`;
+    },
+    defs: '',
+    acc: '<path d="M128,186 C160,164 240,164 272,186 L268,198 C238,180 162,180 132,198Z" fill="#5a8a3a" stroke="#2f5a22" stroke-width="3"/>' +
+      '<ellipse cx="260" cy="176" rx="11" ry="18" fill="#7be07a" stroke="#2f7a3a" stroke-width="2.5" transform="rotate(34 260 176)"/><ellipse cx="144" cy="178" rx="10" ry="16" fill="#5cc05a" stroke="#2f7a3a" stroke-width="2.5" transform="rotate(-34 144 178)"/>'
+  },
+  // 벨라르 경: 여관 ★5 에 5일차 저녁에 찾아오는 왕도의 귀족 미식가. 뒤로 넘긴 검은 머리, 외눈 안경, 자줏빛 코트와 흰 장식 스카프
+  noble: {
+    hair: ['#6a5a7e', '#3e3256', '#1a1230'], iris: ['#6a2a5a', '#e0a0d0'], brow: '#2a2040', pupil: '#1a0820',
+    back: 'M126,226 C116,140 160,104 200,104 C240,104 284,140 274,226Z',
+    ears() { return `<ellipse cx="134" cy="248" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/><ellipse cx="266" cy="248" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/>`; },
+    front: 'M128,238 C122,160 150,126 204,122 C256,126 280,160 272,238 C268,206 256,184 238,172 C210,186 170,186 150,176 C138,192 130,212 128,238Z',
+    strands: '', hl: 'M156,146 C176,130 226,130 246,146',
+    outfit() {
+      return ROBE('#6a1f3a', '#3a0f20') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#fff6ee"/>` +
+        `<path d="M168,384 C176,414 190,426 200,426 C210,426 224,414 232,384 L250,386 C246,430 226,452 200,456 C174,452 154,430 150,386Z" fill="#f4ecff" stroke="#c9b8e8" stroke-width="3"/>` +
+        `<circle cx="200" cy="448" r="9" fill="#e1b84a" stroke="#9c7f2a" stroke-width="2.5"/>` +
+        `<path d="M88,470 H140 M260,470 H312" stroke="#e1b84a" stroke-width="5" opacity=".8"/>` +
+        `<circle cx="150" cy="520" r="7" fill="#e1b84a" stroke="#9c7f2a" stroke-width="2.5"/><circle cx="250" cy="520" r="7" fill="#e1b84a" stroke="#9c7f2a" stroke-width="2.5"/>` +
+        `<path d="M170,300 C180,292 192,294 200,300 C208,294 220,292 230,300 C224,312 212,310 200,306 C188,310 176,312 170,300Z" fill="#2a2040" stroke="#150f26" stroke-width="2.5" stroke-linejoin="round"/>`;
+    },
+    defs: '',
+    acc: // 외눈 안경 (오른쪽 눈)
+      '<circle cx="235" cy="264" r="33" fill="#cfe8ff" fill-opacity=".18" stroke="#e1b84a" stroke-width="5"/><path d="M262,284 C274,320 270,360 262,400" stroke="#e1b84a" stroke-width="3" fill="none" stroke-linecap="round"/>'
+  },
   // 촌장님: 마을 촌장. 대머리에 긴 흰 수염, 녹색 로브
   chief: {
     hair: ['#ffffff', '#e4e4ea', '#9a9aae'], iris: ['#4a5a3a', '#a8c088'], brow: '#c9c9d6', pupil: '#14200a',
@@ -360,7 +400,9 @@ function build(id, name) {
 
 let n = 0;
 Object.assign(HEROINES, CUSTOMERS); // build() 는 같은 구조를 읽으므로 손님도 한 테이블에 합친다
-Object.keys(HEROINES).forEach((id) => {
+// 인자로 id 를 주면 그 캐릭터만 만든다 (예: node tools/gen-chars.js rosa noble). 히로인은 WebP 일러스트를 쓰므로 보통 손님만 다시 만들면 된다.
+const only = process.argv.slice(2);
+Object.keys(HEROINES).filter((id) => !only.length || only.includes(id)).forEach((id) => {
   fs.mkdirSync(path.join(OUT, id), { recursive: true });
   Object.keys(EXPR).forEach((name) => { fs.writeFileSync(path.join(OUT, id, name + '.svg'), build(id, name)); n++; });
 });

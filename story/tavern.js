@@ -51,7 +51,7 @@ window.TAVERN = {
     milk:      { name: '우유',     price: 2, icon: 'assets/tavern/milk.svg',      note: '고소한 우유. 데우면 마음까지 따뜻해진다.' }
   },
 
-  // ---------- 레시피 15종 ----------
+  // ---------- 레시피 17종 (15종 + 여관 ★3 해금 2종) ----------
   //  ing: 재료 조합(순서 무관), tags: 속성 태그, price: 요리 값, basic: true 면 처음부터 메뉴판에 있음
   //  hint: 메뉴판에서 아직 모르는 레시피 칸에 보이는 힌트
   //  나머지는 대화/이벤트({learn:'id'} 또는 손님의 gain), 향신료 선반 업그레이드, 또는 직접 조합해 보다가 발견합니다.
@@ -70,7 +70,10 @@ window.TAVERN = {
     honey_milk:    { name: '꿀술 우유',        ing: ['milk', 'mead'],               tags: ['따뜻함', '달콤함'],          price: 9,  hint: '누군가의 어린 시절 추억의 맛.' },
     knight_feast:  { name: '기사단의 만찬',    ing: ['meat', 'ale', 'bread'],       tags: ['든든함', '독함', '따뜻함'],  price: 14, hint: '누군가가 왕도 주점에서 먹었던 그 요리.' },
     moon_tea:      { name: '달빛 꿀차',        ing: ['moonberry', 'mead', 'herb'],  tags: ['달콤함', '상쾌함', '마법'],  price: 16, hint: '누군가의 스승님이 만들어 주던 차.' },
-    fox_toast:     { name: '꿀버섯 토스트',    ing: ['mushroom', 'mead', 'bread'],  tags: ['달콤함', '든든함', '따뜻함'], price: 13, hint: '누군가의 고향 보육원에서 먹던 겨울 간식.' }
+    fox_toast:     { name: '꿀버섯 토스트',    ing: ['mushroom', 'mead', 'bread'],  tags: ['달콤함', '든든함', '따뜻함'], price: 13, hint: '누군가의 고향 보육원에서 먹던 겨울 간식.' },
+    // 여관 ★3 이 되면 알게 되는 레시피 2개 (story/inn-rank.js 의 unlocks.3.learn)
+    herb_honey:    { name: '허브 꿀차',        ing: ['herb', 'mead'],               tags: ['달콤함', '상쾌함'],          price: 10, hint: '여관이 소문나면 손님이 알려 줄 것 같은 차.' },
+    meat_sand:     { name: '고기 빵 샌드',     ing: ['meat', 'bread'],              tags: ['든든함', '따뜻함'],          price: 11, hint: '여관이 소문나면 손님이 알려 줄 것 같은 한 끼.' }
   },
 
   // ---------- 여관 업그레이드 (밤에 구매. 효과는 id 로 엔진/규칙이 처리) ----------
@@ -148,6 +151,25 @@ window.TAVERN = {
       good:    [{ text: '음, 고맙게 마시겠네. 마음이 조금 놓이는군.', face: 'normal' }, { text: '따뜻하군. 그거면 됐네.', face: 'normal' }],
       fail:    [{ text: '…허허, 오늘만은 맛을 따질 때가 아니지.', face: 'sad' }, { text: '괜찮네, 괜찮아. 이 마을은 더한 것도 견뎠으니.', face: 'sad' }],
       mystery: [{ text: '{dish}라… 이 늙은이도 처음 보는 이름이네.', face: 'surprised' }, { text: '이건 약인가, 술인가, 독인가? …일단 마셔 보겠네.', face: 'surprised' }, { text: '허허허, 긴장이 풀리는구먼! 맛은 모르겠지만 웃음이 나네!', face: 'smile' }]
+    } },
+
+    // ----- 여관 ★2 에 찾아오는 새 단골 로사 (story/inn-rank.js) -----
+    rosa: { taste: { ing: 'herb', label: '허브가 들어간 요리',
+      first: [{ text: '저는 향이 살아 있는 요리가 좋더라고요. 입안에서 숲이 열리는 기분이랄까요.', face: 'smile' }],
+      miss:  [{ text: '맛있어요. 다만 풀향이 조금 아쉽네요. 약초 파는 사람 입이 이래서 곤란하죠, 호호.', face: 'normal' }],
+      bonus: [{ text: '어머, 허브 향! 이거예요, 숲이 입안에서 열리는 맛. 고마워서 팁을 드릴게요.', face: 'smile' }] },
+      react: {
+      perfect: [{ text: '어머나, 이 향이면 우리 약초 가게에 걸어 두고 싶어요!', face: 'smile' }, { text: '딱이에요. 여관이 소문날 만하네요, 호호.', face: 'smile' }],
+      good:    [{ text: '음, 맛있네요. 다음엔 더 취향에 맞게 부탁할게요.', face: 'normal' }, { text: '나쁘지 않아요. 따뜻하게 잘 먹었어요.', face: 'smile' }],
+      fail:    [{ text: '어머… 제가 말을 잘못했나요? 괜찮아요, 괜찮아.', face: 'sad' }, { text: '으음, 이건 약으로도 못 쓰겠는걸요. 호호, 농담이에요.', face: 'normal' }],
+      mystery: [{ text: '{dish}…? 처음 맡아 보는 향이에요. 약초 도감에 적어 둬야겠어요.', face: 'surprised' }, { text: '이건 독인지 약인지 구별이 안 되네요! 일단 한 모금만.', face: 'surprised' }, { text: '어머, 이상한데 마시다 보니 은근히 중독이에요!', face: 'smile' }]
+    } },
+    // ----- 여관 ★5 에 5일차 저녁에 찾아오는 왕도의 귀족 미식가 (영업 특별 손님: reward 보상이 있음, 손님 메모/수집 도감에는 들어가지 않음) -----
+    noble: { special: true, react: {
+      perfect: [{ text: '…훌륭하군. 왕도의 어느 주방에서도 이 한 그릇은 못 만난다.', face: 'smile' }, { text: '기억해 두지. 은빛 여우관의 주인, 그대의 솜씨를.', face: 'smile' }],
+      good:    [{ text: '음, 나쁘지 않네. 소문만큼은 아니지만 정성은 느껴지는군.', face: 'normal' }],
+      fail:    [{ text: '…이게 소문의 그 여관인가. 조금 실망했네.', face: 'sad' }],
+      mystery: [{ text: '{dish}? 이런 이름의 요리는 왕도 요리서에도 없는데. …흥미롭군.', face: 'surprised' }, { text: '정체를 알 수 없는 맛이로군. 하지만 입에서 떠나질 않아.', face: 'surprised' }]
     } },
 
     // ----- 히로인 -----
@@ -236,7 +258,10 @@ window.TAVERN = {
         order: { text: '…머리가 맑아지는 걸로. 술은 빼고.', want: ['상쾌함'], avoid: ['독함'] } },
       { who: 'marta', if: 'tavern.upg.sign',
         say: ['어머나, 저녁 장사를 한다고 해서 와 봤어요. 꿀빵 같은 건 없나요?'],
-        order: { text: '달콤한 걸로 한 잔 주세요. 아기자기하게요.', want: ['달콤함'] } }
+        order: { text: '달콤한 걸로 한 잔 주세요. 아기자기하게요.', want: ['달콤함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '안녕하세요. 약초를 팔러 이 마을에 왔는데, 은빛 여우관이 요즘 이름이 높다더군요.', face: 'smile' }],
+        order: { text: '향긋하고 따뜻한 걸로 부탁해요. 약초꾼은 속이 따뜻해야 일을 하거든요.', want: ['따뜻함', '상쾌함'] } }
     ] },
 
     // ---------- 3일차: 달맞이 장터 노점 ----------
@@ -259,7 +284,10 @@ window.TAVERN = {
         order: { text: '축제니까 달콤하고 따뜻한 걸로! 술은 안 돼!', want: ['달콤함', '따뜻함'], avoid: ['독함'] } },
       { who: 'baron', if: 'tavern.upg.sign',
         say: ['달맞이 장터구먼. 이 노인네도 한 잔 하지.'],
-        order: { text: '따뜻한 걸로 한 잔 주게.', want: ['따뜻함'] } }
+        order: { text: '따뜻한 걸로 한 잔 주게.', want: ['따뜻함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '달맞이 장터는 약초가 잘 팔리는 날이라 바쁘네요. 잠깐 숨 돌리러 왔어요.', face: 'smile' }],
+        order: { text: '입안이 개운해지는 걸로요. 술은 빼고, 향이 살아 있게요.', want: ['상쾌함'], avoid: ['독함'] } }
     ] },
 
     // ---------- 4일차: 마지막 평화로운 저녁 ----------
@@ -281,7 +309,10 @@ window.TAVERN = {
         order: { text: '…마음이 따뜻해지는 걸로. 술은 빼고.', want: ['따뜻함'], avoid: ['독함'] } },
       { who: 'tobi', if: 'tavern.upg.sign',
         say: [{ text: '장사꾼은 위기에 더 눈이 밝습니다. 오늘 여기 들른 게 제 최고의 투자였죠!', face: 'smile' }],
-        order: { text: '든든한데 입안은 개운한 걸로요! 계산은 확실하게!', want: ['든든함', '상쾌함'] } }
+        order: { text: '든든한데 입안은 개운한 걸로요! 계산은 확실하게!', want: ['든든함', '상쾌함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '마을이 어수선한데도 약초 향은 여전하네요. 오늘은 달콤한 향이 그리워서요.', face: 'normal' }],
+        order: { text: '달콤하면서 개운한 걸로 부탁해요. 마음이 가벼워지게요.', want: ['달콤함', '상쾌함'] } }
     ] },
 
     // ---------- 5일차: 출정 전 마지막 영업 ----------
@@ -303,7 +334,15 @@ window.TAVERN = {
         order: { text: '따뜻하고 달콤한 걸로. 마음이 놓이게.', want: ['따뜻함', '달콤함'], avoid: ['독함'] } },
       { who: 'marta', if: 'tavern.upg.sign',
         say: ['모두가 큰일을 앞두고 있네요. 나도 한 잔 보태러 왔어요.'],
-        order: { text: '따뜻한 걸로 한 잔 주세요.', want: ['따뜻함'] } }
+        order: { text: '따뜻한 걸로 한 잔 주세요.', want: ['따뜻함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '모두 큰일을 앞두고 있다고 들었어요. 약초꾼이 해 줄 건 이 한 잔뿐이지만…', face: 'sad' }],
+        order: { text: '든든하면서 개운한 걸로요. 오늘은 힘이 나야 하니까요.', want: ['든든함', '상쾌함'] } },
+      { who: 'noble', if: 'inn.rank>=5',
+        say: [{ text: '왕도에서 소문을 듣고 마차를 달려왔네. 은빛 여우관, 이름값을 하는지 보도록 하지.', face: 'normal' }, { text: '오늘 밤 이 마을에 큰일이 있다지? 그렇다면 더욱, 한 그릇이 마지막 만찬이 될지도 모르니.', face: 'normal' }],
+        order: { text: '마법의 기운이 도는 따뜻한 요리를 청하네. 달빛열매가 들어간 것으로. 이것이 이 여관을 가늠할 시험일세.', want: ['마법', '따뜻함'], ing: ['moonberry'], note: '★5 특별 손님: 마법 + 따뜻함 / 달빛열매가 들어갈 것' },
+        reward: { gold: 30, rep: 2, lines: [{ who: 'noble', text: '이 정도라면 왕궁 연회에 추천해도 부끄럽지 않겠군. 사례일세, 받게. 은빛 여우관의 이름은 왕도에서 이어질 걸세.', face: 'smile' }] },
+        after: [{ text: '그럼 이만. 마을을 지키는 일, 무운을 빌겠네.', face: 'normal' }] }
     ] }
   },
 

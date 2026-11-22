@@ -14,14 +14,14 @@ const load = (f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'),
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 scripts.forEach(load);
-const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX, CG_DEFS, RANDOM_EVENTS, EventCore } = ctx;
+const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX, CG_DEFS, RANDOM_EVENTS, EventCore, LODGING, INN_RANK, GIFTS, RIVALRY, InnCore, HEART } = ctx;
 
 const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
 const scenes = STORY.scenes;
 const edges = {};
-const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx', 'cg', 'rand', 'randret'];
-const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending', 'rand', 'randret'];
+const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx', 'cg', 'rand', 'randret', 'lodging', 'nightev', 'nightret', 'rankcheck', 'giftoffer', 'rivalry', 'rivret'];
+const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending', 'rand', 'randret', 'nightret', 'rivret'];
 const files = new Set();
 let lines = 0, choices = 0;
 
@@ -31,6 +31,7 @@ if (!STORY.init.tavern) err('STORY.init.tavern 없음 (story/tavern.js 맨 아�
 const tavernDaysUsed = new Set(), upgradeCmds = [], bgmUsed = new Set(), cgUsed = new Set();
 const cgScenes = {};   // 씬 id -> 그 씬 안의 cg 명령 순서 (보이기/걷기 짝 검사)
 if (!CG_DEFS) err('story/cg.js (CG_DEFS) 가 index.html 에서 로드되지 않음');
+if (!LODGING || !INN_RANK || !GIFTS || !RIVALRY || !InnCore) err('story/lodging.js, inn-rank.js, gifts.js, rivalry.js 또는 js/inn-core.js 가 index.html 에서 로드되지 않음');
 if (!RANDOM_EVENTS || !EventCore) err('story/random-events.js 또는 js/event-core.js 가 index.html 에서 로드되지 않음');
 if (!Array.isArray(ENDINGS) || !ENDINGS.length) err('ENDINGS 가 없음 (story/endings.js)');
 (STORY.cast || []).forEach((c) => { if (!CHARACTERS[c]) err(`STORY.cast 에 없는 캐릭터: ${c}`); });
@@ -76,6 +77,9 @@ for (const [id, cmds] of Object.entries(scenes)) {
       if (!c.then) err(`[${id}] ${w}: rand 에 then 없음`); else target(c.then, w + ' then');
       Object.keys((RANDOM_EVENTS || { events: {} }).events).forEach((e) => { if (scenes['rev_' + e]) edges[id].push('rev_' + e); });
     }
+    if (key === 'nightev') Object.keys((LODGING || { nightEvents: { events: {} } }).nightEvents.events).forEach((e) => { if (scenes['nev_' + e]) edges[id].push('nev_' + e); });
+    if (key === 'rivalry') ((RIVALRY || { pairs: [] }).pairs).forEach((pr) => { if (scenes[pr.scene]) edges[id].push(pr.scene); });
+    if (key === 'rankcheck' && !(c.rankcheck === true || c.rankcheck === 'quiet')) err(`[${id}] ${w}: rankcheck 는 true 또는 'quiet'`);
     if (key === 'goto') target(c.goto, w);
     if (key === 'if') {
       try { VN.checkCond(c.if); } catch (e) { err(`[${id}] ${w}: ${e.message}`); }
@@ -91,6 +95,7 @@ for (const [id, cmds] of Object.entries(scenes)) {
         if (o.if) { try { VN.checkCond(o.if); } catch (e) { err(`[${id}] ${ow}: ${e.message}`); } }
         if (o.who && !CHARACTERS[o.who]) err(`[${id}] ${ow}: who 에 없는 캐릭터 ${o.who}`);
         if ('cost' in o && !(typeof o.cost === 'number' && o.cost > 0)) err(`[${id}] ${ow}: cost 는 양수여야 함`);
+        if (o.put) { if (typeof o.put !== 'object') err(`[${id}] ${ow}: put 은 객체`); }
         if (o.goto) target(o.goto, ow);
         else if (i === cmds.length - 1) err(`[${id}] ${ow}: 마지막 명령인데 goto 없음`);
       });
@@ -100,9 +105,9 @@ for (const [id, cmds] of Object.entries(scenes)) {
   });
   // 변수 경로 검사
   const sets = [];
-  cmds.forEach((c) => { if (c.set) sets.push(c.set); if (c.put) sets.push(c.put); (c.choice || []).forEach((o) => o.set && sets.push(o.set)); });
+  cmds.forEach((c) => { if (c.set) sets.push(c.set); if (c.put) sets.push(c.put); (c.choice || []).forEach((o) => { if (o.set) sets.push(o.set); if (o.put) sets.push(o.put); }); });
   sets.forEach((s) => Object.keys(s).forEach((k) => {
-    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^today\.(cust|price|tip|note)$/);
+    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^today\.(cust|price|tip|note)$|^lodge\.(note)$|^gift\.given\.\w+$/);
     if (!m) wn(`[${id}] 변수 이름 확인: ${k}`);
     else if (m[2] && !CHARACTERS[m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
   }));
@@ -118,7 +123,7 @@ const reachedEndings = new Set();
 seen.forEach((id) => scenes[id].forEach((c) => { if ('ending' in c) reachedEndings.add(c.ending); }));
 (ENDINGS || []).forEach((e) => { if (!reachedEndings.has(e.id)) err(`엔딩에 도달할 수 없음: ${e.id}`); });
 (HEROINES || []).forEach((h) => {
-  for (let n = 1; n <= 4; n++) if (!scenes[`${h}_${n}`]) err(`히로인 이벤트 없음: ${h}_${n}`);
+  for (let n = 1; n <= 5; n++) if (!scenes[`${h}_${n}`]) err(`히로인 이벤트 없음: ${h}_${n} (5번째는 깊은 이벤트)`);
   if (!CHARACTERS[h]) err(`HEROINES 의 캐릭터 정의 없음: ${h}`);
 });
 (ENDINGS || []).forEach((e) => { if (e.heroine && !CHARACTERS[e.heroine]) err(`ENDINGS ${e.id}: 없는 heroine ${e.heroine}`); });
@@ -222,6 +227,7 @@ if (TAVERN && TavernCore) {
   Object.values(scenes).forEach((cmds) => cmds.forEach((c) => { if ('learn' in c) [].concat(c.learn).forEach((x) => learnable.add(x)); }));
   Object.values(T.days).forEach((d) => d.customers.forEach((c) => { if (c.gain && c.gain.learn) learnable.add(c.gain.learn); }));
   (T.upgrades || []).forEach((u) => (u.learn || []).forEach((x) => learnable.add(x)));
+  Object.values((INN_RANK || { unlocks: {} }).unlocks).forEach((u) => (u.learn || []).forEach((x) => learnable.add(x)));   // 여관 등급 해금 레시피
   Object.values(T.customers).forEach((c) => { if (c.fav) learnable.add(c.fav); });
   Object.keys(R).forEach((x) => { if (!learnable.has(x)) wn(`레시피 ${x}: 기본/해금/최애 어디에도 없어 직접 조합해 발견하는 방법밖에 없음`); });
   (T.upgrades || []).forEach((u) => { if (!u.id || !u.name || !(u.price > 0)) err(`업그레이드 ${u.id}: id/name/price 확인`); (u.learn || []).forEach((x) => { if (!R[x]) err(`업그레이드 ${u.id}: 없는 레시피 ${x}`); }); });
@@ -292,6 +298,7 @@ if (TAVERN && TavernCore) {
   tvStats.taste = {};
   Object.entries(T.customers).forEach(([id, c]) => {
     if (c.heroine) { if (c.taste) err(`히로인 ${id}: 취향(taste)은 단골 전용 (히로인은 최애/싫어함)`); return; }
+    if (c.special) { if (c.taste) err(`특별 손님 ${id}: 취향(taste)을 두지 않음`); return; }   // 5성 귀족처럼 한 번만 오는 손님
     const ts = c.taste;
     if (!ts) return err(`단골 ${id}: taste(숨은 취향) 없음`);
     if (['tag', 'ing'].filter((k) => ts[k]).length !== 1) err(`단골 ${id}: taste 는 tag 또는 ing 중 하나만`);
@@ -354,7 +361,7 @@ const cgStats = { n: 0, temp: 0, file: 0 };
 if (CG_DEFS) {
   const ids = Object.keys(CG_DEFS);
   cgStats.n = ids.length;
-  if (ids.length !== 14) wn(`CG 는 14장이 목표 (현재 ${ids.length}장: 히로인별 3장 x 4 + 공용 2장)`);
+  if (ids.length !== 18) wn(`CG 는 18장이 목표 (현재 ${ids.length}장: 히로인별 4장 x 4 (깊은 이벤트 1장 포함) + 공용 2장)`);
   ids.forEach((id) => {
     const d = CG_DEFS[id], w = `CG ${id}`;
     if (id === 'hide') err(`${w}: 'hide' 는 예약어`);
@@ -472,6 +479,191 @@ if (RANDOM_EVENTS && EventCore) {
   });
 }
 
+// ---------- 숙박 / 여관 등급 / 선물 / 밤 사건 / 신경전 / 깊은 이벤트 데이터 검사 ----------
+const innStats = {};
+if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
+  const R = TAVERN.recipes, faceOk2 = (who, f, where) => { const ch = CHARACTERS[who]; if (!ch) err(`${where}: 없는 캐릭터 ${who}`); else if (f && !ch.faces[f]) err(`${where}: ${who} 에 없는 표정 ${f}`); };
+  // 장면 안에서 닿을 수 있는 씬들 (id 에서 시작해 stopAt 에 닿으면 멈춤)
+  const walk = (start, stopAt) => { const vis = new Set(), st = [start]; let hit = false; while (st.length) { const x = st.pop(); if (vis.has(x)) continue; vis.add(x); if (stopAt.includes(x)) { hit = true; continue; } (edges[x] || []).forEach((t) => st.push(t)); } return { vis, hit }; };
+  // ---- 선물 ----
+  const items = Object.keys(GIFTS.items);
+  if (items.length !== 8) err(`선물은 8종이어야 함 (현재 ${items.length})`);
+  const tp = GIFTS.tiers;
+  if (!(tp.fav.points === 3 && tp.like.points === 2 && tp.normal.points === 1 && tp.hate.points === -1)) err('GIFTS.tiers 는 최애 +3 / 좋아함 +2 / 보통 +1 / 싫어함 -1');
+  items.forEach((id) => {
+    const d = GIFTS.items[id], w = `선물 ${id}`;
+    if (!d.name || !d.desc || !d.hint) err(`${w}: name/desc/hint 확인`);
+    if (!(d.price >= 5 && d.price <= 40)) err(`${w}: price 는 5~40G`);
+    files.add(d.icon); if (!d.icon || !fs.existsSync(path.join(root, d.icon))) err(`${w}: 아이콘 없음 ${d.icon}`);
+  });
+  innStats.gift = {};
+  let reactN = 0;
+  (HEROINES || []).forEach((h) => {
+    const pr = GIFTS.prefs[h] || {}, cnt = { fav: 0, like: 0, normal: 0, hate: 0 };
+    items.forEach((id) => { const t = pr[id]; if (!tp[t]) err(`선물 취향 ${h}.${id}: 알 수 없는 등급 ${t}`); else cnt[t]++; });
+    if (cnt.fav !== 1) err(`선물 취향 ${h}: 최애는 정확히 1개 (현재 ${cnt.fav})`);
+    if (cnt.like < 1) err(`선물 취향 ${h}: 좋아함이 1개 이상 필요`);
+    if (cnt.hate < 1) err(`선물 취향 ${h}: 싫어함이 1개 이상 필요`);
+    const rc = GIFTS.react[h] || {};
+    items.forEach((id) => {
+      const r = rc[id], w = `선물 반응 ${h}.${id}`;
+      if (!r || typeof r.text !== 'string' || r.text.length < 12) { err(`${w}: text 없음/너무 짧음`); return; }
+      faceOk2(h, r.face, w); reactN++;
+    });
+    innStats.gift[h] = Object.fromEntries(['fav', 'like', 'normal', 'hate'].map((t) => [tp[t].label, items.filter((id) => pr[id] === t).map((id) => GIFTS.items[id].name).join('/')]));
+  });
+  items.forEach((id) => { if (!HEROINES.some((h) => ['fav', 'like'].includes(GIFTS.prefs[h][id]))) wn(`선물 ${id}: 누구도 좋아하지 않는 선물 (쓸모 없음)`); });
+  innStats.giftReact = reactN;
+  // ---- 숙박 ----
+  const rooms = Object.keys(LODGING.rooms), req = Object.keys(LODGING.requests);
+  if (rooms.length !== 3) err(`객실은 3개여야 함 (현재 ${rooms.length})`);
+  if (rooms.filter((r) => LODGING.rooms[r].open).length !== 2) err('처음부터 열려 있는 객실은 2개여야 함');
+  rooms.forEach((r) => { const d = LODGING.rooms[r]; if (!d.name || !d.short || !(d.price > 0)) err(`객실 ${r}: name/short/price 확인`); (d.tags || []).forEach((t) => { if (!req.includes(t)) err(`객실 ${r}: 없는 요청 태그 ${t}`); }); if (!d.open && !LODGING.upgrades.some((u) => u.openRoom === r)) err(`객실 ${r}: 열어 줄 업그레이드(openRoom)가 없음`); });
+  const ups = LODGING.upgrades;
+  if (ups.length < 3 || ups.length > 4) err(`객실 업그레이드는 3~4개 (현재 ${ups.length})`);
+  if (new Set(ups.map((u) => u.id)).size !== ups.length) err('객실 업그레이드 id 중복');
+  ups.forEach((u) => {
+    if (!u.name || !u.desc || !(u.price > 0)) err(`객실 업그레이드 ${u.id}: name/desc/price 확인`);
+    if (u.openRoom && !LODGING.rooms[u.openRoom]) err(`객실 업그레이드 ${u.id}: 없는 객실 ${u.openRoom}`);
+    if (u.needRank && !(u.needRank >= 2 && u.needRank <= 5)) err(`객실 업그레이드 ${u.id}: needRank 는 2~5`);
+    Object.entries(u.tags || {}).forEach(([k, arr]) => { if (k !== 'all' && !LODGING.rooms[k]) err(`객실 업그레이드 ${u.id}: tags 의 없는 객실 ${k}`); arr.forEach((t) => { if (!req.includes(t)) err(`객실 업그레이드 ${u.id}: 없는 요청 ${t}`); }); });
+    if (TAVERN.upgrades.some((x) => x.id === u.id)) err(`객실 업그레이드 ${u.id}: 영업 업그레이드 id 와 겹침`);
+  });
+  const gs = LODGING.guests;
+  if (gs.length < 10) wn(`숙박 손님 10팀 이상 권장 (현재 ${gs.length})`);
+  if (new Set(gs.map((g) => g.id)).size !== gs.length) err('숙박 손님 id 중복');
+  const reqCount = {};
+  gs.forEach((g) => {
+    const w = `숙박 손님 ${g.id}`;
+    if (!g.name || !g.kind || !g.glyph || !g.color || !g.say || !g.ok || !g.meh) err(`${w}: name/kind/glyph/color/say/ok/meh 확인`);
+    if (!req.includes(g.req)) err(`${w}: 없는 요청 ${g.req}`);
+    if (!(g.bonus > 0 && g.bonus <= 12)) err(`${w}: bonus 는 1~12G`);
+    reqCount[g.req] = (reqCount[g.req] || 0) + 1;
+  });
+  req.forEach((k) => { if (!reqCount[k]) err(`요청 ${k}: 이 요청을 하는 손님이 없음`); });
+  // 모든 객실 업그레이드를 샀을 때 모든 요청을 만족시킬 수 있어야 한다
+  { const v = { day: 4, rev: { seed: 1, used: [] }, lodge: { upg: Object.fromEntries(ups.map((u) => [u.id, true])), hosted: {}, seen: [], report: [], log: [] }, inn: { rank: 5 }, gold: 0, rep: 0, aff: {} };
+    req.forEach((k) => { if (k !== 'any' && !rooms.some((r) => InnCore.roomOpen(v, r) && InnCore.roomTags(v, r).includes(k))) err(`요청 ${k}: 모든 개조 후에도 만족시킬 방이 없음`); }); }
+  // 시작 상태(열린 2개 방)에서도 손님 구성에 만족 가능한 팀이 항상 있다 + 결정성 + 3팀 확률
+  { let three = 0, N = 600, det = true, noSat = 0;
+    for (let i = 0; i < N; i++) {
+      const mk = () => { const v = { day: 1 + (i % 4), gold: 0, rep: 0, aff: {}, rev: { seed: i * 104729, used: [] }, lodge: null, inn: null }; InnCore.ensure(v); return v; };
+      const a = mk(), b = mk(); const ga = InnCore.guestsFor(a, a.day), gb = InnCore.guestsFor(b, b.day);
+      if (ga.map((g) => g.id).join() !== gb.map((g) => g.id).join()) det = false;
+      if (ga.length === 3) three++;
+      if (new Set(ga.map((g) => g.id)).size !== ga.length) err('숙박 손님이 한 밤에 중복');
+      const open = rooms.filter((r) => InnCore.roomOpen(a, r));
+      if (!ga.some((g) => open.some((r) => InnCore.matches(a, g, r)))) noSat++;
+    }
+    if (!det) err('InnCore.guestsFor 가 결정적이지 않음');
+    if (noSat) err(`시작 객실로 만족시킬 수 있는 손님이 한 팀도 없는 밤이 ${noSat}번 있음`);
+    innStats.three = (three / N).toFixed(2);
+    if (Math.abs(three / N - LODGING.settings.threeChance) > 0.07) err(`3팀 확률이 설정(${LODGING.settings.threeChance})과 다름: ${(three / N).toFixed(2)}`); }
+  // ---- 밤 사건 ----
+  const NE = LODGING.nightEvents, nIds = Object.keys(NE.events);
+  innStats.nev = nIds.length;
+  if (nIds.length < 5 || nIds.length > 6) wn(`밤 사건은 5~6개가 목표 (현재 ${nIds.length}개)`);
+  if (!(NE.chance > 0 && NE.chance <= 0.5)) err('LODGING.nightEvents.chance 는 0 초과 0.5 이하 (약 25% 권장)');
+  if (!Array.isArray(NE.days) || NE.days.some((d) => !(d >= 1 && d <= 4))) err('LODGING.nightEvents.days 는 1~4 사이');
+  if (!scenes.nev_end) err('공용 씬 nev_end 없음');
+  nIds.forEach((id) => {
+    const e = NE.events[id], w = `밤 사건 ${id}`;
+    if (!e.title) err(`${w}: title 없음`);
+    if (e.weight != null && !(e.weight > 0)) err(`${w}: weight 는 양수`);
+    if (e.if) { try { VN.checkCond(e.if); } catch (x) { err(`${w}: if ${x.message}`); } }
+    if (!scenes['nev_' + id]) return err(`${w}: 씬 nev_${id} 가 없음`);
+    const wk = walk('nev_' + id, ['nev_end']); let hasChoice = false;
+    if (!wk.hit) err(`${w}: nev_end 에 도달하지 못함`);
+    wk.vis.forEach((sid) => (scenes[sid] || []).forEach((c, i) => {
+      if ('ending' in c || 'tavern' in c || 'day' in c || 'upgrades' in c || 'lodging' in c) err(`${w} [${sid}] #${i}: 밤 사건에서 쓸 수 없는 명령`);
+      const lim = (set, where) => Object.entries(set || {}).forEach(([k, v]) => {
+        if (k === 'gold' && !(Math.abs(v) <= 15)) err(`${w} ${where}: 골드 변화는 ±15 이하 (${v})`);
+        else if (k === 'rep' && !(Math.abs(v) <= 2)) err(`${w} ${where}: 평판 변화는 ±2 이하 (${v})`);
+        else if (/^aff\./.test(k) && !(v >= 0 && v <= 2)) err(`${w} ${where}: 호감도는 0~2 증가만 (${k} ${v})`);
+        else if (k === 'lodge.note') { if (!(typeof v === 'string' && v.length >= 8)) err(`${w} ${where}: lodge.note 는 한 줄 문장`); }
+        else if (!/^(gold|rep|aff\.\w+)$/.test(k)) err(`${w} ${where}: 밤 사건에서 ${k} 를 바꾸지 않음`);
+      });
+      lim(c.set, `[${sid}] #${i}`);
+      if (c.choice) { hasChoice = true; c.choice.forEach((o, j) => lim(o.set, `[${sid}] 선택지${j + 1}`)); if (!c.choice.some((o) => !o.if)) err(`${w}: 조건 없는 선택지가 없음`); }
+    }));
+    if (!hasChoice) err(`${w}: 선택지가 없음`);
+    if (!wk.vis.size || ![...wk.vis].some((sid) => (scenes[sid] || []).some((c) => c.set && 'lodge.note' in c.set) || (scenes[sid] || []).some((c) => (c.choice || []).some((o) => o.set && 'lodge.note' in o.set)))) wn(`${w}: 다음 날 아침 정산 문구(lodge.note)가 없음`);
+  });
+  Object.keys(scenes).filter((x) => /^nev_/.test(x) && x !== 'nev_end').forEach((x) => { if (!nIds.some((id) => walk('nev_' + id, ['nev_end']).vis.has(x))) wn(`씬 ${x}: 어느 밤 사건에서도 도달할 수 없음`); });
+  // 밤 사건 발생률/결정성
+  { let hit = 0, det = true, N = 4000; const mk = (seed) => { const v = { day: 2, rev: { seed, used: [] }, aff: { erion: 5, kaela: 5, miho: 5, lia: 5 }, lodge: { hosted: { cloak: 1 } } }; InnCore.ensure(v); return v; };
+    for (let i = 0; i < N; i++) { const a = InnCore.nightEvent(mk(i * 7919), 2, VN.evalCond), b = InnCore.nightEvent(mk(i * 7919), 2, VN.evalCond); if (a !== b) det = false; if (a) hit++; }
+    if (!det) err('InnCore.nightEvent 가 결정적이지 않음');
+    if (Math.abs(hit / N - NE.chance) > 0.04) err(`밤 사건 발생률이 설정(${NE.chance})과 다름: ${(hit / N).toFixed(3)}`);
+    innStats.nevRate = (hit / N).toFixed(3); }
+  // 명령 배치: 1~4일차 밤마다 lodging -> nightev -> rankcheck -> upgrades 순서
+  [1, 2, 3, 4].forEach((d) => {
+    const cm = scenes[`d${d}_upgrade`] || [], keys = cm.map((c) => Object.keys(c)[0]).join('>');
+    if (!/lodging>nightev>rankcheck>upgrades>goto$/.test(keys)) err(`d${d}_upgrade: lodging > nightev > rankcheck > upgrades 순서여야 함 (현재 ${keys})`);
+  });
+  // ---- 여관 등급 ----
+  const st = INN_RANK.stars;
+  if (st.length !== 5 || st.some((s2, i) => s2.n !== i + 1 || !s2.name)) err('INN_RANK.stars 는 1~5 등급 5개 (n/name)');
+  for (let i = 1; i < st.length; i++) if (!(st[i].min > st[i - 1].min)) err('INN_RANK.stars 의 min 은 점점 커져야 함');
+  [2, 3, 4, 5].forEach((n) => {
+    const u = INN_RANK.unlocks[n];
+    if (!u || !u.text) err(`INN_RANK.unlocks.${n} 없음`);
+    (u && u.learn || []).forEach((r2) => { if (!R[r2]) err(`INN_RANK.unlocks.${n}: 없는 레시피 ${r2}`); });
+    HEROINES.forEach((h) => { const c2 = (INN_RANK.cheer[n] || {})[h]; if (!c2 || !c2.text) err(`INN_RANK.cheer.${n}.${h} 없음`); else faceOk2(h, c2.face, `INN_RANK.cheer.${n}.${h}`); });
+  });
+  if ((INN_RANK.unlocks[3].learn || []).length !== 2) err('3성 해금은 새 레시피 2개');
+  if (!/\{stars\}/.test(INN_RANK.endingLine)) err('INN_RANK.endingLine 에 {stars} 가 없음');
+  if (!ups.some((u) => u.needRank === 4 && u.openRoom)) err('4성에 다락 특실(openRoom + needRank 4) 업그레이드가 필요');
+  if (!TAVERN.days.day5.customers.some((c) => c.who === 'noble' && /inn\.rank>=5/.test(c.if || '') && c.reward)) err('5일차에 inn.rank>=5 조건의 귀족 손님(reward 포함)이 필요');
+  if (!TAVERN.days.day2.customers.some((c) => /inn\.rank>=2/.test(c.if || ''))) err('2성 해금 단골이 영업 손님 목록에 없음');
+  // 등급 규칙 단위 점검
+  { const v = { day: 3, rep: 0, inn: { rank: 1, sat: 0, log: [] } }; InnCore.ensure(v);
+    v.rep = st[2].min; const r1 = InnCore.checkRank(v); if (!r1 || r1.to !== 3 || r1.levels.join() !== '2,3') err('InnCore.checkRank: 점수 도달 시 등급이 올라야 함');
+    v.rep = -20; if (InnCore.checkRank(v) || v.inn.rank !== 3) err('InnCore.checkRank: 등급은 내려가지 않아야 함'); }
+  // ---- 신경전 ----
+  const pairs = RIVALRY.pairs;
+  if (pairs.length < 3 || pairs.length > 4) err(`신경전 쌍은 3~4개 (현재 ${pairs.length})`);
+  if (!(RIVALRY.max >= 1 && RIVALRY.max <= 2)) err('RIVALRY.max 는 1~2');
+  if (!(RIVALRY.need >= HEART(2) + 1)) err(`RIVALRY.need 는 하트 2칸 반(${HEART(2) + 1}) 이상`);
+  if (!RIVALRY.days.every((d) => d >= 2 && d <= 4)) err('RIVALRY.days 는 2~4일차');
+  if (!scenes.riv_end) err('공용 씬 riv_end 없음');
+  pairs.forEach((p) => {
+    const w = `신경전 ${p.id}`;
+    if (!HEROINES.includes(p.a) || !HEROINES.includes(p.b) || p.a === p.b) err(`${w}: a/b 는 서로 다른 히로인`);
+    if (!p.title || !scenes[p.scene]) return err(`${w}: title/scene 확인`);
+    const wk = walk(p.scene, ['riv_end']);
+    if (!wk.hit) err(`${w}: riv_end 에 도달하지 못함`);
+    const top = scenes[p.scene].find((c) => c.choice);
+    if (!top || top.choice.length !== 3) err(`${w}: 선택지는 3개 (a 편들기 / b 편들기 / 둘 다 달래기)`);
+    else {
+      const [a1, b1, c1] = top.choice;
+      if (!(a1.set[`aff.${p.a}`] > 0 && a1.set[`aff.${p.b}`] < 0 && b1.set[`aff.${p.b}`] > 0 && b1.set[`aff.${p.a}`] < 0)) err(`${w}: 편들기는 편든 쪽 +, 상대 - 여야 함`);
+      if (!(c1.set[`aff.${p.a}`] > 0 && c1.set[`aff.${p.b}`] > 0)) err(`${w}: 달래기는 둘 다 +`);
+      top.choice.forEach((o) => { if ('rep' in o.set || 'gold' in o.set) err(`${w}: 신경전 선택지는 평판/골드를 바꾸지 않음 (평판 +0)`); });
+    }
+    wk.vis.forEach((sid) => (scenes[sid] || []).forEach((c, i) => { if ('ending' in c || 'tavern' in c || 'day' in c || 'upgrades' in c) err(`${w} [${sid}] #${i}: 신경전에서 쓸 수 없는 명령`); }));
+    [p.a, p.b].forEach((h) => { if (![...wk.vis].some((sid) => (scenes[sid] || []).some((c) => c.say === h))) wn(`${w}: ${h} 의 대사가 없음`); });
+  });
+  Object.keys(scenes).filter((x) => /^riv_/.test(x) && x !== 'riv_end').forEach((x) => { if (!pairs.some((p) => walk(p.scene, ['riv_end']).vis.has(x))) wn(`씬 ${x}: 어느 신경전에서도 도달할 수 없음`); });
+  // ---- 깊은 이벤트 ----
+  HEROINES.forEach((h) => {
+    const sc5 = scenes[`${h}_5`], w = `깊은 이벤트 ${h}_5`;
+    if (!sc5) return;
+    const top = sc5.find((c) => c.choice);
+    if (!top || top.choice.length !== 2) err(`${w}: 선택지는 2개`);
+    else top.choice.forEach((o) => { const a = (o.set || {})[`aff.${h}`] || 0; if (!(a >= 2 && a <= 3)) err(`${w}: 호감도 +2~3 (현재 ${a})`); });
+    if (!sc5.some((c) => c.set && c.set[`flag.deep_${h}`])) err(`${w}: flag.deep_${h} 를 켜지 않음`);
+    if (!sc5.some((c) => c.cg === `${h}_deep`)) err(`${w}: CG ${h}_deep 를 띄우지 않음`);
+    if (!CG_DEFS[`${h}_deep`]) err(`${w}: CG_DEFS.${h}_deep 없음`);
+    // 선택지로 들어가는 곳: 4~5일차 낮에만, 하트 4칸 조건
+    const entries = [];
+    Object.entries(scenes).forEach(([sid, cm]) => cm.forEach((c) => (c.choice || []).forEach((o) => { if (o.goto === `${h}_5`) entries.push({ sid, o }); })));
+    if (entries.length < 2) err(`${w}: 진입 선택지가 pick(4일차)와 d5_pick_day(5일차)에 있어야 함`);
+    entries.forEach((e) => { if (!new RegExp(`aff\\.${h}>=${HEART(4)}\\b`).test(e.o.if || '')) err(`${w}: 진입 선택지 조건에 aff.${h}>=${HEART(4)} (하트 4칸) 가 없음 [${e.sid}]`); if (!/flag\.deep_/.test(e.o.if || '')) err(`${w}: 진입 조건에 !flag.deep_${h} (1번만) 가 없음`); });
+    const pickEntry = entries.find((e) => e.sid === 'pick'); if (pickEntry && !/day>=4/.test(pickEntry.o.if)) err(`${w}: pick 진입 조건에 day>=4 가 없음`);
+  });
+}
+
 // sw.js 캐시 목록 / index.html 스크립트 목록
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const list = [...sw.match(/const ASSETS = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
@@ -498,11 +690,15 @@ const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 42949672
 //  숙련 = 메뉴판을 거의 완벽히 외움, 보통 = 가끔 헷갈림, 서툰 = 자주 헷갈림, 대충 = 메뉴판을 안 봄
 //  (옛 모델은 미리보기가 있어서 right 가 숙련 1 / 보통 0.7 / 서툰 0.35 였음. 이제는 "알게 된 레시피를 메뉴판대로 정확히 조합"하는 확률이라 숙련 0.97 / 보통 0.75 / 서툰 0.4. 미리보기가 없어서 헷갈린 만큼 실수가 남는다고 본 값)
 const POL = {
-  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'stove', 'shelf'], right: 0.97, fav: 1, taste: 0.8, plan: 1 },
-  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove'], right: 0.75, fav: 0.5, taste: 0.35, plan: 0.7 },
-  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign'], right: 0.4, fav: 0, taste: 0.1, plan: 0.3 },
-  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, taste: 0, plan: 0 }
+  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'stove', 'shelf'], right: 0.97, fav: 1, taste: 0.8, plan: 1,   lodge: 0.95, gift: 0.9, roomBuy: ['soundproof', 'bedding', 'windowbox', 'attic'] },
+  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove'], right: 0.75, fav: 0.5, taste: 0.35, plan: 0.7, lodge: 0.7, gift: 0.5, roomBuy: ['bedding', 'soundproof'] },
+  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign'], right: 0.4, fav: 0, taste: 0.1, plan: 0.3,                       lodge: 0.35, gift: 0.25, roomBuy: [] },
+  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, taste: 0, plan: 0,                                            lodge: 0.1, gift: 0.05, roomBuy: [] }
 };
+// 숙박/선물 플레이어 모델
+//  lodge   : 손님 요청을 읽고 방을 최적으로 배정할 확률 (아니면 무작위 배정, 가끔 거절)
+//  gift    : 낮에 함께 보낸 히로인에게 선물을 줄 확률 (취향은 처음엔 모르고, 줘 보고 반응으로 알게 되면 좋아하는 선물을 산다)
+//  roomBuy : 밤에 사는 객실 개조 우선순위
 const polNames = Object.keys(POL);
 function randIds(t, n) {
   const have = Object.keys(TAVERN.ingredients).filter((i) => (t.stock[i] || 0) > 0);
@@ -549,6 +745,7 @@ function tavernService(v, dayId, pol, acc) {
       out = TavernCore.serve(TAVERN, v, cu.who, cu.order, ids, ctx, cu);
       TavernCore.applyDelta(v, out);
       acc.sold += out.sale; acc.tips += out.tip; acc[out.result] = (acc[out.result] || 0) + 1;
+      if (cu.reward && (out.result === 'perfect' || out.result === 'good')) { v.gold += cu.reward.gold; v.rep += cu.reward.rep; acc.noble = 1; }
       if (out.fav) acc.fav++;
       if (out.taste) acc.taste++;
     }
@@ -572,14 +769,66 @@ function buyUpgrades(v, pol, acc) {
   });
 }
 
+// ----- 숙박: 그날 손님 배정 (최적 배정을 pol.lodge 확률로, 아니면 무작위) -----
+function lodgeNight(v, pol, acc) {
+  InnCore.ensure(v);
+  const day = v.day;
+  if (InnCore.hasLodged(v, day)) return;
+  const guests = InnCore.guestsFor(v, day), open = InnCore.roomList(v).filter((r) => r.open).map((r) => r.id);
+  let assign = {};
+  if (rnd() < pol.lodge) {   // 모든 배정을 훑어 총 (숙박비 + 만족 가치) 이 가장 큰 것
+    let best = -1, rec = (i, cur, used) => {
+      if (i === guests.length) { let t = 0; guests.forEach((g) => { const q = InnCore.quote(v, g, cur[g.id] || null); t += q.pay + q.sat * 8; }); if (t > best) { best = t; assign = Object.assign({}, cur); } return; }
+      rec(i + 1, cur, used);
+      open.forEach((r) => { if (!used.has(r)) { cur[guests[i].id] = r; used.add(r); rec(i + 1, cur, used); used.delete(r); delete cur[guests[i].id]; } });
+    }; rec(0, {}, new Set());
+  } else {
+    const free = open.slice();
+    guests.forEach((g) => { if (free.length && rnd() > 0.2) assign[g.id] = free.splice(Math.floor(rnd() * free.length), 1)[0]; });
+  }
+  const out = InnCore.settle(v, day, assign);
+  acc.lodgeGold += out.gold; acc.sat += out.sat; acc.nights++;
+}
+function buyRoomUpgrades(v, pol, acc) {
+  InnCore.ensure(v);
+  for (const id of pol.roomBuy) {
+    const u = LODGING.upgrades.find((x) => x.id === id);
+    if (!u || InnCore.buyRoomUpg(v, u) !== 'ok' || v.gold - u.price < pol.keep) continue;
+    v.gold -= u.price; v.lodge.upg[id] = true; acc.roomUpg.push(id); break;   // 하룻밤에 하나
+  }
+}
+function rankCheck(v, acc, learn) {
+  const r = InnCore.checkRank(v);
+  if (r) { acc.rankLog.push(`${v.day}일차 ${r.to}★`); if (learn) r.levels.forEach((n) => ((INN_RANK.unlocks[n] || {}).learn || []).forEach((id) => TavernCore.learn(v, id))); }
+}
+// ----- 선물: 낮에 함께 보낸 히로인에게 (취향을 모르면 탐색, 알면 좋아하는 것) -----
+function simGift(v, who, pol, acc) {
+  InnCore.ensure(v);
+  if (!InnCore.canGive(v, who) || rnd() >= pol.gift) return;
+  const G = v.gift, ids = Object.keys(GIFTS.items), pts = { fav: 3, like: 2, normal: 1, hate: -1 };
+  const rank = (id) => { const k = (G.known[who] || {})[id]; return k ? pts[k] : 0.5; };
+  let id = ids.filter((i) => G.inv[i] > 0).sort((a, b) => rank(b) - rank(a))[0];
+  if (!id || rank(id) < 2) {
+    const want = ids.filter((i) => rank(i) >= 2).sort((a, b) => rank(b) - rank(a) || GIFTS.items[a].price - GIFTS.items[b].price)[0];
+    const cand = want || ids.filter((i) => rank(i) === 0.5).sort(() => rnd() - 0.5)[0];
+    if (cand && v.gold - GIFTS.items[cand].price >= pol.keep) { acc.giftSpent += GIFTS.items[cand].price; InnCore.buyGift(v, cand); id = cand; }
+  }
+  if (!id) return;
+  const res = InnCore.giveGift(v, who, id);
+  if (!res) return;
+  applySet(v, { ['aff.' + who]: res.points });
+  acc.gifts++; acc.giftAff += res.points;
+}
+
 // pickFn(options, vars, sceneId) -> 선택한 option, pol: 영업 플레이어 모델
 function simulate(pickFn, pol) {
   pol = pol || POL.decent;
   const v = JSON.parse(JSON.stringify(STORY.init));
-  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [], events: [] };
+  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [], events: [], lodgeGold: 0, sat: 0, nights: 0, roomUpg: [], rankLog: [], gifts: 0, giftAff: 0, giftSpent: 0, nev: [], riv: [], noble: 0 };
   let sc = STORY.start, pc = 0, steps = 0, ending = null, read = 0;
   const visit = new Set(), snapRep = {};
   EventCore.ensure(v, () => Math.floor(rnd() * 4294967296));   // 이번 회차 랜덤 사건 시드
+  InnCore.ensure(v);
   while (steps++ < 20000) {
     const c = scenes[sc][pc];
     if (!c) return { error: `씬 끝: ${sc}`, v };
@@ -592,6 +841,8 @@ function simulate(pickFn, pol) {
       const o = pickFn(opts, v, sc);
       if (o.cost) v.gold -= o.cost;
       applySet(v, o.set);
+      if (o.put) Object.keys(o.put).forEach((k) => setPath(v, k, o.put[k], false));
+      if (c.talkpick && o.who) simGift(v, o.who, pol, acc);   // 낮에 함께 보낸 히로인에게 선물 (영업 모델별 확률)
       if (o.goto) { sc = o.goto; pc = 0; } else pc++;
       continue;
     }
@@ -606,9 +857,24 @@ function simulate(pickFn, pol) {
     }
     if ('randret' in c) { sc = v.rev.ret; pc = 0; continue; }
     if ('time' in c) { v.time = c.time; pc++; continue; }
-    if ('tavern' in c) { tavernService(v, c.tavern, pol, acc); pc++; continue; }
+    if ('tavern' in c) { tavernService(v, c.tavern, pol, acc); rankCheck(v, acc, true); pc++; continue; }
+    if ('lodging' in c) { lodgeNight(v, pol, acc); pc++; continue; }
+    if ('nightev' in c) {
+      const nid = InnCore.nightEvent(v, v.day, VN.evalCond);
+      if (nid) { v.nev.used.push(nid); v.nev.ret = sc + '#' + (pc + 1); acc.nev.push(nid); sc = 'nev_' + nid; pc = 0; } else pc++;
+      continue;
+    }
+    if ('nightret' in c) { const m = v.nev.ret.split('#'); sc = m[0]; pc = Number(m[1]); continue; }
+    if ('rivalry' in c) {
+      const rp = InnCore.rivalryPick(v, v.day);
+      if (rp) { v.riv.done.push(rp.id); v.riv.n++; v.riv.ret = sc + '#' + (pc + 1); acc.riv.push(rp.id); sc = rp.scene; pc = 0; } else pc++;
+      continue;
+    }
+    if ('rivret' in c) { const m = v.riv.ret.split('#'); sc = m[0]; pc = Number(m[1]); continue; }
+    if ('rankcheck' in c) { rankCheck(v, acc, c.rankcheck !== 'quiet'); pc++; continue; }
+    if ('giftoffer' in c) { pc++; continue; }
     if ('learn' in c) { [].concat(c.learn).forEach((r) => TavernCore.learn(v, r)); pc++; continue; }
-    if ('upgrades' in c) { buyUpgrades(v, pol, acc); pc++; continue; }
+    if ('upgrades' in c) { buyUpgrades(v, pol, acc); buyRoomUpgrades(v, pol, acc); pc++; continue; }
     if ('set' in c) applySet(v, c.set);
     if ('put' in c) Object.keys(c.put).forEach((k) => setPath(v, k, c.put[k], false));
     pc++;
@@ -619,7 +885,7 @@ const sum = (o) => Object.values(o.aff).reduce((a, b) => a + b, 0);
 const med = (a) => { const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
 const stat = { random: {}, errors: 0, byPol: {}, read: [] };
 const pickRand = (opts) => opts[Math.floor(rnd() * opts.length)];
-const score = (o, who) => (o.set && o.set['aff.' + who] || 0) * 10 + (o.who === who ? 5 : 0) + (o.set && o.set.rep || 0) * 2 - (o.cost || 0) * 0.05;
+const score = (o, who) => (o.set && o.set['aff.' + who] || 0) * 10 + (o.who === who ? 5 : 0) + (o.tag === '깊은 이야기' && o.who === who ? 3 : 0) + (o.set && o.set.rep || 0) * 2 - (o.cost || 0) * 0.05;
 const focusPick = (h, noise) => (opts) => { let best = opts[0], bs = -1e9; opts.forEach((o) => { const s2 = score(o, h) + rnd() * noise; if (s2 > bs) { bs = s2; best = o; } }); return best; };
 const evenPick = (opts, v) => {
   const min = Math.min(...Object.values(v.aff));
@@ -629,13 +895,17 @@ const evenPick = (opts, v) => {
 };
 const badPick = (opts) => opts.reduce((a, b) => (((b.set && b.set.rep) || 0) < ((a.set && a.set.rep) || 0) ? b : a));
 // 평균 집계 도우미
-const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {} });
+const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {}, rank: {}, lodge: [], sat: [], gifts: [], giftAff: [], giftSpent: [], deep: [], riv: [], nev: [], score: [], noble: 0, roomUpg: [] });
 const addAgg = (g, r) => {
   g.n++; g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length); g.taste.push(r.acc.taste); g.spWin.push(r.acc.spWin); g.fail.push(r.v.tavern.fail);
   g.end[r.ending] = (g.end[r.ending] || 0) + 1;
+  g.rank[r.v.inn.rank] = (g.rank[r.v.inn.rank] || 0) + 1; g.lodge.push(r.acc.lodgeGold); g.sat.push(r.acc.sat); g.gifts.push(r.acc.gifts); g.giftAff.push(r.acc.giftAff); g.giftSpent.push(r.acc.giftSpent);
+  g.deep.push(HEROINES.filter((h) => r.v.flag['deep_' + h]).length); g.riv.push(r.acc.riv.length); g.nev.push(r.acc.nev.length); g.score.push(InnCore.score(r.v)); g.noble += r.acc.noble; g.roomUpg.push(r.acc.roomUpg.length);
   HEROINES.forEach((h) => { (g.aff[h] = g.aff[h] || []).push(r.v.aff[h]); });
 };
 const avg = (a) => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(1);
+const rankStr = (g) => Object.keys(g.rank).sort().map((k) => `${k}★ ${Math.round(g.rank[k] * 100 / g.n)}%`).join(' ');
+const innLine = (g) => `여관 등급 ${rankStr(g)} (점수 ${fmt(g.score)}) / 숙박 수입 평균 ${avg(g.lodge)}G, 만족 평균 ${avg(g.sat)} / 객실 개조 ${avg(g.roomUpg)}개 / 선물 ${avg(g.gifts)}개 (호감도 +${avg(g.giftAff)}, 지출 ${avg(g.giftSpent)}G) / 깊은 이벤트 ${avg(g.deep)}개 / 신경전 ${avg(g.riv)}회 / 밤 사건 ${avg(g.nev)}회 / 5성 귀족 ${g.noble}회`;
 const fmt = (a) => `${Math.min(...a)}~${Math.max(...a)} (중앙 ${med(a)})`;
 
 // (1) 무작위 스토리 선택 x 영업 플레이어 모델 섞기 (숙련 15 / 보통 35 / 서툰 35 / 대충 15 %)
@@ -670,6 +940,13 @@ polNames.forEach((pn) => {
   fanRes[pn] = agg();
   HEROINES.forEach((h) => { for (let i = 0; i < 40; i++) { const r = simulate((opts) => (rnd() < 0.55 ? focusPick(h, 0)(opts) : pickRand(opts)), POL[pn]); if (!r.error) addAgg(fanRes[pn], r); } });
 });
+// (4) 두 사람 전략: 두 히로인을 번갈아 만난다 (신경전이 일어나는 대표 상황)
+const duoPick = (a, b) => (opts, v) => { const low = v.aff[a] <= v.aff[b] ? a : b; let best = opts[0], bs = -1e9; opts.forEach((o) => { const s2 = (o.who === low ? 6 : (o.who === a || o.who === b ? 3 : 0)) + (o.set && o.set.rep || 0) * 2 - (o.cost || 0) * 0.02; if (s2 > bs) { bs = s2; best = o; } }); return best; };
+const duoRes = {};
+polNames.forEach((pn) => {
+  duoRes[pn] = agg();
+  [['erion', 'kaela'], ['kaela', 'miho'], ['miho', 'lia'], ['lia', 'erion'], ['erion', 'miho'], ['kaela', 'lia']].forEach(([a, b]) => { for (let i = 0; i < 40; i++) { const r = simulate(duoPick(a, b), POL[pn]); if (!r.error) { addAgg(duoRes[pn], r); r.acc.riv.forEach((x) => { duoRes[pn].rivIds = duoRes[pn].rivIds || {}; duoRes[pn].rivIds[x] = (duoRes[pn].rivIds[x] || 0) + 1; }); } } });
+});
 const ref = simulate(evenPick, POL.decent), refBad = simulate(badPick, POL.novice);
 if (refBad.ending !== 'bad') err(`평판 최저 + 서툰 영업 전략이 배드 엔딩에 도달하지 못함 (결과: ${refBad.ending}, 평판 ${refBad.v.rep})`);
 if (ref.ending !== 'normal') wn(`균등 분배 + 보통 영업 전략이 노멀 엔딩이 아님 (결과: ${ref.ending}, aff ${JSON.stringify(ref.v.aff)})`);
@@ -689,6 +966,11 @@ if (AUDIO && AUDIO.tracks) {
   const withFile = Object.values(AUDIO.tracks).filter((t) => t.file).length;
   console.log(`BGM: 트랙 ${Object.keys(AUDIO.tracks).length}개 (파일 연결 ${withFile}개, 나머지는 file:null 이라 요청 없음), 스크립트 사용 ${[...bgmUsed].filter((x) => x !== 'stop').length}종, 효과음 ${SFX.names.length}종`);
 }
+if (innStats.gift) {
+  console.log(`선물: 8종, 반응 ${innStats.giftReact}개 (4x8), 가격 ${Object.values(GIFTS.items).map((d) => d.price).join('/')}G`);
+  HEROINES.forEach((h) => console.log(`  - ${h}: ` + Object.entries(innStats.gift[h]).map(([k, v2]) => `${k}[${v2}]`).join(' ')));
+  console.log(`숙박: 객실 3 (시작 2), 손님 ${LODGING.guests.length}팀, 요청 ${Object.keys(LODGING.requests).length}종, 객실 개조 ${LODGING.upgrades.length}종, 3팀 비율 ${innStats.three}; 밤 사건 ${innStats.nev}개 (발생률 ${innStats.nevRate}); 여관 등급 기준 ${INN_RANK.stars.map((x) => x.n + '★:' + x.min).join(' ')}; 신경전 ${RIVALRY.pairs.length}쌍 (최대 ${RIVALRY.max}회, 호감도 ${RIVALRY.need} 이상)`);
+}
 if (tvStats.taste) console.log('단골 숨은 취향:', JSON.stringify(tvStats.taste));
 if (tvStats.specials) Object.entries(tvStats.specials).forEach(([d, t]) => console.log(`특별 주문 ${d}: ${t}`));
 const per = {}; HEROINES.forEach((h) => { per[h] = Object.keys(scenes).filter((s2) => new RegExp('^' + h + '_').test(s2)).length; });
@@ -696,13 +978,19 @@ stat.read.sort((a, b) => a - b);
 console.log(`한 회차에 읽는 대사/나레이션: 중앙값 ${stat.read[stat.read.length >> 1]}줄 (최소 ${stat.read[0]} ~ 최대 ${stat.read[stat.read.length - 1]}) -> 줄당 3~4초 가정 시 약 ${Math.round(stat.read[stat.read.length >> 1] * 3 / 60)}~${Math.round(stat.read[stat.read.length >> 1] * 4 / 60)}분 + 선택/영업 시간`);
 console.log('히로인별 이벤트 씬 수:', JSON.stringify(per));
 console.log('무작위 선택 x 영업 모델 섞기 6000회 엔딩 분포:', JSON.stringify(stat.random), stat.errors ? `(막힘 ${stat.errors})` : '(막힘 0)');
+polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${pn} (${g.n}회): 엔딩 ${JSON.stringify(g.end)} / 최종 골드 ${fmt(g.gold)} / 평판 ${fmt(g.rep)} / 대성공 ${fmt(g.perfect)}회 / 실패 평균 ${avg(g.fail)}회 / 단골 보너스 평균 ${avg(g.taste)}회 / 특별 주문 성공 평균 ${avg(g.spWin)}/4 / 업그레이드 ${avg(g.upg)}개`); });
 console.log('히로인 집중 전략(각 40회) 최종 호감도 범위 (loveLine ' + STORY.loveLine + '):');
+polNames.forEach((pn) => { const g = Object.values(focusRes[pn]).reduce((a, b) => { Object.keys(b).forEach((k) => { if (Array.isArray(b[k])) a[k] = (a[k] || []).concat(b[k]); else if (typeof b[k] === 'number') a[k] = (a[k] || 0) + b[k]; else if (k === 'rank') Object.keys(b.rank).forEach((r) => { a.rank[r] = (a.rank[r] || 0) + b.rank[r]; }); }); return a; }, { rank: {}, n: 0 }); console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => console.log(`  - 영업 ${pn}: ` + HEROINES.map((h) => { const a = focusRes[pn][h].aff[h]; return `${h} ${Math.min(...a)}~${Math.max(...a)}`; }).join(' / ') + ` | 엔딩 일치 ` + HEROINES.map((h) => `${focusRes[pn][h].end[h] || 0}/${focusRes[pn][h].n}`).join(' ') + ` | 골드 ${fmt(focusRes[pn][HEROINES[0]].gold)}`));
 console.log('균등 분배 전략 (여러 사람에게 고르게):');
+polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / ` + HEROINES.map((h) => `${h} ${fmt(g.aff[h])}`).join(' ') + ` / 평판 ${fmt(g.rep)}`); });
 console.log('팬 전략 (좋아하는 히로인 55% 집중 + 나머지 무작위, 각 160회):');
+polNames.forEach((pn) => { const g = fanRes[pn]; console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => { const g = fanRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / 평판 ${fmt(g.rep)} / 최종 골드 ${fmt(g.gold)}`); });
+console.log('두 사람 번갈아 만나기 전략 (6쌍 x 40회):');
+polNames.forEach((pn) => { const g = duoRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / 신경전 평균 ${avg(g.riv)}회 (${JSON.stringify(g.rivIds || {})}) / 깊은 이벤트 평균 ${avg(g.deep)}개 / ${rankStr(g)}`); });
 console.log('평판 최저 선택 전략 (배드 엔딩):');
 polNames.forEach((pn) => { const g = badRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / 평판 ${fmt(g.rep)}`); });
 // 영업 수입 (균등 분배 전략 기준)

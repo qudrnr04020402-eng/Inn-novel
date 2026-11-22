@@ -25,5 +25,9 @@ window.CHARACTERS = {
   greta: { name: '그레타',      color: '#d6a07a', tag: '은퇴한 용병 / 호탕 · 독한 술',    faces: faces('greta') },
   marta: { name: '마르타',      color: '#ffb08a', tag: '꿀빵 아주머니 / 다정 · 수다',     faces: faces('marta') },
   fin:   { name: '핀',          color: '#9cc4ff', tag: '청년단원 / 어리숙 · 성실',        faces: faces('fin') },
-  chief: { name: '촌장님',      color: '#9fd8a8', tag: '마을 촌장 / 인자 · 걱정',         faces: faces('chief') }
+  chief: { name: '촌장님',      color: '#9fd8a8', tag: '마을 촌장 / 인자 · 걱정',         faces: faces('chief') },
+
+  // ----- 여관 등급으로 찾아오는 손님 (story/inn-rank.js) -----
+  rosa:  { name: '로사',        color: '#a8e08a', tag: '떠돌이 약초 상인 / 느긋 · 향기 (여관 ★2 단골)', faces: faces('rosa') },
+  noble: { name: '벨라르 경',   color: '#d0a0e8', tag: '왕도의 귀족 미식가 / 까다로움 (여관 ★5 특별 손님)', faces: faces('noble') }
 };

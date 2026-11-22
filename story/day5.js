@@ -64,7 +64,12 @@ Object.assign(STORY.scenes, {
       { who: 'erion', text: '"에리온, 마지막으로 곁에서 준비를 도울게요."', set: { 'aff.erion': 2, 'flag.partner_erion': true }, goto: 'd5_with_erion' },
       { who: 'kaela', text: '"카엘라, 같이 앞에서 길을 열어요."', set: { 'aff.kaela': 2, 'flag.partner_kaela': true }, goto: 'd5_with_kaela' },
       { who: 'miho', text: '"미호, 같이 정찰하면서 가요."', set: { 'aff.miho': 2, 'flag.partner_miho': true }, goto: 'd5_with_miho' },
-      { who: 'lia', text: '"리아, 같이 기도하고 출발해요."', set: { 'aff.lia': 2, 'flag.partner_lia': true }, goto: 'd5_with_lia' }
+      { who: 'lia', text: '"리아, 같이 기도하고 출발해요."', set: { 'aff.lia': 2, 'flag.partner_lia': true }, goto: 'd5_with_lia' },
+      // 깊은 이벤트 (story/deep-events.js): 하트 4칸 이상이면 함께 갈 사람으로 고르면서 속마음을 듣는다. 끝나면 바로 저녁 영업으로.
+      { who: 'erion', if: 'aff.erion>=' + HEART(4) + ' && !flag.deep_erion', tag: '깊은 이야기', set: { 'flag.partner_erion': true }, text: '"에리온, 책의 맨 뒷장 이야기를 들려줄래요?"', goto: 'erion_5' },
+      { who: 'kaela', if: 'aff.kaela>=' + HEART(4) + ' && !flag.deep_kaela', tag: '깊은 이야기', set: { 'flag.partner_kaela': true }, text: '"카엘라, 그 종이에 적힌 이야기를 듣고 싶어요."', goto: 'kaela_5' },
+      { who: 'miho', if: 'aff.miho>=' + HEART(4) + ' && !flag.deep_miho', tag: '깊은 이야기', set: { 'flag.partner_miho': true }, text: '"미호, 그 편지 이야기를 들려줄래요?"', goto: 'miho_5' },
+      { who: 'lia', if: 'aff.lia>=' + HEART(4) + ' && !flag.deep_lia', tag: '깊은 이야기', set: { 'flag.partner_lia': true }, text: '"리아, 신전 앞에서 하려던 이야기가 있죠?"', goto: 'lia_5' }
     ] }
   ],
   d5_with_erion: [
@@ -115,6 +120,7 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 출정 전 마지막 영업 =================
   // 저녁 영업(story/tavern.js 의 day5) -> 동굴 결전
   d5_tavern: [
+    { rankcheck: true },   // 여관 등급이 올랐다면 영업 직전에 축하 (5성이면 귀족 손님이 찾아온다)
     { bgm: 'tavern' },
     { talkoffer: true },   // 자유 대화 제안 (PC 서버 + 로컬 LLM 일 때만)
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },

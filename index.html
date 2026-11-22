@@ -56,6 +56,7 @@
       <span class="hud-item day"><b id="hud-day"></b></span>
       <span class="hud-item"><i class="coin"></i><b id="hud-gold">0</b><small>G</small></span>
       <span class="hud-item"><i class="star">★</i><b id="hud-rep">0</b></span>
+      <span class="hud-item rank" id="hud-rank-wrap" title="여관 등급"><small>여관</small><b id="hud-rank">★</b></span>
     </div>
     <button id="menu-btn" type="button" aria-label="메뉴">메뉴</button>
     <div id="cg" class="hidden"></div>
@@ -122,6 +123,15 @@
         <div id="tv-sum-body"></div>
         <div class="tv-actions"><button id="tv-sum-btn" class="btn primary" type="button">영업 종료</button></div>
       </div>
+      <!-- 밤: 숙박 접수 (손님을 누른 뒤 방을 눌러 배정) -->
+      <div id="tv-lodge" class="tv-full hidden">
+        <div class="tv-head"><h2>숙박 접수</h2><span id="lodge-night" class="tv-count"></span></div>
+        <p id="lodge-info" class="tv-info"></p>
+        <div id="lodge-rooms"></div>
+        <div id="lodge-guests"></div>
+        <div id="lodge-result" class="hidden"></div>
+        <div class="tv-actions"><button id="lodge-done" class="btn primary" type="button">접수 마감</button></div>
+      </div>
       <!-- 밤: 여관 업그레이드 -->
       <div id="tv-upg" class="tv-full hidden">
         <div class="tv-head"><h2>여관 손보기</h2><span class="tv-gold"><i class="coin"></i><b id="tv-upg-gold">0</b> G</span></div>
@@ -157,6 +167,43 @@
     </div>
   </section>
 
+  <!-- 여관 등급 상승 -->
+  <section id="rankup" class="overlay hidden">
+    <div class="panel rankup-panel">
+      <div class="rankup-label">여관 등급 상승!</div>
+      <div id="rankup-stars"></div>
+      <h2 id="rankup-name"></h2>
+      <ul id="rankup-unlocks"></ul>
+      <div id="rankup-say">
+        <img id="rankup-pic" alt="">
+        <div><b id="rankup-who"></b><p id="rankup-text"></p></div>
+      </div>
+      <button id="rankup-btn" class="btn primary" type="button">계속</button>
+    </div>
+  </section>
+
+  <!-- 선물 (장터에서 사기 / 건네기 / 반응) -->
+  <section id="gift" class="overlay hidden">
+    <div class="panel tall gift-panel">
+      <div class="tv-head"><h2 id="gift-title">선물</h2><span class="tv-gold"><i class="coin"></i><b id="gift-gold">0</b> G</span></div>
+      <div id="gift-tabs">
+        <button id="gift-tab-shop" class="btn" type="button">장터</button>
+        <button id="gift-tab-give" class="btn" type="button">선물 주기</button>
+      </div>
+      <div id="gift-who"></div>
+      <p id="gift-info" class="tv-info"></p>
+      <div id="gift-list"></div>
+      <div id="gift-react" class="hidden">
+        <img id="gift-react-pic" alt="">
+        <div class="gift-react-name"><b id="gift-react-name"></b><span id="gift-react-tier"></span></div>
+        <p id="gift-react-text"></p>
+        <div id="gift-react-aff"></div>
+        <button id="gift-react-ok" class="btn primary" type="button">확인</button>
+      </div>
+      <button id="gift-close" class="btn primary" type="button">닫기</button>
+    </div>
+  </section>
+
   <!-- 일차 전환 카드 (게임 화면 위, 탭하면 진행) -->
   <section id="daycard" class="hidden">
     <div class="card-inner">
@@ -176,6 +223,7 @@
       <h2 id="ending-title"></h2>
       <span id="ending-new" class="hidden">NEW!</span>
       <p id="ending-desc"></p>
+      <p id="ending-rank"></p>
       <div id="ending-body"></div>
       <div id="ending-count"></div>
       <button id="ending-btn" class="btn primary" type="button">타이틀로</button>
@@ -240,6 +288,7 @@
       <button id="menu-save" class="btn" type="button">저장하기</button>
       <button id="menu-load" class="btn" type="button">불러오기</button>
       <button id="menu-log" class="btn" type="button">백로그 (지난 대사)</button>
+      <button id="menu-gift" class="btn" type="button">선물</button>
       <button id="menu-options" class="btn" type="button">설정</button>
       <button id="menu-chat" class="btn off" type="button">자유 대화<small>PC 서버에서 실행할 때만 사용 가능</small></button>
       <button id="menu-restart" class="btn" type="button">처음부터</button>
@@ -329,12 +378,18 @@
 <script src="story/audio.js"></script>
 <script src="story/common.js"></script>
 <script src="story/tavern.js"></script>
+<script src="story/gifts.js"></script>
+<script src="story/lodging.js"></script>
+<script src="story/inn-rank.js"></script>
 <script src="story/day1.js"></script>
 <script src="story/day2.js"></script>
 <script src="story/day3.js"></script>
 <script src="story/day4.js"></script>
 <script src="story/day5.js"></script>
 <script src="story/endings.js"></script>
+<script src="story/deep-events.js"></script>
+<script src="story/night-events.js"></script>
+<script src="story/rivalry.js"></script>
 <script src="story/random-events.js"></script>
 <script src="story/llm-persona.js"></script>
 <script src="js/llm-core.js"></script>
@@ -342,6 +397,7 @@
 <script src="js/bgm.js"></script>
 <script src="js/tavern-core.js"></script>
 <script src="js/event-core.js"></script>
+<script src="js/inn-core.js"></script>
 <script src="js/engine.js"></script>
 </body>
 </html>

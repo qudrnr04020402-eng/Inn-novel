@@ -50,7 +50,7 @@
       for (var n = 0; n < -cust; n++) {
         for (var i = q.length - 1; i >= 0; i--) {
           var cd = T.customers[q[i].who] || {};
-          if (!cd.heroine && !q[i].gain) { q.splice(i, 1); break; }
+          if (!cd.heroine && !q[i].gain && !q[i].reward) { q.splice(i, 1); break; }
         }
       }
     } else if (cust > 0 && T.extras && T.extras.length) {

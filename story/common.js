@@ -7,7 +7,7 @@ window.STORY = {
   title: '은빛 여우관',
   subtitle: '변두리 마을 여관, 5일간의 이야기',
   start: 'd1_open',                          // 새 게임 시작 씬
-  loveLine: 24,                              // 고백(개별) 엔딩 기준 호감도. 하트 6칸이 이 값에 해당 (엔진이 하트 칸 계산에 사용)
+  loveLine: 25,                              // 고백(개별) 엔딩 기준 호감도. 하트 6칸이 이 값에 해당 (엔진이 하트 칸 계산에 사용)
   cast: ['erion', 'kaela', 'miho', 'lia'],   // 타이틀 화면에 소개할 히로인 (왼쪽부터)
   init: {                                    // 시작 변수
     gold: 80, rep: 0, day: 1, time: '아침',
@@ -23,6 +23,8 @@ window.STORY = {
 // ---------- 히로인 목록 / 조건식 도우미 (코드를 몰라도 그대로 쓰면 됩니다) ----------
 window.HEROINES = ['erion', 'kaela', 'miho', 'lia'];
 window.LOVE = STORY.loveLine;
+// HEART(n) -> 하트 n칸에 해당하는 호감도 (6칸 = loveLine). 조건식에 'aff.erion>=' + HEART(4) 처럼 씁니다.
+window.HEART = function (n) { return Math.ceil(LOVE * n / 6); };
 
 // WIN('erion', 6) -> "호감도가 6 이상이고, 다른 히로인보다 높거나 같다(동점이면 목록 앞쪽 우선)"
 window.WIN = function (id, min) {
@@ -60,6 +62,11 @@ Object.assign(STORY.scenes, {
       { who: 'lia', if: 'ev.lia==1', text: '물동이를 이고 우물에서 돌아오는 길이다. 어쩐지 위태위태하다.', goto: 'lia_2' },
       { who: 'lia', if: 'ev.lia==2', text: '창가에 앉아 말없이 바깥을 보고 있다. 표정이 평소와 조금 다르다.', goto: 'lia_3' },
       { who: 'lia', if: 'ev.lia>=3', text: '신전 앞 계단에 앉아 있다. 손에 낡은 부적을 쥐고 있다.', goto: 'lia_4' },
+      // ----- 깊은 이벤트 (5번째 낮 이벤트): 해당 히로인 호감도 하트 4칸 이상 + 4일차 이후, 한 사람당 1번 (story/deep-events.js) -----
+      { who: 'erion', if: 'day>=4 && aff.erion>=' + HEART(4) + ' && !flag.deep_erion', tag: '깊은 이야기', text: '붉게 물든 하늘 아래, 책 맨 뒷장을 펼쳐 놓고 한참을 보고 있다.', goto: 'erion_5' },
+      { who: 'kaela', if: 'day>=4 && aff.kaela>=' + HEART(4) + ' && !flag.deep_kaela', tag: '깊은 이야기', text: '여관 계단에 앉아 구겨진 종이를 폈다 접었다 하고 있다. 큰 소리가 없다.', goto: 'kaela_5' },
+      { who: 'miho', if: 'day>=4 && aff.miho>=' + HEART(4) + ' && !flag.deep_miho', tag: '깊은 이야기', text: '카운터 뒤에서 낡은 편지 뭉치를 꺼내 놓고 조용히 동전을 세고 있다.', goto: 'miho_5' },
+      { who: 'lia', if: 'day>=4 && aff.lia>=' + HEART(4) + ' && !flag.deep_lia', tag: '깊은 이야기', text: '신전 문 앞에 서서 한참을 들어가지 못하고 있다.', goto: 'lia_5' },
       // ----- 여관 일 -----
       { text: '아무하고도 안 놀고 여관 일에 집중한다', tag: '골드 +20 · 평판 +1', goto: 'work_day' }
     ] }
@@ -74,20 +81,27 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ---------- 밤이 끝난 뒤: 여관 업그레이드 (하루 1번, 1~4일차 밤 다음) ----------
-  // {upgrades:true} 는 업그레이드 구입 화면을 띄우고, "다음 날로" 를 누르면 다음 명령으로 넘어갑니다.
-  d1_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd2_open' }],
-  d2_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd3_open' }],
-  d3_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd4_open' }],
-  d4_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd5_open' }],
+  // ---------- 밤이 끝난 뒤 (1~4일차): 숙박 접수 -> 밤 사건(확률) -> 여관 등급 검사 -> 여관 손보기 -> 다음 날 ----------
+  //  {lodging:true}  숙박 접수 화면 (story/lodging.js)         {nightev:true}  확률로 밤 사건 장면 (끝나면 {nightret:true} 로 여기 다음 줄로 복귀)
+  //  {rankcheck:true} 여관 등급이 올랐으면 축하 화면 (story/inn-rank.js)   {upgrades:true} 여관 손보기 (업그레이드 + 객실 개조)
+  d1_upgrade: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { goto: 'd2_open' }],
+  d2_upgrade: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { goto: 'd3_open' }],
+  d3_upgrade: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { goto: 'd4_open' }],
+  d4_upgrade: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { goto: 'd5_open' }],
 
-  // 낮 이벤트가 끝나면 날짜에 맞는 저녁으로 이동
+  // 낮 이벤트가 끝나면: CG 걷기 -> (자유 대화 제안) -> (선물 제안) -> (히로인 신경전) -> 날짜에 맞는 저녁으로
   after_pick: [
     { cg: 'hide' },       // 낮 이벤트의 CG 는 여기서 확실히 걷는다
     { talkoffer: true },   // PC 서버 + 로컬 LLM 이 있을 때만 "조금 더 이야기하기" 제안 (없으면 그냥 지나감)
+    { giftoffer: true },   // 보관함에 선물이 있고 오늘 아직 안 줬다면 "선물을 건넨다" 제안 (없으면 그냥 지나감)
+    { rivalry: true },     // 두 히로인 호감도가 둘 다 높으면 짧은 신경전 장면 (끝나면 다음 줄로 복귀)
+    { goto: 'after_pick2' }
+  ],
+  after_pick2: [
     { if: 'day==1', goto: 'd1_evening' },
     { if: 'day==2', goto: 'd2_evening' },
     { if: 'day==3', goto: 'd3_evening' },
+    { if: 'day==5', goto: 'd5_tavern' },    // 5일차 깊은 이벤트 뒤
     { goto: 'd4_evening' }
   ]
 });

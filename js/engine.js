@@ -83,12 +83,24 @@
   // ---------- 저장소 (localStorage 가 막혀도 게임은 동작하도록 try/catch) ----------
   // 세이브 형식을 바꾸면 SAVE_VER 와 KEY 의 숫자를 함께 올린다 (옛 세이브는 읽지 않고 무시)
   // v3: 저녁 영업 변수(vars.tavern)가 추가되어 v2 세이브는 읽지 않고 무시한다
-  var SAVE_VER = 3;
-  var KEY = 'inn_vn_v3_';
+  // v4: 숙박/여관 등급/선물/밤 사건/신경전 변수(vars.lodge, inn, nev, gift, riv)가 추가되어 v3 세이브는 읽지 않고 무시한다
+  //     (엔딩/CG/레시피/메모/튜토리얼/설정/읽은 대사 기록은 회차 공통이라 처음 한 번 v3 에서 v4 로 옮겨 온다)
+  var SAVE_VER = 4;
+  var KEY = 'inn_vn_v4_';
   var store = {
     get: function (k) { try { return localStorage.getItem(KEY + k); } catch (e) { return null; } },
     set: function (k, v) { try { localStorage.setItem(KEY + k, v); return true; } catch (e) { return false; } }
   };
+  (function migrateV3() {
+    try {
+      if (localStorage.getItem(KEY + 'migrated')) return;
+      ['endings', 'cg', 'recipes', 'notes', 'tut', 'opt', 'read'].forEach(function (k) {
+        var old = localStorage.getItem('inn_vn_v3_' + k);
+        if (old != null && localStorage.getItem(KEY + k) == null) localStorage.setItem(KEY + k, old);
+      });
+      localStorage.setItem(KEY + 'migrated', '1');
+    } catch (e) { /* 저장소를 못 쓰면 무시 */ }
+  })();
   function readSlot(k) {
     var raw = store.get(k);
     if (!raw) return null;
@@ -139,7 +151,7 @@
   function collectStats() {
     var en = readRec('endings'), cg = readRec('cg'), rc = readRec('recipes'), nt = readRec('notes');
     var cnt = function (rec, ids) { return ids.filter(function (id) { return !!rec[id]; }).length; };
-    var eIds = endingDefs().map(function (d) { return d.id; }), cIds = Object.keys(cgDefs()), rIds = Object.keys(TAVERN.recipes), nIds = Object.keys(TAVERN.customers);
+    var eIds = endingDefs().map(function (d) { return d.id; }), cIds = Object.keys(cgDefs()), rIds = Object.keys(TAVERN.recipes), nIds = Object.keys(TAVERN.customers).filter(function (id) { return !TAVERN.customers[id].special; });
     var cats = [
       { id: 'endings', name: '엔딩', n: cnt(en, eIds), total: eIds.length },
       { id: 'cg', name: 'CG', n: cnt(cg, cIds), total: cIds.length },
@@ -157,7 +169,7 @@
   }
 
   // ---------- 설정 (옵션 화면) ----------
-  // localStorage 'inn_vn_v3_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
+  // localStorage 'inn_vn_v4_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
   var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false, allRecipes: false };
   var OPT = Object.assign({}, OPT_DEF);
   var TYPE_TABLE = [70, 45, 28, 16, 7];           // 글자 속도 1~5 -> 글자당 ms
@@ -183,7 +195,7 @@
   function sfx(name) { if (!F.skip && globalThis.SFX) SFX.play(name); }   // 스킵 중에는 효과음을 내지 않는다
 
   // ---------- 읽은 대사 기록 (회차 공통) ----------
-  // { 씬id: { 줄번호: 1 } } 를 localStorage 'inn_vn_v3_read' 에 { 씬id: [줄번호...] } 로 저장 (영업 임시 씬 __tv 는 기록하지 않음)
+  // { 씬id: { 줄번호: 1 } } 를 localStorage 'inn_vn_v4_read' 에 { 씬id: [줄번호...] } 로 저장 (영업 임시 씬 __tv 는 기록하지 않음)
   var READ = {}, readTimer = 0;
   function loadRead() {
     READ = {};
@@ -310,7 +322,7 @@
   function closeOverlay(el) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); modal--; } }
   function closeAllOverlays() {
     tutHide();   // 아래에서 modal 을 0 으로 되돌리므로 튜토리얼은 카운트 없이 닫는다
-    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options, E.gallery, E.cgview, E.collect].forEach(closeOverlay);
+    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options, E.gallery, E.cgview, E.collect, E.gift, E.rankup].forEach(closeOverlay);
     modal = 0;
   }
 
@@ -521,6 +533,9 @@
     E.hudGold.textContent = S.vars.gold || 0;
     E.hudRep.textContent = S.vars.rep || 0;
     E.hudDay.textContent = (S.vars.day || 1) + '일차 ' + (S.vars.time || '');
+    var rk = (S.vars.inn && S.vars.inn.rank) || 1;
+    E.hudRank.textContent = InnCore.starStr(rk);
+    E.hudRankWrap.dataset.rank = rk;
   }
   function toast(msg, cls) {
     var d = document.createElement('div');
@@ -629,6 +644,13 @@
     S.scene = id; S.pc = 0; return true;
   }
 
+  // 'scene#pc' 형태로 저장해 둔 복귀 지점으로 이동 (밤 사건 / 신경전 장면의 끝)
+  function gotoRet(ret) {
+    var m = /^(.+)#(\d+)$/.exec(ret || '');
+    if (!m || !STORY.scenes[m[1]]) { warn('복귀 지점이 없음: ' + ret); toTitle(); return false; }
+    S.scene = m[1]; S.pc = Number(m[2]); return true;
+  }
+
   // 반환값 true = 입력 대기(진행 멈춤)
   function exec(c) {
     var d;
@@ -688,7 +710,9 @@
       var dl = c.day + '일차 ' + S.vars.time;
       takeSnap(dl);
       pushLog({ name: '', color: '', text: '— ' + dl + ' —' });
-      showCard(c.day + '일차', S.vars.time, c.tip);
+      InnCore.ensure(S.vars);
+      var rtxt = c.day > 1 ? InnCore.reportText(S.vars) : '';    // 간밤 숙박 정산 / 밤 사건 한 줄
+      showCard(c.day + '일차', S.vars.time, [c.tip, rtxt].filter(Boolean).join('\n\n'));
       return true;
     }
     if ('cg' in c) { // 이벤트 CG: {cg:'id'} 전체 화면 일러스트(대사창은 그 위에 계속) / {cg:'hide'} 걷기. 본 CG 는 회차 공통으로 기록
@@ -737,6 +761,45 @@
     if ('tavern' in c) { return startTavern(c.tavern); }           // 저녁 영업 시작: {tavern:'day1'}
     if ('learn' in c) { learnRecipes([].concat(c.learn)); next(); return false; } // 레시피 해금: {learn:'id'} / {learn:['a','b']}
     if ('upgrades' in c) { openUpgrades(); return true; }          // 밤의 여관 업그레이드 화면: {upgrades:true}
+    if ('lodging' in c) { return openLodging(); }                  // 밤의 숙박 접수 화면: {lodging:true} (story/lodging.js)
+    if ('nightev' in c) {                                          // 밤 사건: 확률로 nev_<id> 씬을 거쳐 이 명령 다음 줄로 돌아온다
+      InnCore.ensure(S.vars);
+      var nid = null;
+      try { nid = InnCore.nightEvent(S.vars, S.vars.day || 1, evalCond); } catch (e) { warn(e.message); }
+      if (nid && !STORY.scenes['nev_' + nid]) { warn('없는 밤 사건 씬: nev_' + nid); nid = null; }
+      if (!nid) { next(); return false; }
+      S.vars.nev.used.push(nid); S.vars.nev.today = nid; S.vars.nev.ret = S.scene + '#' + (S.pc + 1);
+      toast('밤 사건: ' + LODGING.nightEvents.events[nid].title, 'up');
+      return !gotoScene('nev_' + nid);
+    }
+    if ('nightret' in c) { return !gotoRet(S.vars.nev.ret); }       // 밤 사건 장면의 끝
+    if ('rivalry' in c) {                                          // 히로인 신경전: 조건이 맞으면 riv_<쌍> 씬을 거쳐 다음 줄로 돌아온다 (story/rivalry.js)
+      var rp = null;
+      try { rp = InnCore.rivalryPick(S.vars, S.vars.day || 1); } catch (e) { warn(e.message); }
+      if (!rp || !STORY.scenes[rp.scene]) { next(); return false; }
+      S.vars.riv.done.push(rp.id); S.vars.riv.n++; S.vars.riv.ret = S.scene + '#' + (S.pc + 1);
+      toast('히로인 신경전: ' + rp.title, 'up');
+      return !gotoScene(rp.scene);
+    }
+    if ('rivret' in c) { return !gotoRet(S.vars.riv.ret); }         // 신경전 장면의 끝
+    if ('rankcheck' in c) {                                        // 여관 등급 검사: {rankcheck:true} 올랐으면 축하 화면 / {rankcheck:'quiet'} 조용히 갱신만
+      if (c.rankcheck === 'quiet') { InnCore.checkRank(S.vars); updateHud(); next(); return false; }
+      if (rankUp(function () { next(); run(); })) return true;
+      next(); return false;
+    }
+    if ('giftoffer' in c) {                                        // 낮 이벤트 뒤 "선물을 건넨다" 제안 (보관함에 선물이 있고 오늘 아직 안 줬을 때만)
+      InnCore.ensure(S.vars);
+      var gid = S.vars.gift.last;
+      S.vars.gift.last = '';
+      if (gid && CHARACTERS[gid] && InnCore.giftCount(S.vars) > 0 && InnCore.canGive(S.vars, gid)) {
+        showChoices([
+          { who: gid, text: '준비한 선물을 건네 볼까?', tag: '선물 · 보관함 ' + InnCore.giftCount(S.vars) + '개', giftto: gid },
+          { text: '선물은 다음 기회에 하기로 한다.' }
+        ], false);
+        return true;
+      }
+      next(); return false;
+    }
     if ('__tv' in c) {                                             // 영업 내부 진행용 (스토리에서 쓰지 않음)
       if (c.__tv === 'brew') { openBrew(); return true; }
       if (TUT.next === 'notes') { tutNotes(); return true; }   // 튜토리얼 마지막 단계: 손님 메모장을 열어 보여 준다
@@ -797,6 +860,7 @@
     E.nextMark.classList.remove('on');
     E.choices.innerHTML = '';
     opts.forEach(function (o) { E.choices.appendChild(makeChoiceBtn(o)); });
+    if (talkpick) E.choices.appendChild(pickTools());
     E.choices.classList.remove('hidden');
     E.choices.scrollTop = 0;
   }
@@ -809,15 +873,18 @@
     pushLog({ name: '', color: '', text: '▶ ' + interp(o.text), choice: true });
     E.choices.classList.add('hidden');
     curOpts = [];
-    if (curPick && o.who && CHARACTERS[o.who]) { // 낮에 함께 보낼 히로인을 골랐다: 자유 대화 대상으로 기억
+    if (curPick && o.who && CHARACTERS[o.who]) { // 낮에 함께 보낼 히로인을 골랐다: 자유 대화/선물 대상으로 기억
+      InnCore.ensure(S.vars); S.vars.gift.last = o.who;
       var lp = LLMCore.ensureState(S.vars);
       lp.last = o.who;
       if (lp.met.indexOf(o.who) < 0) lp.met.push(o.who);
     }
     curPick = false;
     if (o.talk) { enterChat(o.talk, 'offer'); return; }
+    if (o.giftto) { openGift('give', o.giftto, function () { next(); run(); }); return; }
     if (o.cost) applySet({ gold: -o.cost });
     applySet(o.set);
+    if (o.put) { Object.keys(o.put).forEach(function (k) { setPath(S.vars, k, o.put[k], false); }); updateHud(); }
     if (o.goto) { if (!gotoScene(o.goto)) return; } else { next(); }
     run();
   }
@@ -933,6 +1000,7 @@
     E.endLabel.textContent = 'ENDING ' + (endingDefs().indexOf(def) + 1) + ' / ' + total;
     E.endTitle.textContent = def.title;
     E.endDesc.textContent = def.desc || '';
+    E.endRank.textContent = InnCore.endingLine(S.vars);
     E.endNew.classList.toggle('hidden', !isNew);
     E.endCount.textContent = '획득한 엔딩 ' + got + ' / ' + total;
     var ch = CHARACTERS[def.heroine];
@@ -1001,6 +1069,7 @@
     stopFast();
     S = freshState();
     EventCore.ensure(S.vars, function () { return Math.floor(Math.random() * 4294967296); });   // 이번 회차의 랜덤 사건 시드 (세이브에 저장됨)
+    InnCore.ensure(S.vars);
     var rw = collectStats().rewards, bonus = 0;
     if (rw.gold) { bonus = REWARD_GOLD; S.vars.gold = (S.vars.gold || 0) + bonus; }   // 수집 보상: 엔딩 3개 이상이면 시작 골드 +30
     if (rw.allRecipes && OPT.allRecipes) {                                            // 수집 보상: 레시피 도감 완성 -> 메뉴판 전부 공개 (설정에서 켠 경우)
@@ -1117,14 +1186,14 @@
     TUT.next = ''; tutHide();
     if (TVE.root) {
       TVE.root.classList.add('hidden');
-      ['brew', 'shop', 'sum', 'upg', 'menu', 'notes', 'found', 'stamp'].forEach(function (k) { TVE[k].classList.add('hidden'); });
+      ['brew', 'shop', 'sum', 'upg', 'lodge', 'menu', 'notes', 'found', 'stamp'].forEach(function (k) { TVE[k].classList.add('hidden'); });
       TVE.prog.classList.add('hidden');
       E.game.classList.remove('tv-brew');
     }
     if (STORY.scenes && STORY.scenes.__tv) delete STORY.scenes.__tv;
   }
   function tvPanel(name) { // 영업 화면 하나만 보이게 (menu/found 는 위에 겹쳐서 쓰므로 따로 다룸)
-    ['brew', 'shop', 'sum', 'upg'].forEach(function (k) { TVE[k].classList.toggle('hidden', k !== name); });
+    ['brew', 'shop', 'sum', 'upg', 'lodge'].forEach(function (k) { TVE[k].classList.toggle('hidden', k !== name); });
     E.game.classList.toggle('tv-brew', name === 'brew');
   }
   function tvEl(tag, cls, html) {
@@ -1167,7 +1236,7 @@
       id: dayId, def: def, ret: { scene: S.scene, pc: S.pc },
       queue: TavernCore.queue(TAVERN, dayId, S.vars, evalCond), idx: -1, cur: null,
       results: [], sold: 0, tips: 0, spent: 0, repSum: 0, sel: [], phase: 'shop', note: '', startGold: tvGold(), startRep: S.vars.rep || 0,
-      spGold: 0, spResult: null, tasteHits: 0
+      spGold: 0, spResult: null, tasteHits: 0, reward: null
     };
     if (def.bg) { S.bg = def.bg; renderBg(def.bg, true); }
     POS.forEach(function (p) { S.sprites[p] = null; });
@@ -1408,6 +1477,12 @@
       nt.miss = true;
       asList(td.miss).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who, vars)); noteHint(nt, l); });
     }
+    if (cu.reward && (out.result === 'perfect' || out.result === 'good')) {   // 귀족 같은 특별 손님의 사례금
+      var rw = cu.reward;
+      asList(rw.lines).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who, vars)); });
+      cmds.push({ set: { gold: rw.gold || 0, rep: rw.rep || 0 } });
+      TV.spGold += rw.gold || 0; TV.reward = { who: cu.who, gold: rw.gold || 0, rep: rw.rep || 0 };
+    }
     var g = cu.gain;
     if (g && asList(g.on || ['perfect', 'good']).indexOf(out.result) >= 0 && !S.vars.tavern.known[g.learn]) {
       cmds.push({ learn: g.learn });
@@ -1527,6 +1602,7 @@
         if (!nt.fav) addHints([fr.hint || '낮에 그 사람이 흘린 말을 떠올려 보자.']);
         var hl = (nt.hate || []).map(function (r) { return TAVERN.recipes[r].name; });
         body.appendChild(tvEl('div', 'tv-note-line' + (hl.length ? ' known bad' : ''), hl.length ? '싫어하는 메뉴 <em>' + hl.join(', ') + '</em>' : '싫어하는 메뉴 <em>???</em>'));
+        body.appendChild(giftNoteLine(id));
       } else {
         body.appendChild(tvEl('div', 'tv-note-line', '아직 알려진 취향이 없어요'));
       }
@@ -1549,7 +1625,7 @@
     tvPanel('sum');
     E.toasts.innerHTML = ''; // 마지막 손님의 알림이 결산 위에 남지 않게 정리
     TVE.prog.classList.add('hidden');
-    var net = TV.sold + TV.tips + TV.spGold - TV.spent, repNow = TV.repSum;
+    var net = TV.sold + TV.tips + TV.spGold - TV.spent, repNow = TV.repSum + (TV.reward ? TV.reward.rep : 0);
     var aff = {};
     TV.results.forEach(function (r) { if (r.aff) aff[r.who] = (aff[r.who] || 0) + r.aff; });
     var h = '';
@@ -1559,6 +1635,7 @@
       var sr = TV.spResult;
       h += '<div class="sum-row sp ' + (sr.ok ? 'ok' : 'bad') + '"><span>★ 특별 주문 · ' + sr.title + '</span><b class="' + (sr.ok ? 'plus' : 'minus') + '">' + (sr.ok ? '성공 +' + sr.gold + ' G' : '실패') + (sr.rep ? ' / 평판 ' + (sr.rep > 0 ? '+' : '') + sr.rep : '') + '</b></div>';
     }
+    if (TV.reward) h += '<div class="sum-row sp ok"><span>★ ' + ((CHARACTERS[TV.reward.who] || {}).name || '귀한 손님') + '의 사례</span><b class="plus">+' + TV.reward.gold + ' G / 평판 +' + TV.reward.rep + '</b></div>';
     h += '<div class="sum-row"><span>장보기</span><b>-' + TV.spent + ' G</b></div>';
     h += '<div class="sum-row total"><span>손익</span><b class="' + (net >= 0 ? 'plus' : 'minus') + '">' + (net >= 0 ? '+' : '') + net + ' G</b></div>';
     h += '<div class="sum-row"><span>평판</span><b class="' + (repNow >= 0 ? 'plus' : 'minus') + '">' + (repNow > 0 ? '+' : '') + repNow + '</b></div>';
@@ -1588,6 +1665,7 @@
     pushLog({ name: '', color: '', text: '— 영업 결산: 매출 ' + TV.sold + 'G, 팁 ' + TV.tips + 'G' + (TV.spGold ? ', 특별 주문 +' + TV.spGold + 'G' : '') + ', 장보기 ' + TV.spent + 'G —' });
     tvReset();
     S.scene = ret.scene; S.pc = ret.pc + 1;
+    if (rankUp(run)) return;    // 영업 결과로 여관 등급이 올랐으면 축하 화면 먼저
     run();
   }
 
@@ -1621,6 +1699,31 @@
       card.appendChild(b);
       TVE.upgList.appendChild(card);
     });
+    // 객실 개조 (숙박용, story/lodging.js)
+    InnCore.ensure(S.vars);
+    TVE.upgList.appendChild(tvEl('h3', 'tv-upg-sec', '객실 개조 <small>숙박 접수에서 요청을 맞추기 쉬워져요</small>'));
+    LODGING.upgrades.forEach(function (u) {
+      var st = InnCore.buyRoomUpg(S.vars, u), owned = st === 'owned';
+      var card = tvEl('div', 'tv-upg-card room' + (owned ? ' owned' : ''));
+      card.dataset.id = u.id;
+      card.appendChild(tvEl('div', 'tv-upg-tx', '<b>' + u.name + '</b><span>' + u.desc + '</span>'));
+      var b = tvEl('button', 'tv-upg-buy', owned ? '개조 완료' : (st === 'rank' ? '★' + u.needRank + ' 필요' : u.price + 'G'));
+      b.type = 'button';
+      if (st !== 'ok') b.disabled = true;
+      b.addEventListener('click', function () { buyRoomUpg(u); });
+      card.appendChild(b);
+      TVE.upgList.appendChild(card);
+    });
+  }
+  function buyRoomUpg(u) {
+    if (InnCore.buyRoomUpg(S.vars, u) !== 'ok') return;
+    S.vars.gold -= u.price;
+    S.vars.lodge.upg[u.id] = true;
+    sfx('coin');
+    toast('개조: ' + u.name, 'up');
+    updateHud();
+    takeSnap('객실 개조');
+    renderUpgrades();
   }
   function buyUpgrade(u) {
     if (S.vars.tavern.upg[u.id] || tvGold() < u.price) return;
@@ -1636,6 +1739,296 @@
   function closeUpgrades() {
     TVE.root.classList.add('hidden'); TVE.upg.classList.add('hidden');
     next(); run();
+  }
+
+  // ---------- 밤: 숙박 접수 ----------
+  // {lodging:true}: 그날 묵으려는 손님 2~3팀(story/lodging.js)을 "손님을 누르고 -> 방을 누르면" 배정한다.
+  //  요청에 맞는 방 = 숙박비 + 만족 보너스(여관 등급 점수), 안 맞는 방 = 기본 숙박비만, 거절/미배정 = 수입 없음.
+  //  정산하면 골드/만족이 상태에 반영되고, 정산 직후 스냅샷을 저장한다 (불러와도 다시 정산하지 않음).
+  var LG = null;   // { day, guests, rooms, assign:{손님:방}, rej:{손님:true}, sel:'손님id', stage:'pick'|'done' }
+  function lodgeEls() {
+    TVE.lodgeRooms = $('lodge-rooms'); TVE.lodgeGuests = $('lodge-guests'); TVE.lodgeResult = $('lodge-result');
+    TVE.lodgeInfo = $('lodge-info'); TVE.lodgeNight = $('lodge-night'); TVE.lodgeDone = $('lodge-done');
+  }
+  function openLodging() {
+    InnCore.ensure(S.vars);
+    var day = S.vars.day || 1;
+    if (InnCore.hasLodged(S.vars, day)) { next(); return false; }   // 이미 정산한 밤 (불러오기 등)
+    stopFast(); stopTyping();
+    TavernCore.ensure(TAVERN, S.vars);
+    E.toasts.innerHTML = '';
+    E.dialog.classList.add('hidden'); E.choices.classList.add('hidden');
+    LG = { day: day, guests: InnCore.guestsFor(S.vars, day), assign: {}, rej: {}, sel: '', stage: 'pick', out: null };
+    takeSnap('숙박 접수');
+    TVE.root.classList.remove('hidden');
+    tvPanel('lodge');
+    TVE.prog.classList.add('hidden');
+    mode = 'tavern';
+    TVE.lodgeResult.classList.add('hidden');
+    TVE.lodgeRooms.classList.remove('hidden'); TVE.lodgeGuests.classList.remove('hidden');
+    renderLodging();
+    return true;
+  }
+  function lodgeTotal() {
+    var t = 0;
+    LG.guests.forEach(function (g) { t += InnCore.quote(S.vars, g, LG.assign[g.id] || null).pay; });
+    return t;
+  }
+  function renderLodging() {
+    var rooms = InnCore.roomList(S.vars), byRoom = {};
+    Object.keys(LG.assign).forEach(function (gid) { byRoom[LG.assign[gid]] = gid; });
+    TVE.lodgeNight.textContent = LG.day + '일차 밤 · 손님 ' + LG.guests.length + '팀';
+    var selDef = LG.sel ? InnCore.guestDef(LG.sel) : null;
+    TVE.lodgeInfo.textContent = selDef
+      ? selDef.name + '의 방을 눌러 정하세요. 요청: ' + LODGING.requests[selDef.req].label
+      : '손님을 누른 뒤 방을 눌러 배정하세요. 요청에 맞는 방이면 숙박비에 보너스가 붙고 여관 평가가 올라요. 거절하거나 방이 없으면 수입이 없어요.';
+    // 방 3개
+    TVE.lodgeRooms.innerHTML = '';
+    rooms.forEach(function (r) {
+      var b = tvEl('button', 'lodge-room' + (r.open ? '' : ' closed') + (byRoom[r.id] ? ' used' : ''));
+      b.type = 'button'; b.dataset.room = r.id;
+      var occ = byRoom[r.id] ? InnCore.guestDef(byRoom[r.id]) : null;
+      var tagTx = r.tags.map(function (t) { return LODGING.requests[t] ? LODGING.requests[t].label : t; }).join(' · ') || '평범한 방';
+      b.innerHTML = '<b>' + r.name + '</b><span class="lodge-price">' + (r.open ? r.price + 'G' : '잠김') + '</span>' +
+        '<small>' + (r.open ? tagTx : '다락 개조 필요') + '</small>' +
+        '<em>' + (occ ? occ.name : (r.open ? '빈 방' : '')) + '</em>';
+      if (!r.open) b.disabled = true;
+      b.addEventListener('click', function () { lodgeRoomTap(r.id); });
+      TVE.lodgeRooms.appendChild(b);
+    });
+    // 손님
+    TVE.lodgeGuests.innerHTML = '';
+    LG.guests.forEach(function (g) {
+      var room = LG.assign[g.id] || null, q = InnCore.quote(S.vars, g, room);
+      var card = tvEl('div', 'lodge-guest' + (LG.sel === g.id ? ' sel' : '') + (LG.rej[g.id] ? ' rej' : '') + (room ? ' set' : ''));
+      card.dataset.guest = g.id;
+      var gl = tvEl('span', 'lodge-glyph', g.glyph); gl.style.background = g.color;
+      var tx = tvEl('div', 'lodge-gtx');
+      tx.innerHTML = '<b></b><small></small><q></q>';
+      tx.children[0].textContent = g.name; tx.children[1].textContent = g.kind + ' · 요청 [' + LODGING.requests[g.req].label + ']'; tx.children[2].textContent = g.say;
+      var st = tvEl('span', 'lodge-state');
+      if (LG.rej[g.id]) st.textContent = '거절';
+      else if (room) { st.innerHTML = (q.match ? '<i class="ok">맞음</i>' : '<i class="no">안 맞음</i>') + ' ' + InnCore.roomList(S.vars).filter(function (r) { return r.id === room; })[0].short + ' +' + q.pay + 'G'; }
+      else st.textContent = '미배정';
+      var rj = tvEl('button', 'lodge-reject', LG.rej[g.id] ? '되돌리기' : '거절');
+      rj.type = 'button';
+      rj.addEventListener('click', function (ev) { ev.stopPropagation(); lodgeReject(g.id); });
+      card.appendChild(gl); card.appendChild(tx); card.appendChild(st); card.appendChild(rj);
+      card.addEventListener('click', function () { lodgeGuestTap(g.id); });
+      TVE.lodgeGuests.appendChild(card);
+    });
+    TVE.lodgeDone.textContent = '접수 마감 (+' + lodgeTotal() + 'G)';
+  }
+  function lodgeGuestTap(gid) {
+    if (!LG || LG.stage !== 'pick') return;
+    sfx('tap');
+    if (LG.rej[gid]) delete LG.rej[gid];
+    LG.sel = LG.sel === gid ? '' : gid;
+    renderLodging();
+  }
+  function lodgeRoomTap(rid) {
+    if (!LG || LG.stage !== 'pick' || !InnCore.roomOpen(S.vars, rid)) return;
+    var occ = Object.keys(LG.assign).filter(function (g) { return LG.assign[g] === rid; })[0];
+    if (LG.sel) {
+      if (occ && occ !== LG.sel) delete LG.assign[occ];          // 같은 방에 다른 손님이 있으면 내보낸다
+      LG.assign[LG.sel] = rid; delete LG.rej[LG.sel];
+      sfx('select'); LG.sel = '';
+    } else if (occ) { delete LG.assign[occ]; sfx('tap'); }       // 손님을 고르지 않고 찬 방을 누르면 비운다
+    renderLodging();
+  }
+  function lodgeReject(gid) {
+    if (!LG || LG.stage !== 'pick') return;
+    sfx('tap');
+    if (LG.rej[gid]) delete LG.rej[gid]; else { LG.rej[gid] = true; delete LG.assign[gid]; if (LG.sel === gid) LG.sel = ''; }
+    renderLodging();
+  }
+  function lodgeFinish() {
+    if (!LG) return;
+    if (LG.stage === 'done') {   // 정산 결과를 본 뒤 "다음" -> 다음 명령
+      LG = null; TVE.lodge.classList.add('hidden'); TVE.root.classList.add('hidden');
+      run(); return;
+    }
+    var out = InnCore.settle(S.vars, LG.day, LG.assign);
+    LG.stage = 'done'; LG.out = out;
+    pushLog({ name: '', color: '', text: '— 숙박 정산: 수입 +' + out.gold + 'G' + (out.sat ? ', 만족 ' + out.sat : '') + ' —' });
+    updateHud(); sfx(out.gold > 0 ? 'coin' : 'tap');
+    next();                      // 정산 직후 스냅샷은 다음 명령을 가리킨다 (불러와도 정산을 다시 하지 않음)
+    takeSnap('숙박 정산');
+    TVE.lodgeRooms.classList.add('hidden'); TVE.lodgeGuests.classList.add('hidden');
+    var h = '';
+    out.rows.forEach(function (r) {
+      var g = InnCore.guestDef(r.id), rm = r.room ? LODGING.rooms[r.room].short : '';
+      h += '<div class="lodge-res ' + (!r.room ? 'rej' : (r.match ? 'ok' : 'meh')) + '"><span class="lodge-glyph" style="background:' + g.color + '">' + g.glyph + '</span>' +
+        '<div><b>' + g.name + '</b><small>' + (r.room ? rm + ' · ' + (r.match ? '요청 만족' : '요청과 달랐어요') : '돌려보냈어요') + '</small></div><em>' + (r.pay ? '+' + r.pay + 'G' : '-') + '</em></div>';
+    });
+    h += '<div class="sum-row total"><span>오늘 밤 숙박 수입</span><b class="plus">+' + out.gold + ' G</b></div>';
+    if (out.sat) h += '<div class="sum-row"><span>여관 평가 (만족 ' + out.sat + ')</span><b class="plus">★ +' + out.sat + '</b></div>';
+    TVE.lodgeResult.innerHTML = h; TVE.lodgeResult.classList.remove('hidden');
+    TVE.lodgeDone.textContent = '다음';
+    TVE.lodgeInfo.textContent = '손님들은 방으로 올라갔어요. 내일 아침에 평가가 들려올 거예요.';
+  }
+
+  // ---------- 여관 등급 상승 연출 ----------
+  var RK = { cont: null };
+  function rankUp(cont) {
+    var r = InnCore.checkRank(S.vars);
+    updateHud();
+    if (!r) return false;
+    var to = r.to, texts = [];
+    r.levels.forEach(function (n) {
+      var u = INN_RANK.unlocks[n];
+      if (!u) return;
+      if (u.learn) learnRecipes(u.learn);
+      texts.push('★' + n + ' 해금 — ' + u.text);
+    });
+    // 가장 가까운 히로인이 한마디
+    var best = HEROINES.slice().sort(function (a, b) { return ((S.vars.aff || {})[b] || 0) - ((S.vars.aff || {})[a] || 0); })[0];
+    var line = ((INN_RANK.cheer[to] || {})[best]) || { face: 'smile', text: '여관이 더 유명해졌네요!' };
+    var ch = CHARACTERS[best] || {};
+    stopFast(); stopTyping();
+    E.rankupStars.innerHTML = '';
+    for (var i = 0; i < to; i++) { var st = document.createElement('i'); st.textContent = '★'; st.style.animationDelay = (0.15 * i) + 's'; E.rankupStars.appendChild(st); }
+    E.rankupName.textContent = InnCore.rankName(to);
+    E.rankupUnlocks.innerHTML = '';
+    texts.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; E.rankupUnlocks.appendChild(li); });
+    E.rankupPic.src = (ch.faces && (ch.faces[line.face] || ch.faces.smile)) || '';
+    E.rankupWho.textContent = ch.name || ''; E.rankupWho.style.color = ch.color || '#fff';
+    E.rankupText.textContent = line.text;
+    RK.cont = cont;
+    pushLog({ name: '', color: '', text: '★ 여관 등급 상승: ' + InnCore.starStr(to) + ' ' + InnCore.rankName(to) });
+    E.hudRankWrap.classList.remove('pop'); void E.hudRankWrap.offsetWidth; E.hudRankWrap.classList.add('pop');
+    mode = 'rankup';
+    openOverlay(E.rankup);
+    sfx('rankup');
+    return true;
+  }
+  function rankClose() {
+    closeOverlay(E.rankup);
+    var c = RK.cont; RK.cont = null;
+    if (c) c();
+  }
+
+  // ---------- 선물 (장터 / 선물 주기 / 반응) ----------
+  var GF = { tab: 'give', target: '', fixed: false, cont: null, shopOk: false, stage: 'list' };
+  function pickTools() {   // 낮 선택 화면 아래의 작은 도구 버튼 (선택지 버튼과 class 가 달라서 선택지 번호에 섞이지 않는다)
+    var w = document.createElement('div');
+    w.className = 'pick-tools';
+    var n = InnCore.giftCount(S.vars);
+    [['pick-shop', '장터에서 선물 사기', 'shop'], ['pick-gift', '선물 주기 · 보관함 ' + n + '개', 'give']].forEach(function (d) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'pick-tool'; b.id = d[0]; b.textContent = d[1];
+      b.addEventListener('click', function (ev) { ev.stopPropagation(); openGift(d[2], '', null); });
+      w.appendChild(b);
+    });
+    return w;
+  }
+  function openGift(tab, target, cont) {
+    InnCore.ensure(S.vars);
+    stopFast();
+    GF.shopOk = (mode === 'choice' && curPick) || (mode === 'choice' && !!(curOpts || []).length && !!E.choices.querySelector('.pick-tools'));
+    GF.tab = (tab === 'shop' && GF.shopOk) ? 'shop' : 'give';
+    GF.target = target || ''; GF.fixed = !!target; GF.cont = cont || null; GF.stage = 'list';
+    if (!GF.target && GF.tab === 'give') GF.target = HEROINES.filter(function (h) { return InnCore.canGive(S.vars, h); })[0] || HEROINES[0];
+    E.giftReact.classList.add('hidden');
+    renderGift();
+    openOverlay(E.gift);
+  }
+  function giftClose() {
+    closeOverlay(E.gift);
+    if (mode === 'choice' && !snapLocked) takeSnap('선택지');   // 산/준 결과가 불러오기에 남도록 다시 저장
+    var c = GF.cont; GF.cont = null;
+    if (c) c();
+  }
+  function tierMark(t) { return GIFTS.tiers[t] ? GIFTS.tiers[t].mark + ' ' + GIFTS.tiers[t].label : '?'; }
+  function renderGift() {
+    var V = S.vars, G = V.gift;
+    E.giftGold.textContent = V.gold || 0;
+    E.giftTitle.textContent = GF.tab === 'shop' ? '장터 · 선물 사기' : '선물 주기';
+    E.giftTabShop.classList.toggle('on', GF.tab === 'shop'); E.giftTabGive.classList.toggle('on', GF.tab === 'give');
+    E.giftTabShop.disabled = !GF.shopOk || GF.fixed; E.giftTabGive.disabled = GF.fixed;
+    E.giftTabs.classList.toggle('hidden', GF.fixed);
+    E.giftWho.innerHTML = '';
+    E.giftWho.classList.toggle('hidden', GF.tab !== 'give');
+    E.giftList.innerHTML = '';
+    if (GF.tab === 'give') {
+      if (!CHARACTERS[GF.target]) GF.target = HEROINES.filter(function (h) { return InnCore.canGive(V, h); })[0] || HEROINES[0];   // 대상 미선택이면 줄 수 있는 첫 사람
+      (GF.fixed ? [GF.target] : HEROINES).forEach(function (h) {
+        var c = CHARACTERS[h], b = document.createElement('button');
+        b.type = 'button'; b.className = 'gift-who' + (GF.target === h ? ' on' : '') + (InnCore.canGive(V, h) ? '' : ' done'); b.dataset.who = h;
+        var im = document.createElement('img'); im.alt = ''; setIcon(im, c);
+        b.appendChild(im);
+        var nm = document.createElement('b'); nm.textContent = c.name; nm.style.color = c.color; b.appendChild(nm);
+        var sm = document.createElement('small'); sm.textContent = InnCore.canGive(V, h) ? '오늘 가능' : '오늘 줬어요'; b.appendChild(sm);
+        b.addEventListener('click', function () { if (GF.fixed) return; GF.target = h; sfx('tap'); renderGift(); });
+        E.giftWho.appendChild(b);
+      });
+      var tc = CHARACTERS[GF.target] || {};
+      E.giftInfo.textContent = !InnCore.canGive(V, GF.target)
+        ? (tc.name + '에게는 오늘 이미 선물했어요. 선물은 하루에 한 사람당 하나만 줄 수 있어요.')
+        : (tc.name + '에게 줄 선물을 고르세요. 처음 주면 반응으로 취향을 알 수 있어요. (하루에 한 사람당 하나)');
+    } else {
+      E.giftInfo.textContent = '장터에서 선물을 살 수 있어요. 누가 뭘 좋아할지는 반응을 보고 알아내 보세요.';
+    }
+    var ids = Object.keys(GIFTS.items).filter(function (id) { return GF.tab === 'shop' || (G.inv[id] > 0); });
+    if (!ids.length) E.giftList.appendChild(tvEl('p', 'tv-info', GF.tab === 'give' ? '보관함이 비었어요. 낮에 "장터에서 선물 사기"로 살 수 있어요.' : ''));
+    ids.forEach(function (id) {
+      var d = GIFTS.items[id], row = tvEl('div', 'tv-row gift-row'); row.dataset.id = id;
+      var ic = document.createElement('img'); ic.alt = ''; ic.className = 'tv-icon'; ic.src = d.icon; row.appendChild(ic);
+      var known = GF.tab === 'give' && G.known[GF.target] && G.known[GF.target][id];
+      var mid = tvEl('div', 'tv-row-mid');
+      var nm = tvEl('b', null, ''); nm.textContent = d.name + (G.inv[id] ? ' ×' + G.inv[id] : '');
+      var sm = tvEl('small', null, ''); sm.textContent = (GF.tab === 'shop' ? d.price + 'G · ' : '') + d.desc + ' ' + (GF.tab === 'give' ? (known ? '[' + tierMark(known) + ']' : '') : d.hint);
+      mid.appendChild(nm); mid.appendChild(sm); row.appendChild(mid);
+      var btn = tvEl('button', 'tv-buy gift-btn', GF.tab === 'shop' ? d.price + 'G<small>사기</small>' : '주기');
+      btn.type = 'button';
+      if (GF.tab === 'shop') { if ((V.gold || 0) < d.price) btn.disabled = true; btn.addEventListener('click', function () { giftBuy(id); }); }
+      else { if (!InnCore.canGive(V, GF.target)) btn.disabled = true; btn.addEventListener('click', function () { giftGive(id); }); }
+      row.appendChild(btn);
+      E.giftList.appendChild(row);
+    });
+  }
+  function giftBuy(id) {
+    if (!InnCore.buyGift(S.vars, id)) { toast('골드가 모자라요', 'down'); return; }
+    sfx('coin'); updateHud();
+    pushLog({ name: '', color: '', text: '— 선물 구입: ' + GIFTS.items[id].name + ' —' });
+    renderGift();
+    var pt = document.getElementById('pick-gift'); if (pt) pt.textContent = '선물 주기 · 보관함 ' + InnCore.giftCount(S.vars) + '개';
+  }
+  function giftGive(id) {
+    var h = GF.target, res = InnCore.giveGift(S.vars, h, id);
+    if (!res) return;
+    var c = CHARACTERS[h] || {};
+    applySet({ ['aff.' + h]: res.points });
+    pushLog({ name: c.name || h, color: c.color || '#fff', text: '(' + GIFTS.items[id].name + ' · ' + res.label + ') ' + res.react.text });
+    GF.stage = 'react';
+    E.giftReactPic.src = (c.faces && (c.faces[res.react.face] || c.faces.normal)) || '';
+    E.giftReactName.textContent = c.name || h; E.giftReactName.style.color = c.color || '#fff';
+    E.giftReactTier.textContent = GIFTS.items[id].name + ' · ' + tierMark(res.tier);
+    E.giftReactTier.className = 'tier-' + res.tier;
+    E.giftReactText.textContent = res.react.text;
+    E.giftReactAff.innerHTML = '<span class="' + (res.points >= 0 ? 'plus' : 'minus') + '">' + (res.points >= 0 ? '♥ +' : '') + res.points + '</span>' + (res.first ? ' <em>취향을 알게 됐어요 (손님 메모에 기록)</em>' : '');
+    E.giftReact.classList.remove('hidden');
+    sfx(res.points > 0 ? 'heart' : 'heartDown');
+  }
+  function giftReactOk() {
+    E.giftReact.classList.add('hidden'); GF.stage = 'list';
+    if (GF.fixed) { giftClose(); return; }
+    renderGift();
+    var pt = document.getElementById('pick-gift'); if (pt) pt.textContent = '선물 주기 · 보관함 ' + InnCore.giftCount(S.vars) + '개';
+  }
+  // 손님 메모장의 히로인 칸에 붙는 "선물 취향" 줄 (알아낸 것만)
+  function giftNoteLine(id) {
+    var kn = ((S.vars.gift || {}).known || {})[id] || {}, ks = Object.keys(kn);
+    var line = tvEl('div', 'tv-note-line gift' + (ks.length ? ' known' : ''), '');
+    if (!ks.length) { line.innerHTML = '선물 취향 <em>???</em>'; return line; }
+    var parts = [];
+    ['fav', 'like', 'normal', 'hate'].forEach(function (t) {
+      var names = ks.filter(function (k) { return kn[k] === t; }).map(function (k) { return GIFTS.items[k].name; });
+      if (names.length) parts.push(GIFTS.tiers[t].label + ' ' + names.join(', '));
+    });
+    line.innerHTML = '선물 취향 <em></em> <small>(' + ks.length + '/' + Object.keys(GIFTS.items).length + ')</small>';
+    line.querySelector('em').textContent = parts.join(' / ');
+    return line;
   }
 
 
@@ -1976,7 +2369,13 @@
     E.endCount = $('ending-count'); E.endPic = $('ending-pic'); E.endBody = $('ending-body');
     E.btnEndings = $('btn-endings'); E.endingList = $('endings'); E.endingListBody = $('endings-body'); E.endingListCount = $('endings-count');
     E.nextMark = $('next-mark'); E.options = $('options'); E.btnAuto = $('btn-auto'); E.btnSkip = $('btn-skip');
-    E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep'); E.hudDay = $('hud-day');
+    E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep'); E.hudDay = $('hud-day'); E.hudRank = $('hud-rank'); E.hudRankWrap = $('hud-rank-wrap');
+    E.endRank = $('ending-rank');
+    E.rankup = $('rankup'); E.rankupStars = $('rankup-stars'); E.rankupName = $('rankup-name'); E.rankupUnlocks = $('rankup-unlocks');
+    E.rankupPic = $('rankup-pic'); E.rankupWho = $('rankup-who'); E.rankupText = $('rankup-text');
+    E.gift = $('gift'); E.giftGold = $('gift-gold'); E.giftTitle = $('gift-title'); E.giftTabs = $('gift-tabs'); E.giftTabShop = $('gift-tab-shop'); E.giftTabGive = $('gift-tab-give');
+    E.giftWho = $('gift-who'); E.giftInfo = $('gift-info'); E.giftList = $('gift-list'); E.giftReact = $('gift-react');
+    E.giftReactPic = $('gift-react-pic'); E.giftReactName = $('gift-react-name'); E.giftReactTier = $('gift-react-tier'); E.giftReactText = $('gift-react-text'); E.giftReactAff = $('gift-react-aff');
     E.btnContinue = $('btn-continue'); E.btnTitleLoad = $('btn-title-load');
     E.cg = $('cg'); E.btnGallery = $('btn-gallery'); E.btnCollect = $('btn-collect');
     E.gallery = $('gallery'); E.galleryGrid = $('gallery-grid'); E.galleryCount = $('gallery-count');
@@ -1997,6 +2396,7 @@
 
     // 저녁 영업 화면 요소
     TVE.root = $('tavern'); TVE.prog = $('tv-prog'); TVE.brew = $('tv-brew'); TVE.shop = $('tv-shop'); TVE.sum = $('tv-sum'); TVE.upg = $('tv-upg');
+    TVE.lodge = $('tv-lodge'); lodgeEls();
     TVE.menu = $('tv-menu'); TVE.found = $('tv-found'); TVE.stamp = $('tv-stamp');
     TVE.order = document.querySelector('.tv-order'); TVE.orderNote = $('tv-order-note'); TVE.orderTaste = $('tv-order-taste');
     TVE.notes = $('tv-notes'); TVE.notesList = $('tv-notes-list'); TVE.notesCount = $('tv-notes-count');
@@ -2019,6 +2419,16 @@
     $('tv-shop-start').addEventListener('click', function () { TVE.shop.classList.add('hidden'); tvNextCustomer(); });
     $('tv-sum-btn').addEventListener('click', tvClose);
     $('tv-upg-next').addEventListener('click', closeUpgrades);
+    $('lodge-done').addEventListener('click', lodgeFinish);
+    $('rankup-btn').addEventListener('click', rankClose);
+    $('gift-close').addEventListener('click', giftClose);
+    $('gift-react-ok').addEventListener('click', giftReactOk);
+    E.giftTabShop.addEventListener('click', function () { if (GF.shopOk) { GF.tab = 'shop'; sfx('tap'); renderGift(); } });
+    E.giftTabGive.addEventListener('click', function () { GF.tab = 'give'; sfx('tap'); renderGift(); });
+    $('menu-gift').addEventListener('click', function () {
+      if (mode !== 'text' && mode !== 'choice') { toast('지금은 선물을 줄 수 없어요', 'down'); return; }
+      closeOverlay(E.menu); openGift('give', '', null);
+    });
 
     // 설정 / 읽은 대사 / 스킵·오토 버튼
     loadOpt(); applyOpt(); loadRead(); initOptions();
@@ -2172,6 +2582,10 @@
   Object.defineProperty(VN, 'fast', { get: function () { return { auto: F.auto, skip: F.skip }; } });
   Object.defineProperty(VN, 'readCount', { get: function () { var n = 0; Object.keys(READ).forEach(function (k) { n += Object.keys(READ[k]).length; }); return n; } });
   VN.flushRead = flushRead;
+  // 숙박 / 선물 / 등급 상태 (테스트/디버그용)
+  Object.defineProperty(VN, 'lodging', { get: function () { return LG ? { stage: LG.stage, day: LG.day, sel: LG.sel, guests: LG.guests.map(function (g) { return g.id; }), assign: Object.assign({}, LG.assign), rej: Object.assign({}, LG.rej), out: LG.out } : null; } });
+  Object.defineProperty(VN, 'gift', { get: function () { return { tab: GF.tab, target: GF.target, fixed: GF.fixed, stage: GF.stage, shopOk: GF.shopOk, open: !!E.gift && !E.gift.classList.contains('hidden') }; } });
+  Object.defineProperty(VN, 'rankPopup', { get: function () { return !!E.rankup && !E.rankup.classList.contains('hidden'); } });
   // 영업 상태 (테스트/디버그용): 단계, 손님 순번, 고른 재료, 결과 목록
   Object.defineProperty(VN, 'tavern', { get: function () { return TV ? { phase: TV.phase, idx: TV.idx, total: TV.queue.length, cur: TV.cur && TV.cur.who, order: TV.cur && TV.cur.order, sp: TV.cur && TV.cur.sp || null, spResult: TV.spResult, tasteHits: TV.tasteHits, sel: TV.sel.slice(), results: TV.results.map(function (r) { return { who: r.who, result: r.result, dish: r.dish, gold: r.gold, aff: r.aff, rep: r.rep, fav: r.fav, hate: r.hate, taste: r.taste, sp: r.sp, ids: r.ids }; }), repSum: TV.repSum } : null; } });
 

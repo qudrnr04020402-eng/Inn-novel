@@ -29,6 +29,7 @@ Object.assign(STORY.scenes, {
   // ---------- 엔딩 판정 ----------
   end_judge: [
     { time: '새벽' },
+    { rankcheck: 'quiet' },   // 여관 등급을 조용히 마지막으로 갱신 (엔딩 문구 끝에 한 줄로 표시됩니다)
     { if: 'rep<=-3', goto: 'end_bad' },
     { if: WIN('erion', LOVE), goto: 'end_erion' },
     { if: WIN('kaela', LOVE), goto: 'end_kaela' },
