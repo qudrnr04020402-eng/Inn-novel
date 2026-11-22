@@ -6,6 +6,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 아침 =================
   d4_open: [
+    { bgm: 'inn_day' },
     { day: 4, time: '아침', tip: '내일이 마지막 날이에요.\n오늘 밤 이후에는 마음을 정해야 해요.' },
     { bg: 'inn_front' }, { hide: 'all' },
     { narr: '동이 트기 전부터 뒷산에서 푸른 안개가 흘러내리고 있다. 동굴 입구에서 올라오는 빛은 어젯밤보다 한층 짙어졌다.' },
@@ -237,12 +238,14 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 마지막 평화로운 영업 -> 작전 회의 =================
   // 저녁 영업(story/tavern.js 의 day4) 뒤, 가게 문을 닫고 모두가 모여 작전 회의를 한다
   d4_evening: [
+    { bgm: 'tavern' },
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '짐을 싸던 마을 사람들도 해가 지자 한 잔 마시러 하나둘 들른다. 어쩌면 이 식당에서 보내는 마지막 평범한 저녁일지도 모른다.' },
     { tavern: 'day4' },
     { goto: 'd4_ev_meeting' }
   ],
   d4_ev_meeting: [
+    { bgm: 'tension' },
     { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '영업이 끝나고, 식당에 모두가 모였다. 문은 닫혀 있고, 창문 너머로 푸른 안개가 흘러들고 있다.' },
     { show: 'kaela', face: 'normal', pos: 'left' },
@@ -318,6 +321,7 @@ Object.assign(STORY.scenes, {
 
   // ----- 전야의 선물 -----
   d4_ev_gift: [
+    { bgm: 'romance' },
     { hide: 'all' },
     { narr: '회의가 끝나고 각자 흩어졌다. 내일을 위한 마지막 준비 시간이다. 가진 돈으로 누군가에게 도움이 될 물건을 마련할 수 있다.' },
     { choice: [
@@ -367,6 +371,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 밤 (전야) =================
   d4_night: [
+    { bgm: 'inn_night' },
     { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
     { narr: '마지막 밤이다. 모두가 각자 방으로 돌아가고 여관이 조용해졌다. 내일 일을 생각하며 천장을 보고 있는데, 방문이 조용히 열렸다.' },
     { if: WIN('erion', 11), goto: 'd4_night_erion' },
@@ -381,6 +386,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd4_upgrade' }
   ],
   d4_night_erion: [
+    { bgm: 'romance' },
     { bg: 'roof_night' },
     { show: 'erion', face: 'shy', pos: 'center' },
     { say: 'erion', text: '…자? 안 잤지. 지붕 위로 와 줄래. 잠깐이면 돼.' },
@@ -392,6 +398,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd4_upgrade' }
   ],
   d4_night_kaela: [
+    { bgm: 'romance' },
     { show: 'kaela', face: 'shy', pos: 'center' },
     { say: 'kaela', text: '주, 주인장. 자고 있었나? 아니, 이 시간에 불쑥 오다니 영웅의 체면이 말이 아니군.' },
     { narr: '카엘라는 갑옷을 입지 않은 평상복 차림이었다. 처음 보는 모습이다. 붉은 머리를 풀어 내린 채 문 앞에 서 있다.' },
@@ -402,6 +409,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd4_upgrade' }
   ],
   d4_night_miho: [
+    { bgm: 'romance' },
     { show: 'miho', face: 'normal', pos: 'center' },
     { say: 'miho', text: '사장님. 안 자는 거 알아요. 귀가 좋거든요. 한숨 소리가 다 들려요.' },
     { narr: '미호가 침대 모서리에 걸터앉았다. 평소의 장난기가 없다. 꼬리가 천천히 내 다리 위로 올라온다.' },
@@ -412,6 +420,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd4_upgrade' }
   ],
   d4_night_lia: [
+    { bgm: 'romance' },
     { show: 'lia', face: 'shy', pos: 'center' },
     { say: 'lia', text: '…자? 안 자지? 나도 못 자겠어서.' },
     { narr: '리아가 숄을 두른 채 조심스럽게 들어왔다. 침대 곁 의자에 앉아 무릎을 끌어안는다. 어릴 때 천둥 치는 밤에 그랬던 것처럼.' },

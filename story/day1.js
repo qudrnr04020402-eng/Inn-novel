@@ -7,6 +7,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 아침 =================
   d1_open: [
+    { bgm: 'inn_day' },
     { day: 1, time: '아침', tip: '낮에는 한 사람과 시간을 보내고, 저녁에는 모두가 모입니다.\n5일째 밤, 하트 6칸을 가득 채운 가장 가까운 사람이 마음을 전해 와요.' },
     { bg: 'inn_front' },
     { narr: '변두리 마을 라이펜. 그 끝자락, 삐걱거리는 간판 아래에 우리 여관 \'은빛 여우관\'이 있다.' },
@@ -341,6 +342,7 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 첫 영업 (+ 첫 지진) =================
   // 저녁 영업(story/tavern.js 의 day1) -> 영업이 끝난 뒤 첫 지진
   d1_evening: [
+    { bgm: 'tavern' },
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '해가 기울자 식당에 불이 들어왔다. 손님이 몰려온 첫날. 카운터 뒤에 서자 어쩐지 손이 떨렸다.' },
     { show: 'lia', face: 'smile', pos: 'center' },
@@ -365,6 +367,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd1_ev_quake' }
   ],
   d1_ev_quake: [
+    { bgm: 'tension' },
     { fx: 'shake' },
     { narr: '쿠르르릉— 낮고 깊은 울림이 발밑에서부터 올라왔다. 천장에서 먼지가 떨어지고, 등불이 흔들렸다.' },
     { show: 'erion', face: 'surprised' },
@@ -413,6 +416,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 밤 =================
   d1_night: [
+    { bgm: 'inn_night' },
     { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
     { narr: '손님들이 모두 잠든 밤. 금고를 정리하고 불을 끄러 나서는데, 위층에서 희미한 소리가 들렸다.' },
     { narr: '동쪽 창가에서, 에리온이 가만히 뒷산을 바라보고 있었다. 그 손에서 푸른 책이 빛나고 있었다.' },

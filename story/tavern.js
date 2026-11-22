@@ -17,7 +17,9 @@ window.TAVERN = {
     repDay: [-3, 2],                                           // 하루 영업 전체의 평판 변화 한계 [최소, 최대]
     love:  { perfect: 2, good: 1, fail: -1, mystery: 0, hate: -2 },   // 히로인 손님 호감도 변화
     favLove: 4,                                                // 히로인 최애 메뉴를 처음 냈을 때 호감도
-    favLoveRepeat: 2                                           // 두 번째부터
+    favLoveRepeat: 2,                                          // 두 번째부터
+    tasteTip: 1,                                               // 단골 보너스: 주문을 맞히면서 그 손님의 숨은 취향까지 맞췄을 때 팁 +G
+    tasteRep: 1                                                // 단골 보너스: 평판 +N (하루 평판 상한 repDay 안에서만 반영)
   },
 
   skipLine: '아쉽지만… 다음에 다시 올게요.',     // 손님을 정중히 거절했을 때 손님이 하는 말
@@ -82,38 +84,66 @@ window.TAVERN = {
   // ---------- 손님 정의 ----------
   //  react: 결과별 반응 대사 (문자열 또는 {text, face}). 여러 개면 그중 하나가 무작위로 나옵니다. {dish} = 낸 요리 이름
   //  히로인(heroine:true)은 fav(최애 레시피 id), dislike(싫어하는 레시피 id 목록)와 react.fav / react.hate (이 대사는 전부 순서대로 나옴)가 더 있습니다.
+  //  단골(히로인이 아닌 손님)에는 숨은 취향 taste 가 있습니다.
+  //    taste: { tag:'든든함' | ing:'meat', label:'메모장에 적히는 이름',
+  //             first:[첫 방문 때 흘리는 힌트 대사], miss:[주문은 맞췄지만 취향을 못 맞췄을 때 한 번 하는 힌트 대사], bonus:[취향을 맞췄을 때 대사] }
+  //    주문을 대성공/보통으로 맞히면서 취향도 맞으면 "단골 보너스" (rules.tasteTip, tasteRep). 알아낸 취향은 손님 메모장에 공개됩니다.
   customers: {
-    baron: { react: {
+    baron: { taste: { tag: '든든함', label: '든든한 요리',
+      first: [{ text: '나이를 먹으면 말이야, 뜨끈한 것도 좋지만 뱃속에 묵직하게 남는 게 더 좋더구먼.', face: 'normal' }],
+      miss:  [{ text: '…맛은 괜찮은데, 속이 좀 허하구먼. 오래 앉아 있으면 묵직한 게 그리워지거든.', face: 'sad' }],
+      bonus: [{ text: '오오, 이거야! 속이 묵직하게 차는 이 맛! 자네, 이 늙은이 취향을 꿰뚫었구먼. 팁이야, 받게.', face: 'smile' }] },
+      react: {
       perfect: [{ text: '오오, 이거야 이거! 오십 년 마신 것 중에 손꼽겠구먼!', face: 'smile' }, { text: '허허, 주인 솜씨가 아버지를 닮아 가는구먼.', face: 'smile' }],
       good:    [{ text: '음… 나쁘진 않네. 내 입엔 조금 어긋나지만 말이야.', face: 'normal' }, { text: '허, 뭐 마실 만하구먼.', face: 'normal' }],
       fail:    [{ text: '…이 늙은이 이빨이 시험받는 줄 알았네.', face: 'sad' }, { text: '에잉, 주문한 게 이게 아닌데…', face: 'angry' }],
       mystery: [{ text: '이건… 양 먹이인가? 아니, 양도 안 먹겠는데?', face: 'surprised' }, { text: '{dish}라…? 이름부터 수상쩍구먼. 일단 마셔 보지. …씹히는 게 있는데?', face: 'surprised' }, { text: '허허, 도통 무슨 맛인지 모르겠구먼. 신기해서 오히려 좋네!', face: 'smile' }]
     } },
-    tobi: { react: {
+    tobi: { taste: { ing: 'ale', label: '에일이 들어간 요리',
+      first: [{ text: '장사 얘기는 말이죠, 거품 올라오는 한 잔 앞에서 해야 술술 풀립니다. 이건 경험칙입니다!', face: 'smile' }],
+      miss:  [{ text: '맛은 좋은데… 오늘은 보리 향이 아쉽네요. 거품이 없으면 협상이 영 안 됩니다.', face: 'normal' }],
+      bonus: [{ text: '그렇죠, 이 쌉쌀한 보리 향! 취향 저격입니다! 사례로 팁을 얹어 드리죠.', face: 'smile' }] },
+      react: {
       perfect: [{ text: '이건 대박입니다! 장터에서 팔면 열 배는 받겠어요!', face: 'smile' }, { text: '완벽! 계산이 딱 맞습니다! 제 혀는 속이는 법이 없죠!', face: 'smile' }],
       good:    [{ text: '흠, 합격선. 원가 대비 만족도는 보통이네요.', face: 'normal' }, { text: '나쁘지 않아요. 별 다섯 중 셋.', face: 'normal' }],
       fail:    [{ text: '이건 반품… 아니, 환불 불가죠? 알겠습니다, 마시죠.', face: 'sad' }, { text: '손해 본 기분입니다. 수치로 말하자면 마이너스 오!', face: 'angry' }],
       mystery: [{ text: '이게 뭡니까? 상품명 {dish}? 특허는 있습니까?', face: 'surprised' }, { text: '…색이 이상합니다. 팔 수 있을지 계산해 보게 되는군요.', face: 'surprised' }, { text: '흥미롭네요! 수상쩍은데 중독성이 있어서 더 수상합니다.', face: 'smile' }]
     } },
-    greta: { react: {
+    greta: { taste: { ing: 'meat', label: '고기가 들어간 요리',
+      first: [{ text: '난 씹는 맛이 없으면 먹은 것 같지가 않아. 20년 용병 생활에 입에 밴 버릇이지.', face: 'normal' }],
+      miss:  [{ text: '맛은 쓸 만한데 씹을 게 없군. 입이 심심해.', face: 'normal' }],
+      bonus: [{ text: '크하, 이 씹는 맛! 이게 진짜 내 취향이야. 팁은 받아 둬!', face: 'smile' }] },
+      react: {
       perfect: [{ text: '크하! 이거지! 전장의 맛이 나는군!', face: 'smile' }, { text: '좋아. 이 한 잔이면 오우거도 맨손으로 잡겠어.', face: 'smile' }],
       good:    [{ text: '음, 쓸 만해. 군대 급식보단 낫군.', face: 'normal' }, { text: '나쁘지 않아. 한 잔 더 시킬지는 모르겠지만.', face: 'normal' }],
       fail:    [{ text: '…이거 적군 보급품 아니냐?', face: 'angry' }, { text: '젊은 주인, 수련이 필요하겠어.', face: 'sad' }],
       mystery: [{ text: '이건 처음 본 것도 같고… 전쟁터에서 먹던 것 같기도 하고.', face: 'surprised' }, { text: '{dish}? 마시고 죽으면 너를 원망하마. …꿀꺽. 살아 있군.', face: 'surprised' }, { text: '으하하하! 이런 건 20년 용병 생활에도 못 먹어 봤어!', face: 'smile' }]
     } },
-    marta: { react: {
+    marta: { taste: { ing: 'bread', label: '빵이 들어간 요리',
+      first: [{ text: '나는 식사에 빵이 없으면 허전하더라고요. 우리 집 양반이 매일 흑빵을 사 오던 버릇 때문이겠죠.', face: 'normal' }],
+      miss:  [{ text: '맛있긴 한데, 빵 한 조각이 곁들여졌으면 더 좋았을 텐데요. 호호.', face: 'normal' }],
+      bonus: [{ text: '어머, 빵이 들어갔네! 이 폭신한 맛… 마음에 쏙 들어요. 고마워서 팁을 드릴게요.', face: 'smile' }] },
+      react: {
       perfect: [{ text: '어머나, 입안에서 봄이 오는 것 같네!', face: 'smile' }, { text: '아유, 우리 집 양반한테도 싸 가고 싶어요.', face: 'smile' }],
       good:    [{ text: '그래, 괜찮네요. 따뜻하게 먹었으니 됐지 뭐.', face: 'normal' }, { text: '맛있게 먹었어요, 고마워요.', face: 'smile' }],
       fail:    [{ text: '…어머, 이건 내가 시킨 게 아닌 것 같은데.', face: 'sad' }, { text: '허허, 젊은 사람이 바쁘다 보면 그럴 수도 있지. 괜찮아요.', face: 'sad' }],
       mystery: [{ text: '이게 뭐람? 색깔이 신기하네요. 약이라고 하면 믿겠어요.', face: 'surprised' }, { text: '{dish}…? 이름도 이상한데 냄새는 또 구수하네.', face: 'surprised' }, { text: '어머, 먹다 보니 정이 드네. 이상한 건 이상한 건데!', face: 'smile' }]
     } },
-    fin: { react: {
+    fin: { taste: { tag: '달콤함', label: '달콤한 요리',
+      first: [{ text: '순찰 돌 때 주머니에 사탕이 있으면 힘이 나더라고요. …대장님께는 비밀이에요!', face: 'surprised' }],
+      miss:  [{ text: '맛있어요! 맛있는데… 어쩐지 입에 단맛이 좀 남았으면 좋았을 것 같아서요. 아, 불평 아니에요!', face: 'surprised' }],
+      bonus: [{ text: '우와, 달아요! 이거예요, 이거! 사장님, 어떻게 아셨어요? 팁 드릴게요!', face: 'smile' }] },
+      react: {
       perfect: [{ text: '우와! 힘이 불끈 솟아요! 오늘 밤 경계도 문제없어요!', face: 'smile' }, { text: '이거 먹고 나니 오우거도 무섭지 않아요!', face: 'smile' }],
       good:    [{ text: '어, 맛있네요! …아마도요.', face: 'normal' }, { text: '괜찮은 것 같습니다, 사장님!', face: 'smile' }],
       fail:    [{ text: '으윽… 초소에서 먹던 것보다 어렵네요…', face: 'sad' }, { text: '아, 아니에요! 맛있… 으… 맛있습니다!', face: 'surprised' }],
       mystery: [{ text: '이게… 음료수… 맞죠? 움직이진 않죠?', face: 'surprised' }, { text: '{dish}…? 대장님께 보고드려도 될까요?', face: 'surprised' }, { text: '신기해요! 몸이 반짝반짝하는 기분이 들어요!', face: 'smile' }]
     } },
-    chief: { react: {
+    chief: { taste: { ing: 'milk', label: '우유가 들어간 요리',
+      first: [{ text: '나이가 드니 속이 예민해져서 말이야. 부드럽게 넘어가는 게 제일이라네.', face: 'normal' }],
+      miss:  [{ text: '괜찮네, 괜찮아. 다만 부드러운 맛이 조금 그립군. 속이 편한 걸 마시고 싶었거든.', face: 'normal' }],
+      bonus: [{ text: '음, 이 부드러운 맛… 속이 풀리는구먼. 자네는 노인네 속을 들여다보는 눈이 있어. 받게나.', face: 'smile' }] },
+      react: {
       perfect: [{ text: '음… 이 마을에서 마신 것 중 가장 훌륭하네. 고맙네.', face: 'smile' }, { text: '이런 날 이런 한 잔이라니. 자네는 마을의 보물이야.', face: 'smile' }],
       good:    [{ text: '음, 고맙게 마시겠네. 마음이 조금 놓이는군.', face: 'normal' }, { text: '따뜻하군. 그거면 됐네.', face: 'normal' }],
       fail:    [{ text: '…허허, 오늘만은 맛을 따질 때가 아니지.', face: 'sad' }, { text: '괜찮네, 괜찮아. 이 마을은 더한 것도 견뎠으니.', face: 'sad' }],
@@ -275,6 +305,62 @@ window.TAVERN = {
         say: ['모두가 큰일을 앞두고 있네요. 나도 한 잔 보태러 왔어요.'],
         order: { text: '따뜻한 걸로 한 잔 주세요.', want: ['따뜻함'] } }
     ] }
+  },
+
+  // ---------- 특별 주문 (2~5일차, 하루 한 번: 그날 일반 손님이 끝난 뒤 이어서 나옵니다) ----------
+  //  title   : 이름 (장보기 화면 예고, 결산에 표시)      brief : 장보기 화면의 예고 문구
+  //  units   : 손님 목록. 1명이면 "조건 두 가지를 한 접시에", 여러 명이면 "연속으로 서로 다른 조건"
+  //            각 손님은 일반 손님처럼 who / say / order 를 가지고, order 에 재료 조건이 더 붙을 수 있습니다.
+  //              order.ing   = 꼭 들어가야 하는 재료 id 목록,  order.noIng = 들어가면 안 되는 재료 id 목록,  order.note = 주문서에 따로 적히는 조건 한 줄
+  //  성공    : 모든 손님에게 "대성공"(태그 조건 + 재료 조건 전부)을 내면 성공 -> win.gold / win.rep 보상
+  //  실패    : 하나라도 놓치면 lose.rep 만큼 평판이 조금 깎일 뿐 (골드 페널티 없음)
+  //  특별 주문 손님은 건별 평판이 없고, 요리 값/팁은 일반 손님처럼 받습니다.
+  specials: {
+    day2: { title: '행상인의 시식 주문',
+      brief: '행상인 토비가 한 접시짜리 까다로운 주문을 해 올 거예요. (조건 두 가지를 동시에)',
+      win: { gold: 10, rep: 1, lines: [{ who: 'tobi', text: '완벽합니다! 이 한 접시로 거래처 계약이 성사됐어요. 수수료로 사례금을 드리죠!', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'tobi', text: '아쉽네요… 조건이 하나 어긋났습니다. 거래처에는 제가 잘 말해 두죠.', face: 'sad' }] },
+      units: [
+        { who: 'tobi',
+          say: [{ text: '사장님, 하나 더! 장사 얘기예요. 단골 가게 사장님이 시식을 부탁하셨는데 조건이 까다롭습니다.', face: 'smile' }],
+          order: { text: '빵이 들어가고, 술기운은 없고, 배는 든든한 걸로 한 접시! 세 가지 전부 지켜야 합니다.', want: ['든든함'], avoid: ['독함'], ing: ['bread'], note: '조건: 든든함 / 빵이 들어갈 것 / 술(독함)은 안 됨' } }
+      ] },
+    day3: { title: '촌장의 축제 요리',
+      brief: '촌장님이 축제 요리를 따로 부탁하러 오실 거래요. (조건 두 가지를 동시에)',
+      win: { gold: 14, rep: 1, lines: [{ who: 'chief', text: '아이들이 그릇을 싹 비웠네. 마을 어른으로서 고맙다는 말을 전하네. 약소하지만 받아 주게.', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'chief', text: '허허, 괜찮네. 아이들은 축제만으로도 즐거울 테니. 마음만 받겠네.', face: 'sad' }] },
+      units: [
+        { who: 'chief',
+          say: [{ text: '축제 날이라 아이들에게 따뜻한 걸 먹이고 싶어서 말이야. 마을 어른으로서 부탁 하나 하겠네.', face: 'smile' }],
+          order: { text: '따뜻하고 든든하게, 버섯이 들어간 걸로 부탁하네. 아이들한테 술이나 단 건 좋지 않으니 빼 주게.', want: ['따뜻함', '든든함'], avoid: ['독함', '달콤함'], ing: ['mushroom'], note: '조건: 따뜻함 / 든든함 / 버섯이 들어갈 것 / 술·단맛은 안 됨' } }
+      ] },
+    day4: { title: '모험가 파티 3인분',
+      brief: '그레타의 옛 동료 파티가 3인분을 주문할 거예요. (연속 3개, 사람마다 조건이 달라요)',
+      win: { gold: 22, rep: 2, lines: [{ who: 'greta', text: '크하하! 세 사람 입맛에 전부 딱 맞았다! 파티 이름으로 사례하지!', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'greta', text: '으음, 오늘은 한 명쯤 입이 삐죽 나왔군. 다음엔 제대로 부탁하지.', face: 'normal' }] },
+      units: [
+        { who: 'greta',
+          say: [{ text: '모험가 파티 3인분이다! 내 옛 동료들이 마을을 도우러 왔지. 입맛이 제각각이라 까다로울 거야.', face: 'smile' }],
+          order: { text: '일단 나부터. 파티 대장 몫이니 독하고 든든한 걸로!', want: ['독함', '든든함'], note: '조건: 독함 / 든든함' } },
+        { who: 'tobi',
+          say: [{ text: '파티의 짐꾼 겸 회계, 토비입니다! 짐이 가벼워지려면 술기운이 필요하죠.', face: 'smile' }],
+          order: { text: '저는 개운하면서 술기운이 도는 걸로요. 달면 계산이 흐려져요.', want: ['상쾌함', '독함'], avoid: ['달콤함'], note: '조건: 상쾌함 + 독함 / 단맛은 안 됨' } },
+        { who: 'fin',
+          say: [{ text: '저, 저는 청년단 핀인데… 오늘만 임시 파티원이에요! 대장님이 가 보라고 하셔서요!', face: 'surprised' }],
+          order: { text: '술은 못 마시고요, 든든하게! 고기가 들어간 걸로 부탁드려요!', want: ['든든함'], avoid: ['독함'], ing: ['meat'], note: '조건: 든든함 / 고기가 들어갈 것 / 술은 안 됨' } }
+      ] },
+    day5: { title: '노인들의 마지막 부탁',
+      brief: '바론 영감과 마르타 아주머니가 이어서 부탁을 해 올 거예요. (연속 2개)',
+      win: { gold: 14, rep: 1, lines: [{ who: 'marta', text: '정말 맛있었어요. 이 마을 사람들 모두 오늘 밤은 든든하게 잘 수 있겠네요. 고마워요.', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'marta', text: '괜찮아요, 괜찮아. 마음 써 준 것만으로도 충분해요.', face: 'sad' }] },
+      units: [
+        { who: 'baron',
+          say: [{ text: '이 늙은이가 내일 일은 모르지만… 오늘만은 제대로 된 걸 먹어 두고 싶구먼.', face: 'normal' }],
+          order: { text: '버섯이 들어간 따뜻하고 든든한 걸로 한 그릇 주게나. 할멈 솜씨가 그리워서 말이야.', want: ['따뜻함', '든든함'], ing: ['mushroom'], note: '조건: 따뜻함 / 든든함 / 버섯이 들어갈 것' } },
+        { who: 'marta',
+          say: ['나는 대피소 사람들 나눠 줄 몫을 부탁하러 왔어요. 아이들이 먹기 좋은 걸로요.'],
+          order: { text: '달콤하고 든든한 걸로, 꿀술이 들어가면 좋겠어요. 술기운은 없게 해 주세요.', want: ['달콤함', '든든함'], avoid: ['독함'], ing: ['mead'], note: '조건: 달콤함 / 든든함 / 꿀술이 들어갈 것 / 독함은 안 됨' } }
+      ] }
   }
 };
 
@@ -282,10 +368,14 @@ window.TAVERN = {
 //  tavern.perfect / good / fail / mystery = 지금까지 낸 요리 결과 횟수 (스토리 조건식에서 쓸 수 있음. 예: 'tavern.perfect>=4')
 //  tavern.t.perfect ... = 가장 최근 영업의 결과 횟수, tavern.fav.<히로인id> = 최애 메뉴를 낸 횟수
 //  tavern.known.<레시피id> = 아는 레시피, tavern.upg.<업그레이드id> = 구매한 업그레이드, tavern.stock.<재료id> = 재고
+//  tavern.spWin / spLose = 특별 주문 성공/실패 횟수, tavern.sp.day2 = 'win'|'lose', tavern.tasteHits = 단골 보너스 횟수
 STORY.init.tavern = {
   perfect: 0, good: 0, fail: 0, mystery: 0, served: 0, skipped: 0, sales: 0, tips: 0,
   t: { perfect: 0, good: 0, fail: 0, mystery: 0 },
   stock: JSON.parse(JSON.stringify(TAVERN.start.stock)),
   known: (function () { var k = {}; Object.keys(TAVERN.recipes).forEach(function (id) { if (TAVERN.recipes[id].basic) k[id] = true; }); return k; })(),
-  upg: {}, fav: {}, days: {}
+  upg: {}, fav: {}, days: {},
+  notes: {},                 // 손님 메모장: { 손님id: { met, hints:[], taste, fav, hate:[], miss } }
+  sp: {},                    // 특별 주문 결과: { day2:'win'|'lose' ... }
+  spWin: 0, spLose: 0, tasteHits: 0
 };

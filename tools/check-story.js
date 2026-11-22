@@ -4,7 +4,8 @@
 // - 배경/캐릭터/표정 id, 이미지 파일 존재, sw.js 캐시 목록과 비교, index.html 스크립트 목록 비교
 // - 선택지 막힘(전부 유료/조건부) 검사, 히로인별 이벤트 4개 이상, 엔딩 6종 도달 가능
 // - 저녁 영업 데이터(story/tavern.js) 무결성: 레시피 재료 존재/조합 중복, 태그 유효, 손님/주문 유효, 히로인 최애가 실제 레시피, 이미지 존재
-// - 브라우저 없이 스토리를 수천 번 무작위/전략 플레이(저녁 영업 포함: 숙련/보통/서툰 플레이어 모델)해서 엔딩 분포와 호감도 범위를 알려 준다
+// - 단골 숨은 취향 / 특별 주문 / BGM 정의(story/audio.js) / 스크립트의 bgm·sfx 명령 검사
+// - 브라우저 없이 스토리를 수천 번 무작위/전략 플레이(저녁 영업 포함: "메뉴판을 기억하는" 숙련/보통/서툰/대충 플레이어 모델, 특별 주문/단골 취향 포함)해서 엔딩 분포와 호감도 범위를 알려 준다
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const root = path.join(__dirname, '..');
 const ctx = { console }; ctx.window = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
@@ -13,13 +14,13 @@ const load = (f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'),
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 scripts.forEach(load);
-const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore } = ctx;
+const { STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX } = ctx;
 
 const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
 const scenes = STORY.scenes;
 const edges = {};
-const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer'];
+const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx'];
 const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending'];
 const files = new Set();
 let lines = 0, choices = 0;
@@ -27,7 +28,7 @@ let lines = 0, choices = 0;
 if (!scenes[STORY.start]) err(`시작 씬 없음: ${STORY.start}`);
 if (!TAVERN || !TavernCore) err('story/tavern.js 또는 js/tavern-core.js 가 index.html 에서 로드되지 않음');
 if (!STORY.init.tavern) err('STORY.init.tavern 없음 (story/tavern.js 맨 아래)');
-const tavernDaysUsed = new Set(), upgradeCmds = [];
+const tavernDaysUsed = new Set(), upgradeCmds = [], bgmUsed = new Set();
 if (!Array.isArray(ENDINGS) || !ENDINGS.length) err('ENDINGS 가 없음 (story/endings.js)');
 (STORY.cast || []).forEach((c) => { if (!CHARACTERS[c]) err(`STORY.cast 에 없는 캐릭터: ${c}`); });
 
@@ -57,6 +58,8 @@ for (const [id, cmds] of Object.entries(scenes)) {
     if (key === 'bg' && !BACKGROUNDS[c.bg]) err(`[${id}] ${w}: 없는 배경 ${c.bg}`);
     if (key === 'day' && !(Number.isInteger(c.day) && c.day >= 1)) err(`[${id}] ${w}: day 는 1 이상의 정수`);
     if (key === 'fx' && !['shake', 'flash'].includes(c.fx)) err(`[${id}] ${w}: 알 수 없는 fx ${c.fx}`);
+    if (key === 'bgm') { bgmUsed.add(c.bgm); if (c.bgm !== 'stop' && !(AUDIO && AUDIO.tracks && AUDIO.tracks[c.bgm])) err(`[${id}] ${w}: story/audio.js 에 없는 BGM 트랙 ${c.bgm}`); }
+    if (key === 'sfx' && !(SFX && SFX.names.includes(c.sfx))) err(`[${id}] ${w}: js/sfx.js 에 없는 효과음 ${c.sfx}`);
     if (key === 'ending' && !(ENDINGS || []).some((e) => e.id === c.ending)) err(`[${id}] ${w}: ENDINGS 에 없는 엔딩 id ${c.ending}`);
     if (key === 'tavern') { tavernDaysUsed.add(c.tavern); if (!TAVERN.days[c.tavern]) err(`[${id}] ${w}: TAVERN.days 에 없는 영업 id ${c.tavern}`); }
     if (key === 'learn') [].concat(c.learn).forEach((r) => { if (!TAVERN.recipes[r]) err(`[${id}] ${w}: 없는 레시피 ${r}`); });
@@ -157,6 +160,23 @@ Object.entries(CHARACTERS).forEach(([id, c]) => Object.entries(c.faces).forEach(
 Object.entries(BACKGROUNDS).forEach(([id, p]) => { files.add(p); if (!fs.existsSync(path.join(root, p))) err(`배경 이미지 없음: ${id} -> ${p}`); });
 
 
+// ---------- BGM 정의 검사 (story/audio.js) ----------
+const BGM_NEED = ['title', 'inn_day', 'inn_night', 'tavern', 'festival', 'tension', 'cave', 'romance', 'ending_good', 'ending_bad'];
+if (!AUDIO || !AUDIO.tracks) err('story/audio.js (AUDIO.tracks) 가 index.html 에서 로드되지 않음');
+else {
+  BGM_NEED.forEach((id) => { if (!AUDIO.tracks[id]) err(`AUDIO.tracks 에 ${id} 트랙 없음`); });
+  Object.entries(AUDIO.tracks).forEach(([id, t]) => {
+    if (!(t.file === null || typeof t.file === 'string')) err(`BGM ${id}: file 은 null(재생 안 함) 또는 경로 문자열`);
+    if (typeof t.file === 'string') {
+      if (!/^assets\/bgm\/[^/]+\.(mp3|ogg)$/i.test(t.file)) wn(`BGM ${id}: 경로는 assets/bgm/*.mp3|ogg 를 권장 (${t.file})`);
+      if (!fs.existsSync(path.join(root, t.file))) wn(`BGM ${id}: 파일이 없음 (${t.file}) — 로드에 실패하면 조용히 무시됨`);
+    }
+    if (t.gain != null && !(t.gain > 0 && t.gain <= 1)) err(`BGM ${id}: gain 은 0 초과 1 이하`);
+    if (id !== 'title' && !bgmUsed.has(id)) wn(`BGM 트랙 ${id} 를 스크립트에서 쓰지 않음`);
+  });
+  if (!(AUDIO.fadeMs > 0)) err('AUDIO.fadeMs 는 양수');
+}
+
 // ---------- 저녁 영업 데이터 검사 ----------
 const tvStats = {};
 if (TAVERN && TavernCore) {
@@ -251,6 +271,68 @@ if (TAVERN && TavernCore) {
   });
   (HEROINES || []).forEach((h) => { if ((appear[h] || 0) < 3) wn(`히로인 ${h}: 영업 기본 등장 ${appear[h] || 0}회 (3회 이상 권장)`); });
   tvStats.appear = appear; tvStats.orders = orderTotal; tvStats.perfectKnown = orderPerfectKnown;
+  // ---- 단골 숨은 취향 ----
+  ['tasteTip', 'tasteRep'].forEach((k) => { if (!(typeof T.rules[k] === 'number' && T.rules[k] >= 0)) err(`rules.${k} 는 0 이상의 숫자여야 함`); });
+  const orderList = {}; // 손님 id -> 그 손님이 하는 주문들 (일반 + 조건부 + 특별 주문)
+  Object.values(T.days).forEach((d) => d.customers.forEach((c) => { (orderList[c.who] = orderList[c.who] || []).push(c.order); }));
+  Object.values(T.specials || {}).forEach((sp) => sp.units.forEach((u) => { (orderList[u.who] = orderList[u.who] || []).push(u.order); }));
+  const recOf = (id) => Object.assign({ id }, R[id]);
+  tvStats.taste = {};
+  Object.entries(T.customers).forEach(([id, c]) => {
+    if (c.heroine) { if (c.taste) err(`히로인 ${id}: 취향(taste)은 단골 전용 (히로인은 최애/싫어함)`); return; }
+    const ts = c.taste;
+    if (!ts) return err(`단골 ${id}: taste(숨은 취향) 없음`);
+    if (['tag', 'ing'].filter((k) => ts[k]).length !== 1) err(`단골 ${id}: taste 는 tag 또는 ing 중 하나만`);
+    if (ts.tag && !TG[ts.tag]) err(`단골 ${id}: taste.tag 정의되지 않은 태그 ${ts.tag}`);
+    if (ts.ing && !G[ts.ing]) err(`단골 ${id}: taste.ing 없는 재료 ${ts.ing}`);
+    if (!ts.label) err(`단골 ${id}: taste.label 없음`);
+    ['first', 'miss', 'bonus'].forEach((k) => {
+      if (!lineList(ts[k]).length) err(`단골 ${id}: taste.${k} 대사 없음`);
+      lineList(ts[k]).forEach((l) => { if (!(l && typeof l.text === 'string' && l.text)) err(`단골 ${id}: taste.${k} 대사 형식 오류`); else faceOk(id, l.face, `단골 ${id} taste.${k}`); });
+    });
+    const ords = orderList[id] || [];
+    if (!ords.length) { wn(`단골 ${id}: 영업에 한 번도 나오지 않아 취향을 알아낼 수 없음`); return; }
+    const matches = Object.keys(R).filter((x) => TavernCore.tasteMatch(c, recOf(x)));
+    if (!matches.length) err(`단골 ${id}: 취향에 맞는 레시피가 하나도 없음`);
+    let good = 0, perfect = 0;
+    ords.forEach((o) => matches.forEach((x) => { const r = TavernCore.judge(o, recOf(x)); if (r === 'perfect') perfect++; if (r === 'perfect' || r === 'good') good++; }));
+    if (!good) err(`단골 ${id}: 어떤 주문에서도 취향을 맞히면서 주문을 맞힐 수 없음`);
+    else if (!perfect) wn(`단골 ${id}: 대성공과 취향을 동시에 맞출 수 있는 주문이 없음 (보통 + 취향만 가능)`);
+    tvStats.taste[id] = `${ts.tag ? '태그 ' + ts.tag : '재료 ' + G[ts.ing].name} (등장 ${ords.length}회)`;
+  });
+  // ---- 특별 주문 ----
+  tvStats.specials = {};
+  if (!T.specials) err('TAVERN.specials(특별 주문) 없음');
+  else {
+    ['day2', 'day3', 'day4', 'day5'].forEach((d) => { if (!T.specials[d]) err(`특별 주문 ${d} 없음 (2~5일차 하루 한 번)`); });
+    Object.entries(T.specials).forEach(([dayId, sp]) => {
+      if (!T.days[dayId]) { err(`특별 주문 ${dayId}: TAVERN.days 에 없는 날`); return; }
+      const w = `특별 주문 ${dayId}`;
+      if (!sp.title || !sp.brief) err(`${w}: title/brief 없음`);
+      if (!sp.win || !(sp.win.gold > 0) || !Number.isInteger(sp.win.rep) || sp.win.rep < 0) err(`${w}: win.gold 는 양수, win.rep 은 0 이상의 정수`);
+      if (!sp.lose || !Number.isInteger(sp.lose.rep) || sp.lose.rep > 0 || sp.lose.rep < -2) err(`${w}: lose.rep 는 -2~0 의 정수 (소폭 페널티)`);
+      if (sp.lose && sp.lose.gold) err(`${w}: 실패에 골드 페널티를 두지 않음 (lose.gold 제거)`);
+      ['win', 'lose'].forEach((k) => { if (!lineList(sp[k] && sp[k].lines).length) err(`${w}: ${k}.lines 없음`); lineList(sp[k] && sp[k].lines).forEach((l) => { if (l && l.text) faceOk(l.who || (sp.units[0] || {}).who, l.face, `${w} ${k}`); else err(`${w}: ${k}.lines 형식 오류`); }); });
+      if (!Array.isArray(sp.units) || sp.units.length < 1 || sp.units.length > 3) { err(`${w}: units 는 1~3명`); return; }
+      sp.units.forEach((u, i) => {
+        const ww = `${w} 손님${i + 1}(${u.who})`;
+        if (!CHARACTERS[u.who] || !T.customers[u.who]) { err(`${ww}: 없는 손님`); return; }
+        if (T.customers[u.who].heroine) err(`${ww}: 특별 주문 손님은 히로인이 아님 (호감도 밸런스 보호)`);
+        const o = u.order || {};
+        if (!o.text || !Array.isArray(o.want) || !o.want.length) { err(`${ww}: order.text/want 확인`); return; }
+        o.want.concat(o.avoid || []).forEach((t) => { if (!TG[t]) err(`${ww}: 정의되지 않은 태그 ${t}`); });
+        (o.ing || []).concat(o.noIng || []).forEach((x) => { if (!G[x]) err(`${ww}: 없는 재료 ${x}`); });
+        if ((o.ing || []).length + (o.noIng || []).length === 0 && sp.units.length === 1) wn(`${ww}: 한 명짜리 특별 주문인데 재료 조건(ing/noIng)이 없어 "조건 두 가지"가 아님`);
+        if (!o.note) wn(`${ww}: order.note(조건 한 줄)가 없음`);
+        lineList(u.say).forEach((l) => { if (l && l.text) faceOk(l.who || u.who, l.face, ww); });
+        const perfect = Object.keys(R).filter((x) => TavernCore.judge(o, recOf(x)) === 'perfect');
+        if (!perfect.length) err(`${ww}: 대성공으로 맞출 레시피가 하나도 없음`);
+        else if (!perfect.some((x) => R[x].basic)) wn(`${ww}: 기본 레시피만으로는 대성공 불가 (필요: ${perfect.join('/')}) — 해금/발견이 필요한 특별 주문`);
+      });
+      const wl = sp.units.map((u) => u.who).join('/');
+      tvStats.specials[dayId] = `${sp.title} (${sp.units.length}명: ${wl}, 성공 +${sp.win.gold}G 평판 +${sp.win.rep} / 실패 평판 ${sp.lose.rep})`;
+    });
+  }
   // 업그레이드 화면은 1~4일차 밤 뒤에 있어야 한다
   if (upgradeCmds.length < 3) wn(`{upgrades:true} 씬이 ${upgradeCmds.length}개뿐 (밤마다 구입 기회를 주는 것을 권장)`);
 }
@@ -274,12 +356,17 @@ function applySet(v, s) { Object.keys(s || {}).forEach((k) => setPath(v, k, s[k]
 let seed = 12345;
 const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
 
-// 영업 플레이어 모델: 숙련(주문을 거의 다 맞히고 힌트로 최애도 앎) / 보통 / 서툰 / 대충(재료를 아무렇게나)
+// 영업 플레이어 모델 — 미리보기가 없는 현재 규칙 기준: "메뉴판을 기억하는 플레이어"
+//  plan  : 특별 주문 예고를 보고 재료를 미리 챙길 확률
+//  right : 주문마다 메뉴판(알게 된 레시피와 속성)을 보고 정확히 조합할 확률. 실패하면 이름만 기억나는 레시피를 아무거나 내거나 재료를 아무렇게나 섞음
+//  fav   : 히로인 최애를 알고 있을 확률(힌트를 해석함),  taste : 단골 숨은 취향을 노릴 확률(알아냈거나 힌트를 눈치챈 경우)
+//  숙련 = 메뉴판을 거의 완벽히 외움, 보통 = 가끔 헷갈림, 서툰 = 자주 헷갈림, 대충 = 메뉴판을 안 봄
+//  (옛 모델은 미리보기가 있어서 right 가 숙련 1 / 보통 0.7 / 서툰 0.35 였음. 이제는 "알게 된 레시피를 메뉴판대로 정확히 조합"하는 확률이라 숙련 0.97 / 보통 0.75 / 서툰 0.4. 미리보기가 없어서 헷갈린 만큼 실수가 남는다고 본 값)
 const POL = {
-  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'stove', 'shelf'], right: 1, fav: 1 },
-  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove'], right: 0.7, fav: 0.5 },
-  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign'], right: 0.35, fav: 0 },
-  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0 }
+  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'stove', 'shelf'], right: 0.97, fav: 1, taste: 0.8, plan: 1 },
+  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove'], right: 0.75, fav: 0.5, taste: 0.35, plan: 0.7 },
+  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign'], right: 0.4, fav: 0, taste: 0.1, plan: 0.3 },
+  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, taste: 0, plan: 0 }
 };
 const polNames = Object.keys(POL);
 function randIds(t, n) {
@@ -295,20 +382,49 @@ function randKnown(t) {
 function tavernService(v, dayId, pol, acc) {
   const t = v.tavern; TavernCore.ensure(TAVERN, v); TavernCore.resetToday(v);
   const goldStart = v.gold;
+  // 특별 주문 예고(장보기 화면)를 본 플레이어는 그 주문에 쓸 재료를 먼저 사 두고 일반 손님에게 쓰지 않는다 (pol.plan 확률)
+  const reserved = {}, planned = [], spec = TAVERN.specials && TAVERN.specials[dayId];
+  if (spec && rnd() < pol.plan) {
+    spec.units.forEach((u) => {
+      const cands = Object.keys(TAVERN.recipes).filter((id) => t.known[id] && TavernCore.judge(u.order, Object.assign({ id }, TAVERN.recipes[id])) === 'perfect');
+      cands.sort((a, b) => TAVERN.recipes[a].ing.reduce((x, i) => x + TAVERN.ingredients[i].price, 0) - TAVERN.recipes[b].ing.reduce((x, i) => x + TAVERN.ingredients[i].price, 0));
+      if (cands.length) { planned.push(TAVERN.recipes[cands[0]].ing.slice()); TAVERN.recipes[cands[0]].ing.forEach((i) => { reserved[i] = (reserved[i] || 0) + 1; }); } else planned.push(null);
+    });
+    Object.keys(reserved).forEach((i) => { const pr = TAVERN.ingredients[i].price; while ((t.stock[i] || 0) < reserved[i] && v.gold - pr >= 0) { v.gold -= pr; t.stock[i] = (t.stock[i] || 0) + 1; acc.spent += pr; } });
+  }
+  const unreserved = (fn) => { const sv = {}; Object.keys(reserved).forEach((i) => { sv[i] = t.stock[i]; t.stock[i] = Math.max(0, (t.stock[i] || 0) - reserved[i]); }); try { return fn(); } finally { Object.keys(sv).forEach((i) => { t.stock[i] = sv[i]; }); } };
   Object.keys(TAVERN.ingredients).sort((a, b) => TAVERN.ingredients[a].price - TAVERN.ingredients[b].price).forEach((id) => {
     const pr = TAVERN.ingredients[id].price;
     while ((t.stock[id] || 0) < pol.stock && v.gold - pr >= pol.reserve) { v.gold -= pr; t.stock[id] = (t.stock[id] || 0) + 1; acc.spent += pr; }
   });
-  const ctx = { repSum: 0 };
+  const ctx = { repSum: 0 }, spRes = [];
   TavernCore.queue(TAVERN, dayId, v, VN.evalCond).forEach((cu) => {
     let ids = null;
-    if (rnd() < pol.right) ids = TavernCore.bestKnown(TAVERN, v, cu.who, cu.order, rnd() < pol.fav);
-    if (!ids) ids = rnd() < 0.6 ? randKnown(t) : randIds(t, 2 + Math.floor(rnd() * 2));
-    if (!ids) { const o = TavernCore.skip(TAVERN, v, ctx); v.rep += o.rep; acc.skipped++; return; }
-    const out = TavernCore.serve(TAVERN, v, cu.who, cu.order, ids, ctx);
-    TavernCore.applyDelta(v, out);
-    acc.sold += out.sale; acc.tips += out.tip; acc[out.result] = (acc[out.result] || 0) + 1;
-    if (out.fav) acc.fav++;
+    const note = TavernCore.note(v, cu.who);
+    const choose = () => {
+      let r = null;
+      if (cu.sp && planned[cu.sp.i] && rnd() < pol.right && planned[cu.sp.i].every((i) => (t.stock[i] || 0) > 0)) return planned[cu.sp.i];   // 미리 챙긴 재료로 만든다
+      if (rnd() < pol.right) r = TavernCore.bestKnown(TAVERN, v, cu.who, cu.order, rnd() < pol.fav, !cu.sp && (note.taste || rnd() < pol.taste));
+      return r || (rnd() < 0.6 ? randKnown(t) : randIds(t, 2 + Math.floor(rnd() * 2)));
+    };
+    ids = cu.sp ? choose() : unreserved(choose);
+    let out;
+    if (!ids) { out = TavernCore.skip(TAVERN, v, ctx, cu); v.rep += out.rep; acc.skipped++; out.who = cu.who; }
+    else {
+      out = TavernCore.serve(TAVERN, v, cu.who, cu.order, ids, ctx, cu);
+      TavernCore.applyDelta(v, out);
+      acc.sold += out.sale; acc.tips += out.tip; acc[out.result] = (acc[out.result] || 0) + 1;
+      if (out.fav) acc.fav++;
+      if (out.taste) acc.taste++;
+    }
+    if (cu.sp) {
+      spRes.push(out);
+      if (cu.sp.i === cu.sp.n - 1) { // 특별 주문 마지막 손님: 판정과 보상
+        const vd = TavernCore.specialVerdict(TAVERN, dayId, spRes);
+        vd.rep = TavernCore.capRep(TAVERN, ctx, vd.rep); v.gold += vd.gold; v.rep += vd.rep; acc.spGold += vd.gold;
+        v.tavern.sp[dayId] = vd.ok ? 'win' : 'lose'; if (vd.ok) { v.tavern.spWin++; acc.spWin++; } else { v.tavern.spLose++; acc.spLose++; }
+      }
+    }
   });
   acc.net += v.gold - goldStart;
 }
@@ -325,7 +441,7 @@ function buyUpgrades(v, pol, acc) {
 function simulate(pickFn, pol) {
   pol = pol || POL.decent;
   const v = JSON.parse(JSON.stringify(STORY.init));
-  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, upgrades: [] };
+  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [] };
   let sc = STORY.start, pc = 0, steps = 0, ending = null, read = 0;
   const visit = new Set(), snapRep = {};
   while (steps++ < 20000) {
@@ -370,12 +486,13 @@ const evenPick = (opts, v) => {
 };
 const badPick = (opts) => opts.reduce((a, b) => (((b.set && b.set.rep) || 0) < ((a.set && a.set.rep) || 0) ? b : a));
 // 평균 집계 도우미
-const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], end: {}, aff: {} });
+const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {} });
 const addAgg = (g, r) => {
-  g.n++; g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length);
+  g.n++; g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length); g.taste.push(r.acc.taste); g.spWin.push(r.acc.spWin); g.fail.push(r.v.tavern.fail);
   g.end[r.ending] = (g.end[r.ending] || 0) + 1;
   HEROINES.forEach((h) => { (g.aff[h] = g.aff[h] || []).push(r.v.aff[h]); });
 };
+const avg = (a) => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(1);
 const fmt = (a) => `${Math.min(...a)}~${Math.max(...a)} (중앙 ${med(a)})`;
 
 // (1) 무작위 스토리 선택 x 영업 플레이어 모델 섞기 (숙련 15 / 보통 35 / 서툰 35 / 대충 15 %)
@@ -425,12 +542,18 @@ if (TAVERN) {
   console.log(`저녁 영업: 재료 ${nI}종, 레시피 ${nR}개 (기본 ${nB}), 업그레이드 ${TAVERN.upgrades.length}개, 일차별 손님 ${Object.entries(TAVERN.days).map(([k, d]) => `${k}:${d.customers.filter((c) => !c.if).length}${d.customers.some((c) => c.if) ? '+' + d.customers.filter((c) => c.if).length : ''}`).join(' ')}, 주문 ${tvStats.orders}개 (낙관적 지식으로 대성공 가능 ${tvStats.perfectKnown}개)`);
   console.log('히로인 영업 기본 등장 횟수:', JSON.stringify(Object.fromEntries(HEROINES.map((h) => [h, (tvStats.appear || {})[h] || 0]))));
 }
+if (AUDIO && AUDIO.tracks) {
+  const withFile = Object.values(AUDIO.tracks).filter((t) => t.file).length;
+  console.log(`BGM: 트랙 ${Object.keys(AUDIO.tracks).length}개 (파일 연결 ${withFile}개, 나머지는 file:null 이라 요청 없음), 스크립트 사용 ${[...bgmUsed].filter((x) => x !== 'stop').length}종, 효과음 ${SFX.names.length}종`);
+}
+if (tvStats.taste) console.log('단골 숨은 취향:', JSON.stringify(tvStats.taste));
+if (tvStats.specials) Object.entries(tvStats.specials).forEach(([d, t]) => console.log(`특별 주문 ${d}: ${t}`));
 const per = {}; HEROINES.forEach((h) => { per[h] = Object.keys(scenes).filter((s2) => new RegExp('^' + h + '_').test(s2)).length; });
 stat.read.sort((a, b) => a - b);
 console.log(`한 회차에 읽는 대사/나레이션: 중앙값 ${stat.read[stat.read.length >> 1]}줄 (최소 ${stat.read[0]} ~ 최대 ${stat.read[stat.read.length - 1]}) -> 줄당 3~4초 가정 시 약 ${Math.round(stat.read[stat.read.length >> 1] * 3 / 60)}~${Math.round(stat.read[stat.read.length >> 1] * 4 / 60)}분 + 선택/영업 시간`);
 console.log('히로인별 이벤트 씬 수:', JSON.stringify(per));
 console.log('무작위 선택 x 영업 모델 섞기 6000회 엔딩 분포:', JSON.stringify(stat.random), stat.errors ? `(막힘 ${stat.errors})` : '(막힘 0)');
-polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${pn} (${g.n}회): 엔딩 ${JSON.stringify(g.end)} / 최종 골드 ${fmt(g.gold)} / 평판 ${fmt(g.rep)} / 대성공 ${fmt(g.perfect)}회 / 업그레이드 ${(g.upg.reduce((a, b) => a + b, 0) / g.n).toFixed(1)}개`); });
+polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${pn} (${g.n}회): 엔딩 ${JSON.stringify(g.end)} / 최종 골드 ${fmt(g.gold)} / 평판 ${fmt(g.rep)} / 대성공 ${fmt(g.perfect)}회 / 실패 평균 ${avg(g.fail)}회 / 단골 보너스 평균 ${avg(g.taste)}회 / 특별 주문 성공 평균 ${avg(g.spWin)}/4 / 업그레이드 ${avg(g.upg)}개`); });
 console.log('히로인 집중 전략(각 40회) 최종 호감도 범위 (loveLine ' + STORY.loveLine + '):');
 polNames.forEach((pn) => console.log(`  - 영업 ${pn}: ` + HEROINES.map((h) => { const a = focusRes[pn][h].aff[h]; return `${h} ${Math.min(...a)}~${Math.max(...a)}`; }).join(' / ') + ` | 엔딩 일치 ` + HEROINES.map((h) => `${focusRes[pn][h].end[h] || 0}/${focusRes[pn][h].n}`).join(' ') + ` | 골드 ${fmt(focusRes[pn][HEROINES[0]].gold)}`));
 console.log('균등 분배 전략 (여러 사람에게 고르게):');
@@ -440,7 +563,7 @@ polNames.forEach((pn) => { const g = fanRes[pn]; console.log(`  - 영업 ${pn}: 
 console.log('평판 최저 선택 전략 (배드 엔딩):');
 polNames.forEach((pn) => { const g = badRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / 평판 ${fmt(g.rep)}`); });
 // 영업 수입 (균등 분배 전략 기준)
-polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`영업 ${pn} 5일 순수익(매출+팁-재료비, 업그레이드 제외): 중앙 ${med(g.net)}G (범위 ${Math.min(...g.net)}~${Math.max(...g.net)}), 최애 서빙 ${(g.fav.reduce((a, b) => a + b, 0) / g.n).toFixed(1)}회`); });
+polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`영업 ${pn} 5일 순수익(매출+팁-재료비, 업그레이드 제외): 중앙 ${med(g.net)}G (범위 ${Math.min(...g.net)}~${Math.max(...g.net)}), 최애 서빙 ${avg(g.fav)}회, 단골 보너스 ${avg(g.taste)}회, 특별 주문 성공 ${avg(g.spWin)}/4`); });
 console.log(`균등 분배 + 보통 영업 -> ${ref.ending} (호감도 ${JSON.stringify(ref.v.aff)}) / 평판 최저 + 서툰 영업 -> ${refBad.ending} (평판 ${refBad.v.rep})`);
 warns.forEach((m) => console.log('경고: ' + m));
 errors.forEach((m) => console.log('오류: ' + m));

@@ -39,6 +39,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 에리온 =================
   end_erion: [
+    { bgm: 'ending_good' },
     { bg: 'roof_night' }, { hide: 'all' },
     { narr: '마을 잔치가 한밤까지 이어졌다. 사람들이 하나둘 돌아간 뒤, 나는 누군가의 인기척을 따라 지붕에 올라갔다.' },
     { show: 'erion', face: 'normal', pos: 'center' },
@@ -59,6 +60,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 카엘라 =================
   end_kaela: [
+    { bgm: 'ending_good' },
     { bg: 'inn_front' }, { hide: 'all' },
     { narr: '다음 날 아침. 여관 앞마당에서 쾅, 하는 소리가 났다. 문을 열자 반짝이는 갑옷을 입은 카엘라가 한쪽 무릎을 꿇고 있었다.' },
     { show: 'kaela', face: 'normal', pos: 'center' },
@@ -80,6 +82,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 미호 =================
   end_miho: [
+    { bgm: 'ending_good' },
     { bg: 'inn_dawn' }, { hide: 'all' },
     { narr: '결전 다음 날, 해가 중천에 뜬 시각. 여관 앞에 낯선 마차가 멈췄다. 마차 안에서 일곱 명의 아이가 우르르 쏟아져 나왔다.' },
     { show: 'miho', face: 'smile', pos: 'center' },
@@ -98,6 +101,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 리아 =================
   end_lia: [
+    { bgm: 'ending_good' },
     { bg: 'inn_front' }, { hide: 'all' },
     { narr: '결전 후 일주일이 지났다. 여관은 평소의 일상으로 돌아왔다. 복도에서 걸레질을 하며 콧노래를 부르는 목소리도 여전하다.' },
     { show: 'lia', face: 'smile', pos: 'center' },
@@ -119,6 +123,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 노멀 =================
   end_normal: [
+    { bgm: 'ending_good' },
     { bg: 'inn_day' }, { hide: 'all' },
     { narr: '결전 다음 날의 아침 식사. 은빛 여우관의 식당은 오랜만에 사람들로 가득했다. 마을을 구한 영웅들을 한 번이라도 보려고 사람들이 몰려든 것이다.' },
     { show: 'kaela', face: 'smile', pos: 'left' },
@@ -139,6 +144,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 배드 =================
   end_bad: [
+    { bgm: 'ending_bad' },
     { bg: 'inn_day' }, { hide: 'all' },
     { narr: '마을은 구했다. 하지만 그날 이후, 여관을 찾는 발길은 눈에 띄게 끊겼다.' },
     { narr: '\'위기 때 돈부터 챙기는 여관 주인.\' 한번 퍼진 소문은 좀처럼 사라지지 않았다. 마을 장터에서도, 식당에서도, 아이들 놀이터에서도.' },

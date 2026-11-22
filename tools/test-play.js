@@ -9,6 +9,10 @@
 //  (e) 저장/불러오기/이어하기, 옛 세이브·깨진 세이브가 있어도 타이틀이 정상인지
 //  (f) 저녁 영업 UI: 장보기 / 재료 선택·비우기·4번째 재료 막힘 / 메뉴판 / 내기 / 정중히 거절 / 결산 / 업그레이드를 실제 탭으로
 //  (g) 영업 중 저장 -> 영업 시작 시점으로 되돌아가는지, 세이브 키 v3
+//  (h) 스킵(읽은 대사만 넘기고 새 대사/선택지/업그레이드에서 멈춤, 2회차) / 오토 / 탭하면 해제 / 설정 저장·복원·깨진 설정
+//  (i) 효과음(AudioContext 가 에러 없이 동작, 12종 전부 재생, 음소거) / BGM(file:null 은 요청 없음, 크로스페이드, 비활성 탭 일시정지)
+//  (j) 영업 난이도: 미리보기 숨김(쉬운 모드에서만 표시) / 손님 메모장(힌트 ??? -> 취향 공개, 히로인 최애) / 단골 보너스
+//  (k) 특별 주문: 성공(1접시 두 조건) / 실패(3인분 중 하나 놓침) / 결산 표시
 // 모든 플레이에서 콘솔 error/warning 0, 가로 스크롤 0 이어야 통과.
 // 영업은 페이지 안의 __tvPlan() 이 "다음에 누를 버튼"을 알려 주고 (정답 찾기/무작위 모델), 빠른 모드는 click(), 실제 모드는 tap 으로 누른다.
 const { chromium } = require('playwright');
@@ -446,7 +450,8 @@ async function main() {
     const toBrew = async () => { for (let i = 0; i < 50 && (await tv()).phase !== 'brew'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(40); } };
     await toBrew();
     await tap('moonberry'); await tap('ale');
-    chk((await page.locator('#tv-note').innerText()).includes('처음 보는'), '모르는 조합의 안내 문구가 없음');
+    const hardNote = await page.locator('#tv-note').innerHTML();
+    chk(!hardNote.includes('▶') && !hardNote.includes('처음 보는') && !hardNote.includes('tv-tag'), `미리보기가 숨겨지지 않음: ${hardNote}`);
     await page.locator('#tv-serve').tap(); await page.waitForTimeout(300);
     chk(await vis('tv-found'), '레시피 발견 연출이 뜨지 않음');
     await page.screenshot({ path: `${SHOTS}/tv_07_found_ui.png` });
@@ -504,8 +509,8 @@ async function main() {
     chk((await page.evaluate(() => VN.state.vars.day)) === 2 || (await page.evaluate(() => VN.mode)) === 'card', '업그레이드 후 다음 날로 넘어가지 않음');
     // 간판을 샀으니 2일차 영업 손님이 1명 늘어난다
     await toTavern(page);
-    chk((await tv()).total === 6, `간판 업그레이드 후 2일차 손님 수 ${(await tv()).total} (6이어야 함)`);
-    report.push(`영업UI: 장보기/메뉴판(15칸 중 미발견 10)/재료 선택·해제·최대3개/비우기/메뉴판으로 채우기/판정/발견 연출/정체불명/거절/결산(${resN}명)/업그레이드 4종 구매/해금/간판 손님+1`);
+    chk((await tv()).total === 7, `간판 업그레이드 후 2일차 손님 수 ${(await tv()).total} (일반 5+간판 1+특별 주문 1 = 7이어야 함)`);
+    report.push(`영업UI: 장보기/메뉴판(15칸 중 미발견 10)/재료 선택·해제·최대3개/비우기/메뉴판으로 채우기/판정/발견 연출/정체불명/거절/결산(${resN}명)/업그레이드 4종 구매/해금/간판 손님+1(+특별 주문 1)`);
     await ctx.close();
   }
 
@@ -549,12 +554,418 @@ async function main() {
     await ctx.close();
   }
 
+
+  // ---------- 공용 도우미 (h~k) ----------
+  const opt = (page) => page.evaluate(() => VN.opt);
+  const fast = (page) => page.evaluate(() => VN.fast);
+  const stNow = (page) => page.evaluate(() => ({ mode: VN.mode, scene: VN.state && VN.state.scene, pc: VN.state && VN.state.pc, fast: VN.fast, shift: document.getElementById('app').scrollLeft + document.getElementById('game').scrollLeft + window.scrollX }));
+  const tapText = async (page, n) => { for (let i = 0; i < n; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(60); } };
+  const setRange = (page, id, v) => page.$eval(id, (el, val) => { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+  const seed = async (page, scene, patchSrc) => {
+    await page.evaluate(([sc, src]) => {
+      const v = JSON.parse(JSON.stringify(STORY.init));
+      (new Function('v', src))(v);
+      const snap = { scene: sc, pc: 0, vars: v, bg: 'inn_evening', sprites: { left: null, center: null, right: null }, bgm: null, log: [], label: 'test' };
+      localStorage.setItem('inn_vn_v3_auto', JSON.stringify({ v: 3, t: Date.now(), snap }));
+    }, [scene, patchSrc]);
+    await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])');
+    await page.tap('#btn-continue'); await page.waitForTimeout(250);
+    await page.evaluate(`(${DRIVE2.toString()})()`);
+  };
+  // 영업 드라이버 2: 정답(또는 일부러 틀린) 요리를 내면서 특정 지점에서 멈춰 준다
+  const DRIVE2 = () => {
+    window.__seen = {};
+    window.__drive = (cfg) => {
+      const g = document.getElementById('game');
+      const vis = (id) => { const e = document.getElementById(id); return !!e && !e.classList.contains('hidden'); };
+      const click = (sel) => { const e = document.querySelector(sel); if (!e || e.disabled) return false; e.click(); return true; };
+      for (let i = 0; i < 6000; i++) {
+        const m = VN.mode;
+        if (m === 'choice' || m === 'ending' || m === 'title') return m;
+        if (m === 'text') { g.click(); continue; }
+        if (m !== 'tavern') return 'other:' + m;
+        if (vis('confirm')) { click('#confirm-yes'); continue; }
+        if (vis('tv-found')) { click('#tv-found-btn'); continue; }
+        if (vis('tv-sum')) return 'summary';
+        if (vis('tv-upg')) return 'upg';
+        if (vis('tv-shop')) { click('#tv-shop-start'); continue; }
+        const T = VN.tavern;
+        if (T && T.phase === 'brew') {
+          const key = 'b' + T.idx;
+          if (cfg.stopSp && T.sp && !window.__seen[key]) { window.__seen[key] = 1; return 'spbrew'; }
+          if (cfg.stopAt != null && T.idx === cfg.stopAt && !window.__seen[key]) { window.__seen[key] = 1; return 'brew'; }
+          const v = VN.state.vars;
+          const bad = Object.keys(TAVERN.recipes).filter((id) => VN.state.vars.tavern.known[id] && TavernCore.judge(T.order, Object.assign({ id }, TAVERN.recipes[id])) !== 'perfect');
+          let ids = (cfg.wrong && T.sp && cfg.wrong.includes(T.sp.i)) ? TAVERN.recipes[bad[0]].ing.slice() : TavernCore.bestKnown(TAVERN, v, T.cur, T.order, false, true);
+          if (T.sp && !(cfg.wrong && cfg.wrong.includes(T.sp.i))) {   // 특별 주문: 모든 조건을 만족(대성공)하는 레시피를 직접 찾는다
+            const pf = Object.keys(TAVERN.recipes).filter((id) => VN.state.vars.tavern.known[id] && TavernCore.judge(T.order, Object.assign({ id }, TAVERN.recipes[id])) === 'perfect');
+            if (pf.length) ids = TAVERN.recipes[pf[0]].ing.slice();
+          }
+          ids = ids || ['ale', 'bread'];
+          click('#tv-clear');
+          for (const id of ids) click('.tv-ing[data-id="' + id + '"]');
+          if (!click('#tv-serve')) return 'noserve';
+          continue;
+        }
+        return 'stuck:' + (T && T.phase);
+      }
+      return 'loop';
+    };
+  };
+  const ALLKNOWN = "Object.keys(TAVERN.recipes).forEach(function (r) { v.tavern.known[r] = true; }); Object.keys(TAVERN.ingredients).forEach(function (i) { v.tavern.stock[i] = 6; }); v.gold = 300;";
+
+  // ---------- (h) 스킵 / 오토 / 설정 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '스킵오토');
+    const chk = (cond, msg) => { if (!cond) problems.push('[스킵오토] ' + msg); };
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    const d0 = await opt(page);
+    chk(d0.textSpeed === 3 && d0.autoSpeed === 3 && d0.bgm === 60 && d0.sfx === 70 && !d0.mute && !d0.skipUnread && !d0.easy, `기본 설정값 이상 ${JSON.stringify(d0)}`);
+    await page.tap('#btn-options'); await page.waitForTimeout(300);
+    await page.screenshot({ path: `${SHOTS}/s6_10_title_options.png` });
+    await page.tap('#options-close');
+    // 1회차: 카드 + 첫 선택지(d1_lia)까지 직접 탭으로 읽는다
+    await page.tap('#btn-new'); await page.waitForTimeout(400);
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);          // 일차 카드
+    for (let i = 0; i < 60 && (await stNow(page)).mode !== 'choice'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(50); }
+    let st = await stNow(page);
+    chk(st.mode === 'choice' && st.scene === 'd1_lia', `1회차 첫 선택지에 도달하지 못함 ${JSON.stringify(st)}`);
+    const read1 = await page.evaluate(() => VN.readCount);
+    chk(read1 >= 7, `읽은 줄 기록이 적음 ${read1}`);
+    // 첫 화면 스크린샷 (대사 + 오토/스킵 버튼)
+    await page.evaluate(() => VN.flushRead());
+    await page.reload(); await page.waitForSelector('#btn-new');
+    chk((await page.evaluate(() => VN.readCount)) === read1, '새로고침 뒤 읽은 줄 기록이 유지되지 않음');
+    // 2회차: 처음부터 -> 읽은 줄은 스킵으로 넘기고 선택지에서 멈춘다
+    await page.tap('#btn-new'); await page.waitForTimeout(400);
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    chk(await page.locator('#btn-skip').isVisible() && await page.locator('#btn-auto').isVisible(), '스킵/오토 버튼이 대사창에 보이지 않음');
+    await page.screenshot({ path: `${SHOTS}/s6_01_dialog_fast_btns.png` });
+    const t0 = Date.now();
+    await page.tap('#btn-skip'); await page.waitForTimeout(40);
+    chk((await fast(page)).skip, '스킵 버튼을 눌러도 스킵이 켜지지 않음');
+    await page.screenshot({ path: `${SHOTS}/s6_02_skip_on.png` });
+    await page.waitForFunction(() => VN.mode === 'choice', null, { timeout: 8000 });
+    const dt = Date.now() - t0;
+    st = await stNow(page);
+    chk(st.scene === 'd1_lia' && !st.fast.skip, `읽은 줄만 넘기고 선택지에서 멈춰야 함 ${JSON.stringify(st)}`);
+    chk(dt < 3500, `스킵이 느림 (${dt}ms)`);
+    // 안 읽은 장면: 1회차에 고르지 않은 선택지 -> 스킵이 첫 새 대사에서 멈춘다
+    await page.locator('.choice-btn').nth(2).tap(); await page.waitForTimeout(150);
+    st = await stNow(page);
+    chk(st.scene === 'd1_lia_offer' && st.mode === 'text', `선택 뒤 장면 이상 ${JSON.stringify(st)}`);
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    await page.tap('#btn-skip'); await page.waitForTimeout(500);
+    st = await stNow(page);
+    chk(!st.fast.skip && st.scene === 'd1_lia_offer' && st.pc === 1 && st.mode === 'text', `처음 보는 줄에서 스킵이 멈춰야 함 ${JSON.stringify(st)}`);
+    // 오토: 속도 최대로 올리고 켠다 -> 탭 없이 진행, 탭하면 해제
+    await page.tap('#menu-btn'); await page.tap('#menu-options'); await page.waitForTimeout(150);
+    await page.screenshot({ path: `${SHOTS}/s6_03_options.png` });
+    await setRange(page, '#opt-auto', 5); await setRange(page, '#opt-text', 5);
+    await page.tap('#options-close'); await page.waitForTimeout(100);
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    const pc0 = (await stNow(page)).pc;
+    await page.tap('#btn-auto'); await page.waitForTimeout(80);
+    chk((await fast(page)).auto, '오토가 켜지지 않음');
+    await page.screenshot({ path: `${SHOTS}/s6_02_auto_on.png` });
+    await page.waitForFunction((p) => VN.state.pc > p || VN.mode !== 'text', pc0, { timeout: 6000 });
+    chk(true, '');
+    // 선택지(d1_kaela)에서 자동 정지
+    await page.waitForFunction(() => VN.mode === 'choice', null, { timeout: 30000 });
+    st = await stNow(page);
+    chk(!st.fast.auto && st.scene === 'd1_kaela', `오토가 선택지에서 멈추지 않음 ${JSON.stringify(st)}`);
+    // 탭하면 오토 해제 (그 탭으로 진행하지는 않음)
+    await page.locator('.choice-btn').first().tap(); await page.waitForTimeout(200);
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    await page.tap('#btn-auto'); await page.waitForTimeout(60);
+    const pcA = (await stNow(page)).pc;
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(120);
+    st = await stNow(page);
+    chk(!st.fast.auto && st.pc === pcA, `화면 탭으로 오토가 해제되어야 함 ${JSON.stringify(st)} (pc ${pcA})`);
+    await page.tap('#btn-skip'); await page.waitForTimeout(60);
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(120);
+    chk(!(await fast(page)).skip, '화면 탭으로 스킵이 해제되어야 함');
+    // 메뉴를 열면 오토가 꺼진다
+    await page.tap('#btn-auto'); await page.tap('#menu-btn'); await page.waitForTimeout(100);
+    chk(!(await fast(page)).auto, '메뉴를 열어도 오토가 안 꺼짐');
+    await page.tap('#menu-close');
+    // 설정 저장/복원: UI 로 모든 값을 바꾸고 새로고침
+    await page.tap('#menu-btn'); await page.tap('#menu-options'); await page.waitForTimeout(100);
+    await setRange(page, '#opt-text', 5); await setRange(page, '#opt-auto', 2); await setRange(page, '#opt-bgm', 35); await setRange(page, '#opt-sfx', 10);
+    await page.tap('#opt-mute'); await page.tap('#opt-unread'); await page.tap('#opt-easy');
+    const o1 = await opt(page);
+    chk(o1.textSpeed === 5 && o1.autoSpeed === 2 && o1.bgm === 35 && o1.sfx === 10 && o1.mute && o1.skipUnread && o1.easy, `설정 변경이 반영되지 않음 ${JSON.stringify(o1)}`);
+    chk(await page.evaluate(() => SFX.mute === true && BGM.info().mute === true && Math.abs(SFX.vol - 0.1) < 1e-6 && Math.abs(BGM.info().vol - 0.35) < 1e-6), '음소거/볼륨이 사운드 모듈에 반영되지 않음');
+    await page.tap('#options-close');
+    const raw = await page.evaluate(() => localStorage.getItem('inn_vn_v3_opt'));
+    chk(raw && JSON.parse(raw).bgm === 35, `설정이 localStorage 에 저장되지 않음 ${raw}`);
+    await page.reload(); await page.waitForSelector('#btn-new');
+    const o2 = await opt(page);
+    chk(JSON.stringify(o2) === JSON.stringify(o1), `새로고침 뒤 설정 복원 실패 ${JSON.stringify(o2)}`);
+    await page.tap('#btn-options'); await page.waitForTimeout(100);
+    const ui = await page.evaluate(() => ({ t: document.getElementById('opt-text').value, a: document.getElementById('opt-auto').value, b: document.getElementById('opt-bgm').value, s: document.getElementById('opt-sfx').value, m: document.getElementById('opt-mute').getAttribute('aria-pressed'), u: document.getElementById('opt-unread').getAttribute('aria-pressed'), e: document.getElementById('opt-easy').getAttribute('aria-pressed') }));
+    chk(ui.t === '5' && ui.a === '2' && ui.b === '35' && ui.s === '10' && ui.m === 'true' && ui.u === 'true' && ui.e === 'true', `설정 화면 UI 가 저장값과 다름 ${JSON.stringify(ui)}`);
+    chk(await page.evaluate(() => SFX.mute === true && BGM.info().mute === true), '새로고침 뒤 음소거가 사운드 모듈에 적용되지 않음');
+    await page.tap('#options-close');
+    // 깨진 설정 값은 기본값으로
+    await page.evaluate(() => localStorage.setItem('inn_vn_v3_opt', '{깨진 json'));
+    await page.reload(); await page.waitForSelector('#btn-new');
+    const o3 = await opt(page);
+    chk(JSON.stringify(o3) === JSON.stringify(d0), `깨진 설정은 기본값이어야 함 ${JSON.stringify(o3)}`);
+    await page.evaluate(() => localStorage.setItem('inn_vn_v3_opt', JSON.stringify({ textSpeed: 99, autoSpeed: -4, bgm: 'x', sfx: 500, mute: 1 })));
+    await page.reload(); await page.waitForSelector('#btn-new');
+    const o4 = await opt(page);
+    chk(o4.textSpeed === 5 && o4.autoSpeed === 1 && o4.bgm === 60 && o4.sfx === 100 && o4.mute === true, `범위를 벗어난 설정 보정 이상 ${JSON.stringify(o4)}`);
+    await page.evaluate(() => localStorage.removeItem('inn_vn_v3_opt'));
+    // 안 읽은 대사도 스킵 + 업그레이드 화면에서 정지: 1일차 저녁 마무리(d1_ev_end)에서 스킵
+    await page.evaluate(() => localStorage.setItem('inn_vn_v3_opt', JSON.stringify({ skipUnread: true })));
+    await page.evaluate(() => localStorage.removeItem('inn_vn_v3_read'));
+    await seed(page, 'd1_ev_end', 'v.day = 1; v.time = "저녁";');
+    await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
+    await page.tap('#btn-skip');
+    await page.waitForFunction(() => VN.mode === 'tavern', null, { timeout: 8000 });
+    st = await stNow(page);
+    chk(!st.fast.skip && st.mode === 'tavern' && await page.locator('#tv-upg').isVisible(), `안 읽은 대사도 넘기고 업그레이드 화면에서 멈춰야 함 ${JSON.stringify(st)}`);
+    chk((await page.evaluate(() => VN.state.bgm)) === 'inn_night', 'bgm 명령이 상태(S.bgm)에 기록되지 않음');
+    report.push(`스킵/오토/설정: 2회차 스킵 ${dt}ms 만에 선택지(읽은 줄 ${read1}개)에서 정지, 새 대사 정지, 오토 정지/탭 해제, 업그레이드 화면 정지(안 읽은 대사 스킵 옵션), 설정 저장/복원/깨진 값 보정`);
+    await ctx.close();
+  }
+
+  // ---------- (i) 효과음 / BGM ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '소리');
+    const chk = (cond, msg) => { if (!cond) problems.push('[소리] ' + msg); };
+    const reqs = [];
+    page.on('request', (r) => { if (/\/assets\/bgm\//.test(r.url())) reqs.push(r.url()); });
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    chk(await page.evaluate(() => !SFX.ctx), '사용자 입력 전에 AudioContext 가 만들어짐');
+    await page.evaluate(() => { SFX.play('select'); });   // 입력 전 호출은 조용히 무시
+    await page.tap('#btn-new'); await page.waitForTimeout(400);
+    let sf = await page.evaluate(() => JSON.parse(JSON.stringify(SFX.stats)));
+    chk(sf.created && sf.running && sf.errors === 0, `첫 터치 뒤 AudioContext 상태 이상 ${JSON.stringify(sf)}`);
+    // 12종 전부 재생 (같은 소리는 겹침 방지로 무시되므로 이름마다 한 번씩)
+    const names = await page.evaluate(() => SFX.names.slice());
+    chk(names.length === 12, `효과음 종류 ${names.length}`);
+    const res = await page.evaluate(() => SFX.names.map((n) => SFX.play(n)));
+    sf = await page.evaluate(() => JSON.parse(JSON.stringify(SFX.stats)));
+    chk(res.every(Boolean) && sf.errors === 0 && names.every((n) => sf.byName[n] >= 1), `효과음 재생 이상 ${JSON.stringify(sf)}`);
+    // 대사 넘김 탭 소리 / 음소거
+    await page.waitForTimeout(700);
+    const p1 = (await page.evaluate(() => SFX.stats.byName.tap || 0));
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(100); await page.touchscreen.tap(195, 300); await page.waitForTimeout(100);
+    const p2 = (await page.evaluate(() => SFX.stats.byName.tap || 0));
+    chk(p2 > p1, `대사를 넘길 때 tap 소리가 나지 않음 (${p1} -> ${p2})`);
+    await page.tap('#menu-btn'); await page.tap('#menu-options'); await page.waitForTimeout(100);
+    await page.tap('#opt-mute');
+    await page.tap('#options-close'); await page.waitForTimeout(700);
+    const m1 = await page.evaluate(() => SFX.stats.played);
+    for (let i = 0; i < 3; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(150); }
+    const m2 = await page.evaluate(() => SFX.stats.played);
+    chk(m2 === m1, `음소거인데 효과음이 재생됨 (${m1} -> ${m2})`);
+    chk(await page.evaluate(() => SFX.master.gain.value === 0), '음소거인데 마스터 게인이 0 이 아님');
+    chk((await stNow(page)).shift === 0, '가로 스크롤 발생');
+    // BGM: 기본은 전부 file:null -> 요청 0, 오류 없음
+    chk(reqs.length === 0, `file:null 인 BGM 이 파일을 요청함 ${reqs.join(',')}`);
+    const b0 = await page.evaluate(() => BGM.info());
+    chk(b0.want === 'inn_day' && b0.playing === null && b0.live === 0, `file:null 트랙은 want 만 기록하고 재생하지 않아야 함 ${JSON.stringify(b0)}`);
+    // 크로스페이드/비활성 탭: 조용한 WAV(data URI)를 임시 트랙으로 연결해 확인
+    const wav = (() => { const n = 800, b = Buffer.alloc(44 + n); b.write('RIFF', 0); b.writeUInt32LE(36 + n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(8000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(n, 40); b.fill(128, 44); return 'data:audio/wav;base64,' + b.toString('base64'); })();
+    await page.evaluate((u) => { AUDIO.tracks.title.file = u; AUDIO.tracks.tension.file = u; AUDIO.tracks.cave.file = 'data:audio/wav;base64,AAAA'; }, wav);
+    await page.evaluate(() => BGM.play('title'));
+    let b1 = await page.evaluate(() => BGM.info());
+    chk(b1.playing === 'title' && b1.live === 1, `BGM 재생 시작 이상 ${JSON.stringify(b1)}`);
+    await page.evaluate(() => BGM.play('tension'));
+    const b2 = await page.evaluate(() => BGM.info());
+    chk(b2.playing === 'tension' && b2.live === 2, `크로스페이드 중에는 두 곡이 살아 있어야 함 ${JSON.stringify(b2)}`);
+    await page.waitForTimeout(1500);
+    const b3 = await page.evaluate(() => BGM.info());
+    chk(b3.playing === 'tension' && b3.live === 1, `크로스페이드 1초 뒤 이전 곡이 정리되어야 함 ${JSON.stringify(b3)}`);
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    const paused = await page.evaluate(() => BGM.info().hidden);
+    chk(paused, '탭이 백그라운드가 되어도 BGM 상태가 hidden 이 아님');
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.evaluate(() => BGM.play('stop'));
+    await page.waitForTimeout(1300);
+    const b4 = await page.evaluate(() => BGM.info());
+    chk(b4.want === null && b4.live === 0 && b4.playing === null, `BGM 정지 이상 ${JSON.stringify(b4)}`);
+    await page.evaluate(() => BGM.play('cave'));   // 깨진 파일: 조용히 비활성
+    await page.waitForTimeout(800);
+    const b5 = await page.evaluate(() => BGM.info());
+    chk(b5.live === 0 && b5.failed.includes('cave'), `못 읽는 파일이 조용히 비활성되지 않음 ${JSON.stringify(b5)}`);
+    report.push(`소리: AudioContext 첫 터치 뒤 생성(running), 효과음 12종 재생 오류 ${sf.errors}, tap 소리 ${p1}->${p2}, 음소거 시 재생 0, BGM file:null 요청 0, 크로스페이드/정지/백그라운드/깨진 파일 처리 확인 (헤드리스라 실제 소리는 확인 불가)`);
+    await ctx.close();
+  }
+
+  // ---------- (j) 미리보기 숨김 / 손님 메모장 / 단골 보너스 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '난이도');
+    const chk = (cond, msg) => { if (!cond) problems.push('[난이도] ' + msg); };
+    const vars = () => page.evaluate(() => JSON.parse(JSON.stringify(VN.state.vars)));
+    const vis = (id) => page.evaluate((i) => !document.getElementById(i).classList.contains('hidden'), id);
+    const tv = () => page.evaluate(() => VN.tavern);
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    await page.tap('#btn-new');
+    await toTavern(page);
+    // 첫 만남 전: 메모장은 비어 있다
+    await page.locator('#tv-shop-notes').tap(); await page.waitForTimeout(250);
+    chk(await vis('tv-notes') && (await page.locator('#tv-notes-list').innerText()).includes('아직 만난 손님이 없어요'), '영업 전 메모장이 비어 있지 않음');
+    await page.locator('#tv-notes-close').tap();
+    await page.locator('#tv-shop-start').tap();
+    for (let i = 0; i < 40 && (await tv()).phase !== 'brew'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(40); }
+    let t = await tv();
+    chk(t.phase === 'brew' && t.cur === 'baron', `첫 손님이 바론이 아님 ${JSON.stringify(t && t.cur)}`);
+    // 메모: 취향 ??? + 힌트 대사
+    await page.locator('#tv-notes-btn').tap(); await page.waitForTimeout(250);
+    let row = await page.locator('.tv-note-row[data-who="baron"]').innerText();
+    chk(row.includes('???') && row.includes('묵직'), `바론 메모가 ??? + 힌트가 아님: ${row}`);
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_05_memo_unknown.png` });
+    await page.locator('#tv-notes-close').tap(); await page.waitForTimeout(100);
+    // 재료 선택: 미리보기 없음
+    await page.locator('.tv-ing[data-id="meat"]').tap(); await page.locator('.tv-ing[data-id="mushroom"]').tap(); await page.waitForTimeout(150);
+    let note = await page.locator('#tv-note').innerHTML();
+    chk(!note.includes('▶') && !note.includes('tv-tag') && !note.includes('고기 스튜'), `미리보기가 보임: ${note}`);
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_04_brew_no_preview.png` });
+    // 메뉴판은 그대로 열람 가능
+    await page.locator('#tv-board').tap(); await page.waitForTimeout(200);
+    chk((await page.locator('#tv-board-list .tv-recipe').count()) === 15 && (await page.locator('#tv-board-list .tv-recipe:not(.unk) .tv-tag').count()) >= 5, '메뉴판에서 레시피/속성을 볼 수 없음');
+    await page.locator('#tv-board-close').tap(); await page.waitForTimeout(100);
+    // 내기: 바론 주문(따뜻함)에 고기 스튜 = 대성공 + 취향(든든함) = 단골 보너스
+    const gold0 = (await vars()).gold;
+    await page.locator('#tv-serve').tap(); await page.waitForTimeout(250);
+    t = await tv();
+    const r0 = t.results[0];
+    chk(r0 && r0.result === 'perfect' && r0.taste === true, `단골 보너스가 안 붙음 ${JSON.stringify(r0)}`);
+    chk((await page.locator('#toasts').innerText()).includes('단골 보너스'), '단골 보너스 토스트가 없음');
+    const v1 = await vars();
+    chk(v1.tavern.notes.baron.taste === true && v1.tavern.tasteHits === 1, '메모장 기록(taste)이 남지 않음');
+    chk(v1.gold - gold0 === r0.gold && r0.gold === 13, `보너스 팁 포함 골드 이상: +${v1.gold - gold0} (기대 ${r0.gold}, 고기스튜 10G + 팁 2 + 보너스 1 = 13?)`.replace('= 13?', ''));
+    // 다음 손님이 올 때까지 대사 진행 -> 메모 다시 열기
+    for (let i = 0; i < 50 && (await tv()).phase !== 'brew'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(40); }
+    await page.locator('#tv-notes-btn').tap(); await page.waitForTimeout(250);
+    row = await page.locator('.tv-note-row[data-who="baron"]').innerText();
+    chk(row.includes('든든한 요리') && !row.includes('???'), `바론 취향이 공개되지 않음: ${row}`);
+    chk((await page.locator('.tv-note-row').count()) >= 2, '두 번째 손님이 메모장에 없음');
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_06_memo_known.png` });
+    await page.locator('#tv-notes-close').tap(); await page.waitForTimeout(100);
+    // 쉬운 모드: 설정에서 켜면 같은 화면에 미리보기가 나온다
+    await page.locator('.tv-ing[data-id="herb"]').tap(); await page.locator('.tv-ing[data-id="milk"]').tap();
+    chk(!(await page.locator('#tv-note').innerHTML()).includes('▶'), '쉬운 모드 전인데 미리보기가 보임');
+    await page.tap('#menu-btn'); await page.tap('#menu-options'); await page.waitForTimeout(100);
+    await page.tap('#opt-easy'); await page.tap('#options-close'); await page.waitForTimeout(150);
+    note = await page.locator('#tv-note').innerHTML();
+    chk(note.includes('▶') && note.includes('허브 우유차') && note.includes('tv-tag'), `쉬운 모드인데 미리보기가 없음: ${note}`);
+    chk((await opt(page)).easy === true, '쉬운 모드 설정값 이상');
+    report.push('난이도: 미리보기 숨김(쉬운 모드 설정에서만 표시), 메뉴판 열람 유지, 메모장 비어 있음 -> ??? + 힌트 대사 -> 단골 보너스(고기 스튜 +팁/기록) -> 취향 공개, 쉬운 모드 토글');
+    await ctx.close();
+  }
+
+  // 히로인 메모 (최애 발견 / 싫어함 기록) + 모르는 히로인은 ??? 와 레시피 힌트
+  {
+    const { ctx, page } = await newPage(browser, problems, '히로인메모');
+    const chk = (cond, msg) => { if (!cond) problems.push('[히로인메모] ' + msg); };
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    await seed(page, 'd2_evening', ALLKNOWN + ' v.day = 2; v.time = "저녁"; v.tavern.notes.kaela = { met: true, first: true, hints: [], taste: false, fav: true, hate: ["herb_tea"], miss: false }; v.tavern.notes.erion = { met: true, first: true, hints: [], taste: false, fav: false, hate: [], miss: false };');
+    await toTavern(page);
+    await page.locator('#tv-shop-notes').tap(); await page.waitForTimeout(250);
+    const k = await page.locator('.tv-note-row[data-who="kaela"]').innerText(), e = await page.locator('.tv-note-row[data-who="erion"]').innerText();
+    chk(k.includes('기사단의 만찬') && k.includes('허브 우유차'), `카엘라 최애/싫어함 기록 이상: ${k}`);
+    chk(e.includes('???') && e.includes('스승님'), `에리온은 ??? + 레시피 힌트여야 함: ${e}`);
+    report.push('히로인 메모: 알아낸 최애/싫어하는 메뉴는 공개, 모르면 ??? + 레시피 힌트');
+    await ctx.close();
+  }
+
+  // ---------- (k) 특별 주문 ----------
+  {
+    const { ctx, page } = await newPage(browser, problems, '특별주문');
+    const chk = (cond, msg) => { if (!cond) problems.push('[특별주문] ' + msg); };
+    const vars = () => page.evaluate(() => JSON.parse(JSON.stringify(VN.state.vars)));
+    const tv = () => page.evaluate(() => VN.tavern);
+    await page.goto(URL); await page.waitForSelector('#btn-new');
+    // 2일차: 성공 (1접시 두 조건)
+    await seed(page, 'd2_evening', ALLKNOWN + ' v.day = 2; v.time = "저녁";');
+    await toTavern(page);
+    chk((await page.locator('#tv-shop-info').innerText()).includes('특별 주문 예고'), '장보기 화면에 특별 주문 예고가 없음');
+    let r = await page.evaluate(() => window.__drive({ stopSp: true }));
+    chk(r === 'spbrew', `특별 주문 손님에서 멈추지 못함: ${r}`);
+    let t = await tv();
+    chk(t.sp && t.sp.i === 0 && t.sp.n === 1 && t.cur === 'tobi', `특별 주문 정보 이상 ${JSON.stringify(t.sp)}`);
+    chk((await page.locator('#tv-prog').innerText()).includes('특별 1/1'), '진행 표시에 특별 주문이 안 보임');
+    chk(await page.locator('.tv-order.sp').count() === 1 && (await page.locator('#tv-order-note').innerText()).includes('빵이 들어갈 것'), '특별 주문서에 재료 조건이 안 보임');
+    chk((await page.locator('#tv-cust').innerText()).includes('특별 주문'), '손님 이름에 특별 주문 표시 없음');
+    await page.waitForTimeout(250);
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_07_special_order.png` });
+    const goldBefore = (await vars()).gold, repBefore = (await vars()).rep;
+    r = await page.evaluate(() => window.__drive({ stopSp: true }));
+    chk(r === 'summary', `결산에 도달하지 못함: ${r}`);
+    t = await tv();
+    chk(t.spResult && t.spResult.ok === true && t.spResult.gold === 10, `특별 주문 성공 판정 이상 ${JSON.stringify(t.spResult)}`);
+    const last = t.results[t.results.length - 1];
+    const vs = await vars();
+    chk(vs.gold - goldBefore === last.gold + 10, `특별 주문 골드 정산 이상: +${vs.gold - goldBefore} (요리 ${last.gold} + 보상 10)`);
+    chk(vs.tavern.spWin === 1 && vs.tavern.sp.day2 === 'win', '특별 주문 성공 기록이 남지 않음');
+    chk(last.sp === true && last.rep === 0, `특별 주문 손님은 건별 평판이 없어야 함 ${JSON.stringify(last)}`);
+    const sumText = await page.locator('#tv-sum-body').innerText();
+    chk(/특별 주문.*시식/.test(sumText) && sumText.includes('성공'), `결산에 특별 주문 결과가 없음: ${sumText}`);
+    chk(await page.locator('.tv-res.sp').count() === 1, '결산 아이콘에 특별 주문 표시가 없음');
+    await page.waitForTimeout(200);
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_08_summary_special.png` });
+    chk((await stNow(page)).shift === 0, '결산 화면 가로 스크롤');
+    // 4일차: 3인분 중 가운데 손님을 틀리게 -> 실패 (골드 페널티 없음, 평판 소폭)
+    await page.locator('#tv-sum-btn').tap();
+    await seed(page, 'd4_evening', ALLKNOWN + ' v.day = 4; v.time = "저녁"; v.rep = 5;');
+    await toTavern(page);
+    r = await page.evaluate(() => window.__drive({ stopSp: true, wrong: [1] }));
+    t = await tv();
+    chk(r === 'spbrew' && t.sp.i === 0 && t.sp.n === 3 && t.cur === 'greta', `3인분 첫 손님 이상 ${r} ${JSON.stringify(t.sp)}`);
+    chk((await page.locator('#tv-prog').innerText()).includes('특별 1/3'), '3인분 진행 표시 이상');
+    r = await page.evaluate(() => window.__drive({ stopSp: true, wrong: [1] }));
+    t = await tv();
+    chk(r === 'spbrew' && t.sp.i === 1 && t.cur === 'tobi', `3인분 두 번째 손님 이상 ${r} ${JSON.stringify(t.sp)}`);
+    await page.waitForTimeout(250);
+    await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
+    await page.screenshot({ path: `${SHOTS}/s6_09_special_party.png` });
+    const g2 = (await vars()).gold;
+    r = await page.evaluate(() => window.__drive({ stopSp: true, wrong: [1] }));
+    chk(r === 'spbrew', `3인분 세 번째 손님 이상 ${r}`);
+    const gBeforeLast = (await vars()).gold;
+    r = await page.evaluate(() => window.__drive({ stopSp: true, wrong: [1] }));
+    chk(r === 'summary', `4일차 결산 도달 실패: ${r}`);
+    t = await tv();
+    const sp4 = t.results.filter((x) => x.sp);
+    chk(sp4.length === 3 && sp4[0].result === 'perfect' && sp4[1].result !== 'perfect' && sp4[2].result === 'perfect', `3인분 결과 이상 ${JSON.stringify(sp4.map((x) => x.result))}`);
+    chk(t.spResult && t.spResult.ok === false && t.spResult.pass === 2 && t.spResult.gold === 0, `3인분 실패 판정 이상 ${JSON.stringify(t.spResult)}`);
+    const v4 = await vars();
+    chk(v4.gold >= gBeforeLast && v4.tavern.spLose === 1 && v4.tavern.sp.day4 === 'lose', `실패 시 골드 페널티가 없어야 함: ${gBeforeLast} -> ${v4.gold}`);
+    chk(t.repSum >= -3 && t.repSum <= 2, `평판 하루 한계 이탈 ${t.repSum}`);
+    const sum4 = await page.locator('#tv-sum-body').innerText();
+    chk(sum4.includes('모험가 파티') && sum4.includes('실패'), `실패 결산 표시 이상: ${sum4}`);
+    // 3인분 전부 성공
+    await page.locator('#tv-sum-btn').tap();
+    await seed(page, 'd4_evening', ALLKNOWN + ' v.day = 4; v.time = "저녁";');
+    await toTavern(page);
+    r = await page.evaluate(() => window.__drive({}));
+    t = await tv();
+    chk(r === 'summary' && t.spResult && t.spResult.ok === true && t.spResult.pass === 3 && t.spResult.gold === 22, `3인분 성공 판정 이상 ${r} ${JSON.stringify(t.spResult)}`);
+    // 저장: 영업 중 상태는 영업 시작 시점. 특별 주문 결과는 영업 종료 후 저장에 남는다
+    await page.locator('#tv-sum-btn').tap(); await page.waitForTimeout(300);
+    const v5 = await vars();
+    chk(v5.tavern.spWin === 1 && v5.tavern.days.day4.special === 'win', '결산 확정 뒤 특별 주문 기록(days.day4.special) 없음');
+    report.push('특별 주문: 2일차 성공(요리+보상 정산, 건별 평판 0), 4일차 3인분 실패(가운데 손님 틀림: 골드 페널티 없음, 평판 하루 한계 안) / 전부 성공(+22G), 장보기 예고/진행 표시/결산 행 확인');
+    await ctx.close();
+  }
+
   await browser.close();
   console.log('\n--- 요약 ---');
   report.forEach((r) => console.log(r));
   console.log(`소요 ${((Date.now() - t0) / 1000).toFixed(0)}초, 스크린샷 폴더 ${SHOTS}`);
   problems.forEach((p) => console.log('문제:', p));
-  console.log(problems.length ? `실패: 문제 ${problems.length}건` : `통과: 총 ${results.length + 9}회 플레이/시나리오, 콘솔 error/warning 0건`);
+  console.log(problems.length ? `실패: 문제 ${problems.length}건` : `통과: 총 ${results.length + 15}회 플레이/시나리오, 콘솔 error/warning 0건`);
   process.exit(problems.length ? 1 : 0);
 }
 main().catch((e) => { console.error(e); process.exit(2); });

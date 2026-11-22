@@ -6,6 +6,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 아침 =================
   d5_open: [
+    { bgm: 'tension' },
     { day: 5, time: '아침', tip: '마지막 날이에요.\n낮에 함께 동굴로 갈 사람을 고르고, 저녁에 결전을 치릅니다.' },
     { bg: 'inn_front' }, { hide: 'all' },
     { fx: 'shake' },
@@ -112,6 +113,7 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 출정 전 마지막 영업 =================
   // 저녁 영업(story/tavern.js 의 day5) -> 동굴 결전
   d5_tavern: [
+    { bgm: 'tavern' },
     { talkoffer: true },   // 자유 대화 제안 (PC 서버 + 로컬 LLM 일 때만)
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '출발 시각이 가까워졌다. 하지만 식당에는 대피한 마을 사람들이, 그리고 마지막 한 잔을 청하는 동료들이 모여 있다.' },
@@ -122,6 +124,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 결전: 동굴 =================
   d5_evening: [
+    { bgm: 'tension' },
     { time: '황혼' }, { bg: 'cave_front' }, { hide: 'all' },
     { narr: '해 질 녘. 동굴 입구에서 푸른 빛이 하늘로 솟구쳐 노을을 물들였다. 마을 청년단은 멀찍이서 횃불을 들고 우리를 지켜보고 있다.' },
     { show: 'kaela', face: 'normal', pos: 'left' },
@@ -131,7 +134,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', text: '…문이 열린다. 간다.' },
     { fx: 'shake' },
     { narr: '동굴 안쪽에서 쿠르릉, 하고 거대한 바위가 굴러가는 소리가 났다. 푸른 빛이 눈부시게 터졌다. 우리는 동굴 속으로 뛰어들었다.' },
-    { hide: 'all' }, { bg: 'cave_inside' },
+    { hide: 'all' }, { bgm: 'cave' }, { bg: 'cave_inside' },
     { narr: '동굴 깊숙한 곳. 푸른 수정이 사방에서 빛나는 널찍한 공동. 한가운데에 거대한 검은 그림자가 일어서고 있다. 갑옷 같은 형상에 붉은 눈 두 개.' },
     { show: 'kaela', face: 'surprised', pos: 'left' },
     { show: 'erion', face: 'normal', pos: 'center' },
@@ -169,7 +172,7 @@ Object.assign(STORY.scenes, {
   d5_s1_lia: [
     { show: 'lia', face: 'normal' },
     { say: 'lia', text: '신이시여, 이 자리에 선 모든 이에게 빛의 가호를!' },
-    { fx: 'flash' },
+    { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '금빛 빛무리가 동료들을 감쌌다. 몸이 가벼워지고 두려움이 걷혔다. 리아의 손끝에서 따뜻한 빛이 쉼 없이 흘러나오고 있었다.' },
     { goto: 'd5_stage2' }
   ],
@@ -278,14 +281,15 @@ Object.assign(STORY.scenes, {
   d5_win_lia: [
     { show: 'lia', face: 'normal', pos: 'center' },
     { say: 'lia', text: '맡겨 줘! 신이시여, 이 책에 제 모든 가호를!' },
-    { fx: 'flash' },
+    { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '리아의 손끝에서 금빛 빛이 퍼져 책과 하나가 되었다. 푸른 빛과 금빛이 뒤섞이며 문양이 한층 단단해졌다.' },
     { show: 'erion', face: 'surprised', pos: 'left' },
     { say: 'erion', text: '…이 따뜻함은. 이름 대신 바칠 필요가 없어졌어.' },
     { goto: 'd5_win' }
   ],
   d5_win: [
-    { fx: 'flash' },
+    { bgm: 'inn_day' },
+    { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '푸른 빛과 금빛이 폭발하듯 동굴을 가득 채웠다. 문지기의 거대한 몸이 빛 속에서 서서히 부서지며 먼지처럼 흩어졌다.' },
     { narr: '쿠르릉— 마지막 진동이 지나가고, 균열이 아물었다. 봉인의 문양이 푸른 수정 위에 선명하게 새겨졌다. 동굴이 고요해졌다.' },
     { hide: 'all' },

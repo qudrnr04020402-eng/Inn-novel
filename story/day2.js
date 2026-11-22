@@ -6,6 +6,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 아침 =================
   d2_open: [
+    { bgm: 'inn_day' },
     { day: 2, time: '아침', tip: '호감도가 높아지면\n밤에 몰래 찾아오는 사람이 생길지도 몰라요.' },
     { bg: 'inn_day' }, { hide: 'all' },
     { narr: '어젯밤의 진동은 마을 전체를 술렁이게 했다. 식당은 아침부터 사람들로 북적인다. 손님 셋은 이미 자리에 앉아 있다.' },
@@ -235,6 +236,7 @@ Object.assign(STORY.scenes, {
   // ================= 저녁: 영업 -> 지하 저장고 =================
   // 저녁 영업(story/tavern.js 의 day2) 뒤, 영업을 정리하던 중 저장고에서 소리가 난다
   d2_evening: [
+    { bgm: 'tavern' },
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '어젯밤 진동의 여파로 저녁 식당은 평소보다 더 시끌벅적하다. 소문을 들으러 온 사람들, 겁먹은 손님들, 그리고 어쩐지 낯익은 얼굴들.' },
     { narr: '그래도 장사는 해야 한다. 앞치마를 두르고 카운터 앞에 섰다.' },
@@ -242,6 +244,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd2_ev_cellar' }
   ],
   d2_ev_cellar: [
+    { bgm: 'tension' },
     { bg: 'inn_evening' }, { hide: 'all' },
     { narr: '마지막 손님을 보내고 가게를 정리하던 때였다. 부엌에서 접시를 닦던 리아가 하얗게 질린 얼굴로 뛰쳐나왔다.' },
     { show: 'lia', face: 'surprised', pos: 'center' },
@@ -291,7 +294,7 @@ Object.assign(STORY.scenes, {
   d2_ev_lia: [
     { show: 'lia', face: 'normal' },
     { say: 'lia', text: '알았어! 모두 눈 감아! …빛이여, 어둠을 물리쳐 주세요!' },
-    { fx: 'flash' },
+    { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '눈부신 빛이 저장고를 가득 채웠다. 그림자들은 비명 같은 소리를 지르며 연기처럼 흩어졌다. 리아의 목소리가 이렇게 단단하게 울리는 건 처음 들었다.' },
     { show: 'lia', face: 'shy' },
     { say: 'lia', text: '…어, 되, 됐어? 나 해낸 거야? 다리가 후들거려…' },
@@ -344,6 +347,7 @@ Object.assign(STORY.scenes, {
 
   // ================= 밤 =================
   d2_night: [
+    { bgm: 'inn_night' },
     { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
     { narr: '길고 긴 하루가 끝났다. 방 불을 끄려는데, 누군가 조용히 문을 두드렸다.' },
     { if: WIN('erion', 5), goto: 'd2_night_erion' },
@@ -358,6 +362,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd2_upgrade' }
   ],
   d2_night_erion: [
+    { bgm: 'romance' },
     { show: 'erion', face: 'shy', pos: 'center' },
     { say: 'erion', text: '…찻잔 돌려주러 왔어. 그뿐이야. 늦은 시간인 건 알아.' },
     { narr: '손에는 깨끗이 씻은 찻잔이 들려 있었다. 그런데 어쩐지 돌아갈 생각이 없어 보인다.' },
@@ -367,6 +372,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd2_upgrade' }
   ],
   d2_night_kaela: [
+    { bgm: 'romance' },
     { show: 'kaela', face: 'shy', pos: 'center' },
     { say: 'kaela', text: '자, 자고 있었나, 주인장? 아니, 그, 영웅은 원래 밤에 수련하는 법이라…' },
     { say: 'kaela', face: 'sad', text: '…솔직히 말하면, 아까 저장고에서 조금 무서웠다. 영웅이 무서워하면 안 되는데. 잠이 안 와서 와 봤다.' },
@@ -376,6 +382,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd2_upgrade' }
   ],
   d2_night_miho: [
+    { bgm: 'romance' },
     { show: 'miho', face: 'smile', pos: 'center' },
     { say: 'miho', text: '사장님~ 자요? 안 자죠? 불 켜져 있던데요.' },
     { narr: '미호가 문틈으로 얼굴만 쏙 내밀었다. 손에는 작은 주머니가 들려 있다.' },
@@ -385,6 +392,7 @@ Object.assign(STORY.scenes, {
     { goto: 'd2_upgrade' }
   ],
   d2_night_lia: [
+    { bgm: 'romance' },
     { show: 'lia', face: 'smile', pos: 'center' },
     { say: 'lia', text: '아직 안 자지? 따뜻한 우유 가져왔어. 오늘 많이 놀랐으니까 푹 자야 해.' },
     { narr: '리아는 잠옷 위에 숄을 걸친 채 쟁반을 들고 서 있었다. 어릴 때처럼 맨발로 올라온 모양이다.' },

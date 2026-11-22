@@ -31,7 +31,10 @@
           <button id="btn-continue" class="btn" type="button">이어하기</button>
           <button id="btn-title-load" class="btn" type="button">불러오기</button>
         </div>
-        <button id="btn-endings" class="btn" type="button">엔딩 목록</button>
+        <div class="btn-row title-last">
+          <button id="btn-endings" class="btn" type="button">엔딩 목록</button>
+          <button id="btn-options" class="btn" type="button">설정</button>
+        </div>
       </div>
     </div>
   </section>
@@ -58,6 +61,10 @@
       <div id="nametag"></div>
       <div id="text"></div>
       <div id="next-mark">▼</div>
+      <div id="fast-btns">
+        <button id="btn-auto" class="fast-btn" type="button" aria-pressed="false">오토</button>
+        <button id="btn-skip" class="fast-btn" type="button" aria-pressed="false">스킵</button>
+      </div>
     </div>
 
     <!-- 자유 대화(로컬 LLM): PC 서버에서 열었을 때만 사용됨 -->
@@ -78,6 +85,8 @@
         <div class="tv-order">
           <div class="tv-order-head"><b id="tv-cust"></b><button id="tv-skip" type="button" class="tv-mini">정중히 거절</button></div>
           <p id="tv-order-text"></p>
+          <p id="tv-order-note" class="hidden"></p>
+          <p id="tv-order-taste" class="hidden"></p>
         </div>
         <div id="tv-slots"></div>
         <p id="tv-note"></p>
@@ -85,6 +94,7 @@
         <div class="tv-actions">
           <button id="tv-clear" class="btn" type="button">비우기</button>
           <button id="tv-board" class="btn" type="button">메뉴판</button>
+          <button id="tv-notes-btn" class="btn" type="button">손님 메모</button>
           <button id="tv-serve" class="btn primary" type="button">내기</button>
         </div>
       </div>
@@ -95,6 +105,7 @@
         <div id="tv-shop-list"></div>
         <div class="tv-actions">
           <button id="tv-shop-board" class="btn" type="button">메뉴판</button>
+          <button id="tv-shop-notes" class="btn" type="button">손님 메모</button>
           <button id="tv-shop-start" class="btn primary" type="button">영업 시작</button>
         </div>
       </div>
@@ -118,6 +129,13 @@
         <div id="tv-board-tags"></div>
         <div id="tv-board-list"></div>
         <div class="tv-actions"><button id="tv-board-close" class="btn primary" type="button">닫기</button></div>
+      </div>
+      <!-- 손님 메모장 -->
+      <div id="tv-notes" class="tv-full hidden">
+        <div class="tv-head"><h2>손님 메모장</h2><span id="tv-notes-count" class="tv-count"></span></div>
+        <p class="tv-info">만난 손님과 알아낸 취향을 적어 둡니다. 주문을 맞히면서 취향까지 맞추면 단골 보너스! 모르는 취향은 손님이 흘린 말을 단서로 짐작해 보세요.</p>
+        <div id="tv-notes-list"></div>
+        <div class="tv-actions"><button id="tv-notes-close" class="btn primary" type="button">닫기</button></div>
       </div>
       <!-- 레시피 발견 -->
       <div id="tv-found" class="tv-full tv-pop hidden">
@@ -184,10 +202,32 @@
       <button id="menu-save" class="btn" type="button">저장하기</button>
       <button id="menu-load" class="btn" type="button">불러오기</button>
       <button id="menu-log" class="btn" type="button">백로그 (지난 대사)</button>
+      <button id="menu-options" class="btn" type="button">설정</button>
       <button id="menu-chat" class="btn off" type="button">자유 대화<small>PC 서버에서 실행할 때만 사용 가능</small></button>
       <button id="menu-restart" class="btn" type="button">처음부터</button>
       <button id="menu-title" class="btn" type="button">타이틀로</button>
       <button id="menu-close" class="btn primary" type="button">닫기</button>
+    </div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="options" class="overlay hidden">
+    <div class="panel tall">
+      <h2>설정</h2>
+      <div id="options-body">
+        <label class="opt-row"><span class="opt-name">글자 속도</span><b id="opt-text-v" class="opt-val"></b>
+          <input id="opt-text" type="range" min="1" max="5" step="1"></label>
+        <label class="opt-row"><span class="opt-name">오토 속도</span><b id="opt-auto-v" class="opt-val"></b>
+          <input id="opt-auto" type="range" min="1" max="5" step="1"></label>
+        <label class="opt-row"><span class="opt-name">BGM 볼륨</span><b id="opt-bgm-v" class="opt-val"></b>
+          <input id="opt-bgm" type="range" min="0" max="100" step="5"></label>
+        <label class="opt-row"><span class="opt-name">효과음 볼륨</span><b id="opt-sfx-v" class="opt-val"></b>
+          <input id="opt-sfx" type="range" min="0" max="100" step="5"></label>
+        <button id="opt-mute" class="opt-toggle" type="button" aria-pressed="false"><span>전체 음소거<small>BGM과 효과음을 모두 끕니다</small></span><b class="opt-state"></b></button>
+        <button id="opt-unread" class="opt-toggle" type="button" aria-pressed="false"><span>안 읽은 대사도 스킵<small>꺼두면 처음 보는 대사에서 스킵이 멈춥니다</small></span><b class="opt-state"></b></button>
+        <button id="opt-easy" class="opt-toggle" type="button" aria-pressed="false"><span>쉬운 모드 (미리보기 표시)<small>영업에서 재료를 고르면 완성될 요리 이름과 속성을 보여 줍니다</small></span><b class="opt-state"></b></button>
+      </div>
+      <button id="options-close" class="btn primary" type="button">닫기</button>
     </div>
   </section>
 
@@ -235,6 +275,7 @@
 <!-- 스토리 데이터 -> 엔진 순서로 로드 (fetch 를 쓰지 않아 file:// 에서도 동작) -->
 <script src="story/characters.js"></script>
 <script src="story/backgrounds.js"></script>
+<script src="story/audio.js"></script>
 <script src="story/common.js"></script>
 <script src="story/tavern.js"></script>
 <script src="story/day1.js"></script>
@@ -245,6 +286,8 @@
 <script src="story/endings.js"></script>
 <script src="story/llm-persona.js"></script>
 <script src="js/llm-core.js"></script>
+<script src="js/sfx.js"></script>
+<script src="js/bgm.js"></script>
 <script src="js/tavern-core.js"></script>
 <script src="js/engine.js"></script>
 </body>
