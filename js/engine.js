@@ -1238,7 +1238,7 @@
       id: dayId, def: def, ret: { scene: S.scene, pc: S.pc },
       queue: TavernCore.queue(TAVERN, dayId, S.vars, evalCond), idx: -1, cur: null,
       results: [], sold: 0, tips: 0, spent: 0, repSum: 0, sel: [], phase: 'shop', note: '', startGold: tvGold(), startRep: S.vars.rep || 0,
-      spGold: 0, spResult: null, tasteHits: 0, reward: null, free: !!def.free, bought: {}
+      spGold: 0, spResult: null, tasteHits: 0, reward: null, free: !!def.free, bought: {}, cart: {}
     };
     if (def.bg) { S.bg = def.bg; renderBg(def.bg, true); }
     POS.forEach(function (p) { S.sprites[p] = null; });
@@ -1276,56 +1276,116 @@
     var lb = S.vars.tavern.lastBuy || {}, lbN = Object.keys(lb).reduce(function (a, k) { return a + (lb[k] || 0); }, 0);
     TVE.shopLast.disabled = !lbN; TVE.shopLast.title = lbN ? '지난 장보기: ' + Object.keys(lb).map(function (k) { return TAVERN.ingredients[k].name + '×' + lb[k]; }).join(', ') : '지난 장보기 기록이 없어요';
     TVE.shopList.innerHTML = '';
+    cartClamp();
     Object.keys(TAVERN.ingredients).forEach(function (id) {
-      var g = TAVERN.ingredients[id], pr = TavernCore.price(TAVERN, S.vars, id);
+      var g = TAVERN.ingredients[id], pr = TavernCore.price(TAVERN, S.vars, id), q = TV.cart[id] || 0, have = shopRefundable(id);
       var row = tvEl('div', 'tv-row');
       row.dataset.id = id;
       row.appendChild(tvIcon(id, 'tv-icon'));
-      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + '</b><small>' + (pr !== g.price ? '<s>' + g.price + '</s> <em class="tv-sale' + (pr > g.price ? ' up' : '') + '">' + pr + 'G</em>' : pr + 'G') + ' · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span></small>');
+      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + '</b><small>' + (pr !== g.price ? '<s>' + g.price + '</s> <em class="tv-sale' + (pr > g.price ? ' up' : '') + '">' + pr + 'G</em>' : pr + 'G') + ' · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span>' + (have ? ' · <span class="tv-have">오늘 산 물건 ' + have + '</span>' : '') + '</small>');
       row.appendChild(mid);
-      [1, 3].forEach(function (n) {
-        var b = tvEl('button', 'tv-buy', '+' + n + '<small>' + (pr * n) + 'G</small>');
-        b.type = 'button'; b.dataset.n = n;
-        if (tvGold() < pr * n) b.disabled = true;
-        b.addEventListener('click', function () { buyIng(id, n); });
-        row.appendChild(b);
-      });
+      row.appendChild(stepper(q, q > -have, tvGold() - cartNet() >= pr,
+        function () { shopStep(id, -1); }, function () { shopStep(id, 1); }));
       TVE.shopList.appendChild(row);
     });
+    // 합계 / 구매 후 잔액
+    var net = cartNet(), after = tvGold() - net, empty = !cartCount();
+    TVE.shopSum.innerHTML = empty ? '장바구니가 비었어요. 구매 후 잔액 <b>' + after + ' G</b>'
+      : (net > 0 ? '결제 <b class="minus">-' + net + ' G</b>' : net < 0 ? '환불 <b class="plus">+' + (-net) + ' G</b>' : '변동 없음') + ' · 구매 후 잔액 <b>' + after + ' G</b>';
+    TVE.shopConfirm.disabled = empty; TVE.shopClear.disabled = empty;
   }
-  function buyIng(id, n) {
-    var g = TAVERN.ingredients[id], cost = TavernCore.price(TAVERN, S.vars, id) * n;
-    if (tvGold() < cost) { toast('골드가 모자라요', 'down'); return; }
-    sfx('select');
-    S.vars.gold -= cost; TV.spent += cost;
-    S.vars.tavern.stock[id] = (S.vars.tavern.stock[id] || 0) + n;
-    TV.bought[id] = (TV.bought[id] || 0) + n;
-    updateHud(); renderShop();
+  // ----- 장바구니 공용 -----
+  // [-] 수량 [+] 한 줄. q > 0 이면 담는 중(구매), q < 0 이면 반품 예약
+  function stepper(q, canMinus, canPlus, onMinus, onPlus) {
+    var w = tvEl('div', 'tv-step');
+    var m = tvEl('button', 'tv-minus', '−'); m.type = 'button'; m.setAttribute('aria-label', '빼기'); m.disabled = !canMinus;
+    var n = tvEl('span', 'tv-qty' + (q > 0 ? ' add' : q < 0 ? ' ret' : ''), q > 0 ? '+' + q : String(q)); n.title = q < 0 ? '반품' : '';
+    var p = tvEl('button', 'tv-plus', '+'); p.type = 'button'; p.setAttribute('aria-label', '더하기'); p.disabled = !canPlus;
+    m.addEventListener('click', function () { onMinus(); }); p.addEventListener('click', function () { onPlus(); });
+    w.appendChild(m); w.appendChild(n); w.appendChild(p);
+    return w;
   }
-  // 한꺼번에 사기: want = { 재료id: 개수 }. 골드가 허락하는 만큼만 (재료 정의 순서대로). 산 개수와 비용을 돌려준다.
-  function buyMany(want) {
+  function cartCount() { return Object.keys(TV.cart).reduce(function (a, k) { return a + Math.abs(TV.cart[k] || 0); }, 0); }
+  // 아직 쓰지 않은 오늘 구매분 (장보기 중에는 재고를 쓰지 않으니 오늘 산 만큼, 재고를 넘지 않게)
+  function shopRefundable(id) { return Math.max(0, Math.min(TV.bought[id] || 0, S.vars.tavern.stock[id] || 0)); }
+  // 양수 = 낼 돈, 음수 = 돌려받을 돈
+  function cartNet() {
+    return Object.keys(TV.cart).reduce(function (a, id) { return a + (TV.cart[id] || 0) * TavernCore.price(TAVERN, S.vars, id); }, 0);
+  }
+  // 골드/재고가 바뀌어도 장바구니가 불가능한 상태로 남지 않게 다듬는다
+  function cartClamp() {
+    Object.keys(TV.cart).forEach(function (id) {
+      if (!TV.cart[id]) { delete TV.cart[id]; return; }
+      if (TV.cart[id] < -shopRefundable(id)) TV.cart[id] = -shopRefundable(id);
+      if (!TV.cart[id]) delete TV.cart[id];
+    });
+  }
+  function shopStep(id, d) {
+    var pr = TavernCore.price(TAVERN, S.vars, id), q = TV.cart[id] || 0;
+    if (d > 0 && tvGold() - cartNet() < pr) { toast('골드가 모자라요', 'down'); return; }
+    if (d < 0 && q <= -shopRefundable(id)) return;
+    sfx('tap');
+    TV.cart[id] = q + d;
+    if (!TV.cart[id]) delete TV.cart[id];
+    renderShop();
+  }
+  // 장바구니에 담기만 한다 (확정은 사용자가). want = { 재료id: 개수 }, 잔액이 허락하는 만큼 (재료 정의 순서대로)
+  function cartAdd(want) {
     var n = 0, cost = 0;
     Object.keys(TAVERN.ingredients).forEach(function (id) {
+      var pr = TavernCore.price(TAVERN, S.vars, id);
       for (var k = 0; k < (want[id] || 0); k++) {
-        var pr = TavernCore.price(TAVERN, S.vars, id);
-        if (tvGold() < pr) break;
-        S.vars.gold -= pr; TV.spent += pr; cost += pr; n++;
-        S.vars.tavern.stock[id] = (S.vars.tavern.stock[id] || 0) + 1;
-        TV.bought[id] = (TV.bought[id] || 0) + 1;
+        if (tvGold() - cartNet() < pr) break;
+        TV.cart[id] = (TV.cart[id] || 0) + 1; n++; cost += pr;
       }
+      if (!TV.cart[id]) delete TV.cart[id];
     });
-    updateHud(); renderShop();
+    renderShop();
     return { n: n, cost: cost };
   }
-  function buyLast() {   // "지난번처럼 사기"
-    var lb = S.vars.tavern.lastBuy || {};
-    var r = buyMany(lb);
-    if (r.n) { sfx('coin'); toast('지난번처럼 ' + r.n + '개 구입 (-' + r.cost + 'G)', 'up'); } else toast('살 수 있는 게 없어요', 'down');
+  function shopClear() { if (!cartCount()) return; sfx('tap'); TV.cart = {}; renderShop(); }
+  // 구매 확정: 이때 비로소 골드 차감·재고 반영 (반품은 전액 환불)
+  function shopConfirm() {
+    cartClamp();
+    var net = cartNet();
+    if (!cartCount()) return;
+    if (net > tvGold()) { toast('골드가 모자라요', 'down'); renderShop(); return; }
+    var buyN = 0, retN = 0;
+    Object.keys(TV.cart).forEach(function (id) {
+      var q = TV.cart[id], pr = TavernCore.price(TAVERN, S.vars, id), t = S.vars.tavern;
+      t.stock[id] = (t.stock[id] || 0) + q;
+      if (!t.stock[id]) delete t.stock[id];
+      TV.bought[id] = (TV.bought[id] || 0) + q;
+      if (!TV.bought[id]) delete TV.bought[id];
+      TV.spent += q * pr;
+      if (q > 0) buyN += q; else retN -= q;
+    });
+    S.vars.gold -= net;
+    TV.cart = {};
+    sfx('coin');
+    toast((buyN ? '구매 ' + buyN + '개' : '') + (buyN && retN ? ' · ' : '') + (retN ? '반품 ' + retN + '개' : '') + ' 확정 (' + (net > 0 ? '-' : '+') + Math.abs(net) + 'G)', net > 0 ? 'down' : 'up');
+    updateHud(); renderShop();
   }
-  function buySuggest() {   // "추천 구매": 오늘 손님 주문을 아는 레시피로 맞추는 데 모자라는 재료만
-    var plan = TavernCore.suggestBuy(TAVERN, S.vars, TV.queue, tvGold(), function (id) { return TavernCore.price(TAVERN, S.vars, id); });
-    var r = buyMany(plan.buy);
-    if (r.n) { sfx('coin'); toast('추천 구매 ' + r.n + '개 (-' + r.cost + 'G)', 'up'); } else toast(plan.cost ? '골드가 모자라요' : '이미 재료가 충분해요', plan.cost ? 'down' : 'up');
+  function buyLast() {   // "지난번처럼 사기": 담기만 한다
+    var r = cartAdd(S.vars.tavern.lastBuy || {});
+    if (r.n) { sfx('coin'); toast('지난번처럼 ' + r.n + '개 담았어요 (' + r.cost + 'G) · 구매 확정을 눌러 주세요', 'up'); } else toast('담을 수 있는 게 없어요', 'down');
+  }
+  function buySuggest() {   // "추천 구매": 오늘 손님 주문을 아는 레시피로 맞추는 데 모자라는 재료만 (이미 담은 것은 재고로 친다)
+    var stock = Object.assign({}, S.vars.tavern.stock);
+    Object.keys(TV.cart).forEach(function (id) { if (TV.cart[id] > 0) stock[id] = (stock[id] || 0) + TV.cart[id]; });
+    var fake = Object.assign({}, S.vars, { tavern: Object.assign({}, S.vars.tavern, { stock: stock }) });
+    var plan = TavernCore.suggestBuy(TAVERN, fake, TV.queue, tvGold() - cartNet(), function (id) { return TavernCore.price(TAVERN, S.vars, id); });
+    var r = cartAdd(plan.buy);
+    if (r.n) { sfx('coin'); toast('추천 ' + r.n + '개 담았어요 (' + r.cost + 'G) · 구매 확정을 눌러 주세요', 'up'); } else toast(plan.cost ? '골드가 모자라요' : '이미 재료가 충분해요', plan.cost ? 'down' : 'up');
+  }
+  // 영업 시작: 장바구니에 담긴 게 있으면 사지 않고 나가는지 한 번 확인
+  function shopStart() {
+    var go = function () {
+      TV.cart = {};
+      if (TV && Object.keys(TV.bought).length) S.vars.tavern.lastBuy = Object.assign({}, TV.bought);   // 다음 "지난번처럼 사기"용
+      TVE.shop.classList.add('hidden'); tvNextCustomer();
+    };
+    if (cartCount()) ask('담은 물건을 사지 않고 나갈까요?', go); else go();
   }
 
   // ----- 손님 한 명 -----
@@ -1710,7 +1770,10 @@
     return TAVERN.upgrades.some(function (u) { return !have[u.id] && g >= u.price; }) ||
       LODGING.upgrades.some(function (u) { return InnCore.buyRoomUpg(S.vars, u) === 'ok'; });
   }
+  // 이 밤 화면에서 산 것 (화면을 떠나기 전까지 취소 가능): { tav:{id:{learned:[새로 배운 레시피]}}, room:{id:true} }
+  var UPB = { tav: {}, room: {} };
   function openUpgrades() {
+    UPB = { tav: {}, room: {} };
     stopFast();
     TavernCore.ensure(TAVERN, S.vars);
     if (OPT.autoSkipUpg && !anyBuyable()) {   // 설정: 살 게 없으면 손보기 화면을 건너뛴다
@@ -1735,10 +1798,11 @@
       var card = tvEl('div', 'tv-upg-card' + (owned ? ' owned' : ''));
       card.dataset.id = u.id;
       card.appendChild(tvEl('div', 'tv-upg-tx', '<b>' + u.name + '</b><span>' + u.desc + '</span>'));
-      var b = tvEl('button', 'tv-upg-buy', owned ? '구입 완료' : u.price + 'G');
+      var undo = owned && !!UPB.tav[u.id];
+      var b = tvEl('button', 'tv-upg-buy' + (undo ? ' cancel' : ''), undo ? '취소<small>+' + u.price + 'G</small>' : owned ? '구입 완료' : u.price + 'G');
       b.type = 'button';
-      if (owned || tvGold() < u.price) b.disabled = true;
-      b.addEventListener('click', function () { buyUpgrade(u); });
+      if ((owned && !undo) || (!owned && tvGold() < u.price)) b.disabled = true;
+      b.addEventListener('click', function () { if (undo) cancelUpgrade(u); else buyUpgrade(u); });
       card.appendChild(b);
       TVE.upgList.appendChild(card);
     });
@@ -1750,10 +1814,11 @@
       var card = tvEl('div', 'tv-upg-card room' + (owned ? ' owned' : ''));
       card.dataset.id = u.id;
       card.appendChild(tvEl('div', 'tv-upg-tx', '<b>' + u.name + '</b><span>' + u.desc + '</span>'));
-      var b = tvEl('button', 'tv-upg-buy', owned ? '개조 완료' : (st === 'rank' ? '★' + u.needRank + ' 필요' : u.price + 'G'));
+      var undoR = owned && !!UPB.room[u.id];
+      var b = tvEl('button', 'tv-upg-buy' + (undoR ? ' cancel' : ''), undoR ? '취소<small>+' + u.price + 'G</small>' : owned ? '개조 완료' : (st === 'rank' ? '★' + u.needRank + ' 필요' : u.price + 'G'));
       b.type = 'button';
-      if (st !== 'ok') b.disabled = true;
-      b.addEventListener('click', function () { buyRoomUpg(u); });
+      if ((owned && !undoR) || (!owned && st !== 'ok')) b.disabled = true;
+      b.addEventListener('click', function () { if (undoR) cancelRoomUpg(u); else buyRoomUpg(u); });
       card.appendChild(b);
       TVE.upgList.appendChild(card);
     });
@@ -1762,17 +1827,51 @@
     if (InnCore.buyRoomUpg(S.vars, u) !== 'ok') return;
     S.vars.gold -= u.price;
     S.vars.lodge.upg[u.id] = true;
+    UPB.room[u.id] = true;
     sfx('coin');
     toast('개조: ' + u.name, 'up');
     updateHud();
     takeSnap('객실 개조');
     renderUpgrades();
   }
+  // 객실 개조 취소: 전액 환불
+  function cancelRoomUpg(u) {
+    if (!S.vars.lodge.upg[u.id] || !UPB.room[u.id]) return;
+    S.vars.gold += u.price;
+    delete S.vars.lodge.upg[u.id]; delete UPB.room[u.id];
+    sfx('tap');
+    toast('개조 취소: ' + u.name + ' (+' + u.price + 'G)', 'up');
+    updateHud();
+    takeSnap('객실 개조 취소');
+    renderUpgrades();
+  }
+  // 업그레이드 취소: 전액 환불, 이 구매로 새로 해금된 레시피도 되돌린다
+  function cancelUpgrade(u) {
+    var rec = UPB.tav[u.id];
+    if (!S.vars.tavern.upg[u.id] || !rec) return;
+    S.vars.gold += u.price;
+    delete S.vars.tavern.upg[u.id];
+    var book = readRec('recipes'), ch = false;
+    rec.learned.forEach(function (id) {
+      delete S.vars.tavern.known[id];
+      if (rec.recNew.indexOf(id) >= 0 && book[id]) { delete book[id]; ch = true; }   // 수집 기록도 되돌림 (이 구매로 처음 기록된 것만)
+    });
+    if (ch) store.set('recipes', JSON.stringify(book));
+    delete UPB.tav[u.id];
+    sfx('tap');
+    toast('구입 취소: ' + u.name + ' (+' + u.price + 'G)', 'up');
+    updateHud();
+    takeSnap('여관 업그레이드 취소');
+    renderUpgrades();
+  }
   function buyUpgrade(u) {
     if (S.vars.tavern.upg[u.id] || tvGold() < u.price) return;
     S.vars.gold -= u.price;
     S.vars.tavern.upg[u.id] = true;
+    var before = Object.assign({}, S.vars.tavern.known), recBefore = readRec('recipes');
     if (u.learn) learnRecipes(u.learn);
+    var fresh = (u.learn || []).filter(function (id) { return !before[id] && S.vars.tavern.known[id]; });
+    UPB.tav[u.id] = { learned: fresh, recNew: fresh.filter(function (id) { return !recBefore[id]; }) };
     sfx('coin');
     toast('구입: ' + u.name, 'up');
     updateHud();
@@ -1943,7 +2042,7 @@
   }
 
   // ---------- 선물 (장터 / 선물 주기 / 반응) ----------
-  var GF = { tab: 'give', target: '', fixed: false, cont: null, shopOk: false, stage: 'list' };
+  var GF = { tab: 'give', target: '', fixed: false, cont: null, shopOk: false, stage: 'list', cart: {} };   // cart: 장터 장바구니 { 선물id: 수량(음수=반품) } (저장하지 않음)
   function pickTools() {   // 낮 선택 화면 아래의 작은 도구 버튼 (선택지 버튼과 class 가 달라서 선택지 번호에 섞이지 않는다)
     var w = document.createElement('div');
     w.className = 'pick-tools';
@@ -1961,13 +2060,15 @@
     stopFast();
     GF.shopOk = (mode === 'choice' && curPick) || (mode === 'choice' && !!(curOpts || []).length && !!E.choices.querySelector('.pick-tools'));
     GF.tab = (tab === 'shop' && GF.shopOk) ? 'shop' : 'give';
-    GF.target = target || ''; GF.fixed = !!target; GF.cont = cont || null; GF.stage = 'list';
+    GF.target = target || ''; GF.fixed = !!target; GF.cont = cont || null; GF.stage = 'list'; GF.cart = {};
     if (!GF.target && GF.tab === 'give') GF.target = HEROINES.filter(function (h) { return InnCore.canGive(S.vars, h); })[0] || HEROINES[0];
     E.giftReact.classList.add('hidden');
     renderGift();
     openOverlay(E.gift);
   }
+  // 닫기: 장바구니에 담긴 게 있으면 사지 않고 나갈지 한 번 묻고, 나가면 장바구니는 버린다
   function giftClose() {
+    if (giftCartCount()) { ask('담은 물건을 사지 않고 나갈까요?', function () { GF.cart = {}; giftClose(); }); return; }
     closeOverlay(E.gift);
     if (mode === 'choice' && !snapLocked) takeSnap('선택지');   // 산/준 결과가 불러오기에 남도록 다시 저장
     var c = GF.cont; GF.cont = null;
@@ -2003,28 +2104,74 @@
     } else {
       E.giftInfo.textContent = '장터에서 선물을 살 수 있어요. 누가 뭘 좋아할지는 반응을 보고 알아내 보세요.';
     }
-    var ids = Object.keys(GIFTS.items).filter(function (id) { return GF.tab === 'shop' || (G.inv[id] > 0); });
+    var shop = GF.tab === 'shop';
+    giftCartClamp();
+    E.giftCart.classList.toggle('hidden', !shop);
+    var ids = Object.keys(GIFTS.items).filter(function (id) { return shop || (G.inv[id] > 0); });
     if (!ids.length) E.giftList.appendChild(tvEl('p', 'tv-info', GF.tab === 'give' ? '보관함이 비었어요. 낮에 "장터에서 선물 사기"로 살 수 있어요.' : ''));
     ids.forEach(function (id) {
       var d = GIFTS.items[id], row = tvEl('div', 'tv-row gift-row'); row.dataset.id = id;
       var ic = document.createElement('img'); ic.alt = ''; ic.className = 'tv-icon'; ic.src = d.icon; row.appendChild(ic);
       var known = GF.tab === 'give' && G.known[GF.target] && G.known[GF.target][id];
       var mid = tvEl('div', 'tv-row-mid');
+      var have = shop ? InnCore.giftRefundable(V, id) : 0;
       var nm = tvEl('b', null, ''); nm.textContent = d.name + (G.inv[id] ? ' ×' + G.inv[id] : '');
-      var sm = tvEl('small', null, ''); sm.textContent = (GF.tab === 'shop' ? d.price + 'G · ' : '') + d.desc + ' ' + (GF.tab === 'give' ? (known ? '[' + tierMark(known) + ']' : '') : d.hint);
+      var sm = tvEl('small', null, ''); sm.textContent = (shop ? d.price + 'G · ' : '') + d.desc + ' ' + (GF.tab === 'give' ? (known ? '[' + tierMark(known) + ']' : '') : d.hint) + (have ? ' · 오늘 산 선물 ' + have + '개 (반품 가능)' : '');
       mid.appendChild(nm); mid.appendChild(sm); row.appendChild(mid);
-      var btn = tvEl('button', 'tv-buy gift-btn', GF.tab === 'shop' ? d.price + 'G<small>사기</small>' : '주기');
-      btn.type = 'button';
-      if (GF.tab === 'shop') { if ((V.gold || 0) < d.price) btn.disabled = true; btn.addEventListener('click', function () { giftBuy(id); }); }
-      else { if (!InnCore.canGive(V, GF.target)) btn.disabled = true; btn.addEventListener('click', function () { giftGive(id); }); }
-      row.appendChild(btn);
+      if (shop) {
+        var q = GF.cart[id] || 0;
+        row.appendChild(stepper(q, q > -have, (V.gold || 0) - giftCartNet() >= d.price, function () { giftStep(id, -1); }, function () { giftStep(id, 1); }));
+      } else {
+        var btn = tvEl('button', 'tv-buy gift-btn', '주기');
+        btn.type = 'button';
+        if (!InnCore.canGive(V, GF.target)) btn.disabled = true;
+        btn.addEventListener('click', function () { giftGive(id); });
+        row.appendChild(btn);
+      }
       E.giftList.appendChild(row);
     });
+    if (shop) {
+      var net = giftCartNet(), after = (V.gold || 0) - net, empty = !giftCartCount();
+      E.giftSum.innerHTML = empty ? '장바구니가 비었어요. 구매 후 잔액 <b>' + after + ' G</b>'
+        : (net > 0 ? '결제 <b class="minus">-' + net + ' G</b>' : net < 0 ? '환불 <b class="plus">+' + (-net) + ' G</b>' : '변동 없음') + ' · 구매 후 잔액 <b>' + after + ' G</b>';
+      E.giftConfirm.disabled = empty; E.giftClear.disabled = empty;
+    }
   }
-  function giftBuy(id) {
-    if (!InnCore.buyGift(S.vars, id)) { toast('골드가 모자라요', 'down'); return; }
+  function giftCartCount() { return Object.keys(GF.cart).reduce(function (a, k) { return a + Math.abs(GF.cart[k] || 0); }, 0); }
+  function giftCartNet() { return Object.keys(GF.cart).reduce(function (a, id) { return a + (GF.cart[id] || 0) * GIFTS.items[id].price; }, 0); }
+  function giftCartClamp() {   // 반품 예약이 반품 가능 수를 넘지 않게 (그 사이 선물을 줬다면 줄어든다)
+    Object.keys(GF.cart).forEach(function (id) {
+      var m = -InnCore.giftRefundable(S.vars, id);
+      if (GF.cart[id] < m) GF.cart[id] = m;
+      if (!GF.cart[id]) delete GF.cart[id];
+    });
+  }
+  function giftStep(id, d) {
+    var q = GF.cart[id] || 0, pr = GIFTS.items[id].price;
+    if (d > 0 && (S.vars.gold || 0) - giftCartNet() < pr) { toast('골드가 모자라요', 'down'); return; }
+    if (d < 0 && q <= -InnCore.giftRefundable(S.vars, id)) return;
+    sfx('tap');
+    GF.cart[id] = q + d; if (!GF.cart[id]) delete GF.cart[id];
+    renderGift();
+  }
+  function giftClear() { if (!giftCartCount()) return; sfx('tap'); GF.cart = {}; renderGift(); }
+  // 구매 확정: 이때 비로소 골드 차감·보관함 반영 (반품은 오늘 산, 아직 주지 않은 선물만 전액 환불)
+  function giftConfirm() {
+    giftCartClamp();
+    var net = giftCartNet();
+    if (!giftCartCount()) return;
+    if (net > (S.vars.gold || 0)) { toast('골드가 모자라요', 'down'); renderGift(); return; }
+    var buyN = 0, retN = 0;
+    Object.keys(GF.cart).forEach(function (id) {
+      var q = GF.cart[id], k;
+      for (k = 0; k < q; k++) if (InnCore.buyGift(S.vars, id)) buyN++;
+      for (k = 0; k > q; k--) if (InnCore.refundGift(S.vars, id)) retN++;
+      if (q > 0) pushLog({ name: '', color: '', text: '— 선물 구입: ' + GIFTS.items[id].name + (q > 1 ? ' ×' + q : '') + ' —' });
+      if (q < 0) pushLog({ name: '', color: '', text: '— 선물 반품: ' + GIFTS.items[id].name + (q < -1 ? ' ×' + (-q) : '') + ' —' });
+    });
+    GF.cart = {};
     sfx('coin'); updateHud();
-    pushLog({ name: '', color: '', text: '— 선물 구입: ' + GIFTS.items[id].name + ' —' });
+    toast((buyN ? '구매 ' + buyN + '개' : '') + (buyN && retN ? ' · ' : '') + (retN ? '반품 ' + retN + '개' : '') + ' 확정 (' + (net > 0 ? '-' : '+') + Math.abs(net) + 'G)', net > 0 ? 'down' : 'up');
     renderGift();
     var pt = document.getElementById('pick-gift'); if (pt) pt.textContent = '선물 주기 · 보관함 ' + InnCore.giftCount(S.vars) + '개';
   }
@@ -2409,6 +2556,8 @@
     E.rankupPic = $('rankup-pic'); E.rankupWho = $('rankup-who'); E.rankupText = $('rankup-text');
     E.gift = $('gift'); E.giftGold = $('gift-gold'); E.giftTitle = $('gift-title'); E.giftTabs = $('gift-tabs'); E.giftTabShop = $('gift-tab-shop'); E.giftTabGive = $('gift-tab-give');
     E.giftWho = $('gift-who'); E.giftInfo = $('gift-info'); E.giftList = $('gift-list'); E.giftReact = $('gift-react');
+    E.giftCart = $('gift-cart'); E.giftSum = $('gift-sum'); E.giftConfirm = $('gift-confirm'); E.giftClear = $('gift-clear');
+    E.giftConfirm.addEventListener('click', giftConfirm); E.giftClear.addEventListener('click', giftClear);
     E.giftReactPic = $('gift-react-pic'); E.giftReactName = $('gift-react-name'); E.giftReactTier = $('gift-react-tier'); E.giftReactText = $('gift-react-text'); E.giftReactAff = $('gift-react-aff');
     E.btnContinue = $('btn-continue'); E.btnTitleLoad = $('btn-title-load');
     E.cg = $('cg'); E.btnGallery = $('btn-gallery'); E.btnCollect = $('btn-collect');
@@ -2450,10 +2599,9 @@
     $('tv-notes-close').addEventListener('click', function () { TVE.notes.classList.add('hidden'); });
     $('tv-shop-board').addEventListener('click', function () { openBoard(false); });
     $('tv-board-close').addEventListener('click', function () { TVE.menu.classList.add('hidden'); });
-    $('tv-shop-start').addEventListener('click', function () {
-      if (TV && Object.keys(TV.bought).length) S.vars.tavern.lastBuy = Object.assign({}, TV.bought);   // 다음 "지난번처럼 사기"용
-      TVE.shop.classList.add('hidden'); tvNextCustomer();
-    });
+    $('tv-shop-start').addEventListener('click', shopStart);
+    TVE.shopSum = $('tv-shop-sum'); TVE.shopConfirm = $('tv-shop-confirm'); TVE.shopClear = $('tv-shop-clear');
+    TVE.shopConfirm.addEventListener('click', shopConfirm); TVE.shopClear.addEventListener('click', shopClear);
     TVE.shopLast = $('tv-shop-last'); TVE.shopLast.addEventListener('click', buyLast);
     $('tv-shop-suggest').addEventListener('click', buySuggest);
     $('tv-sum-btn').addEventListener('click', tvClose);

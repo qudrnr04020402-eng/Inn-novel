@@ -6,6 +6,12 @@
 const { chromium } = require('playwright');
 const URL = process.env.URL || 'http://localhost:8765/index.html';
 
+// 장보기: [+] 를 n 번 눌러 장바구니에 담고 "구매 확정" 까지 누른다
+async function shopBuy(page, id, n) {
+  for (let i = 0; i < n; i++) await page.locator(`.tv-row[data-id="${id}"] .tv-plus`).tap();
+  await page.locator('#tv-shop-confirm').tap();
+}
+
 async function newPage(browser, problems, label, o) {
   o = Object.assign({ tut: true }, o);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -162,7 +168,7 @@ async function run(browser, problems, report, SHOTS) {
     await page.locator('.tv-upg-card.room[data-id="windowbox"] .tv-upg-buy').tap();
     const vU = await vars(page);
     chk(vU.gold === gB - 55 && vU.lodge.upg.bedding && vU.lodge.upg.windowbox, `객실 개조 구입 이상 (골드 ${gB}->${vU.gold})`);
-    chk(await page.locator('.tv-upg-card.room[data-id="bedding"] .tv-upg-buy').isDisabled(), '산 객실 개조가 잠기지 않음');
+    chk((await page.locator('.tv-upg-card.room[data-id="bedding"] .tv-upg-buy').innerText()).includes('취소'), '산 객실 개조가 취소 버튼으로 바뀌지 않음');
     // 다음 날 아침 카드에 간밤 숙박 정산
     await page.locator('#tv-upg-next').tap(); await page.waitForTimeout(300);
     const tip = await page.locator('#card-tip').innerText();
@@ -401,14 +407,14 @@ async function run(browser, problems, report, SHOTS) {
     await shot(page, 'gift_01_shop');
     // 구입: 골드 차감, 보관함 증가 / 골드 부족이면 버튼 잠김
     const g0 = (await vars(page)).gold;
-    await page.locator('.gift-row[data-id="flower"] .gift-btn').tap();
-    await page.locator('.gift-row[data-id="whetstone"] .gift-btn').tap();
-    await page.locator('.gift-row[data-id="trinket"] .gift-btn').tap();
+    for (const id of ['flower', 'whetstone', 'trinket']) await page.locator(`.gift-row[data-id="${id}"] .tv-plus`).tap();
+    chk((await vars(page)).gold === g0, '확정 전에 골드가 빠져나감 (장바구니)');
+    await page.locator('#gift-confirm').tap();
     const v1 = await vars(page);
     chk(v1.gold === g0 - 10 - 14 - 20 && v1.gift.inv.flower === 1 && v1.gift.inv.whetstone === 1 && v1.gift.inv.trinket === 1 && v1.gift.bought === 3, `선물 구입 이상 (골드 ${g0}->${v1.gold}, ${JSON.stringify(v1.gift.inv)})`);
     await page.evaluate(() => { VN.state.vars.gold = 9; });
     await page.locator('#gift-tab-give').tap(); await page.locator('#gift-tab-shop').tap();
-    chk((await page.locator('.gift-row[data-id="flower"] .gift-btn').isDisabled()) && (await page.locator('.gift-row[data-id="ink"] .gift-btn').isDisabled()) && (await page.locator('.gift-row[data-id="sweets"] .gift-btn').isDisabled()) === false, '골드 9G 일 때 비싼 선물 버튼이 잠기지 않거나 싼 과자(8G)가 열림 판정 이상');
+    chk((await page.locator('.gift-row[data-id="flower"] .tv-plus').isDisabled()) && (await page.locator('.gift-row[data-id="ink"] .tv-plus').isDisabled()) && (await page.locator('.gift-row[data-id="sweets"] .tv-plus').isDisabled()) === false, '골드 9G 일 때 비싼 선물 버튼이 잠기지 않거나 싼 과자(8G)가 열림 판정 이상');
     // 주기 탭: 보관함 3개
     await page.locator('#gift-tab-give').tap(); await page.waitForTimeout(250);
     chk((await page.locator('.gift-row').count()) === 3 && (await page.locator('.gift-who').count()) === 4, '선물 주기 탭 이상');
@@ -814,8 +820,7 @@ async function run(browser, problems, report, SHOTS) {
     await until(r2.page, () => VN.mode === 'tavern');
     c2(await r2.page.locator('#tv-shop-last').isDisabled(), '지난 장보기 기록이 없는데 "지난번처럼 사기"가 켜져 있음');
     // 직접 사고 영업 시작 -> lastBuy 기록
-    await r2.page.locator('.tv-row[data-id="ale"] .tv-buy[data-n="3"]').tap();
-    await r2.page.locator('.tv-row[data-id="herb"] .tv-buy[data-n="1"]').tap();
+    await shopBuy(r2.page, 'ale', 3); await shopBuy(r2.page, 'herb', 1);
     await r2.page.locator('#tv-shop-start').tap(); await r2.page.waitForTimeout(250);
     const lb = (await vars(r2.page)).tavern.lastBuy;
     c2(lb && lb.ale === 3 && lb.herb === 1 && Object.keys(lb).length === 2, `lastBuy 기록 이상 ${JSON.stringify(lb)}`);
@@ -827,14 +832,18 @@ async function run(browser, problems, report, SHOTS) {
     const cost = await r3.page.evaluate(() => { const v = VN.state.vars; return 3 * TavernCore.price(TAVERN, v, 'ale') + 1 * TavernCore.price(TAVERN, v, 'herb') + 2 * TavernCore.price(TAVERN, v, 'meat'); });
     await shot(r3.page, 'qol_02_shop_buttons');
     await r3.page.locator('#tv-shop-last').tap(); await r3.page.waitForTimeout(250);
+    c3((await vars(r3.page)).gold === 100, '지난번처럼 사기가 확정 전에 골드를 차감함 (담기만 해야 함)');
+    await r3.page.locator('#tv-shop-confirm').tap(); await r3.page.waitForTimeout(250);
     const v3 = await vars(r3.page);
     c3(v3.gold === 100 - cost && v3.tavern.stock.ale === 3 && v3.tavern.stock.herb === 1 && v3.tavern.stock.meat === 2, `지난번처럼 사기 결과 이상 (골드 ${v3.gold}, 기대 ${100 - cost}, ${JSON.stringify(v3.tavern.stock)})`);
     await shot(r3.page, 'qol_03_repeat_buy');
     // 골드가 모자라면 되는 만큼만
     await r3.page.evaluate(() => { const v = VN.state.vars; v.gold = 9; Object.keys(v.tavern.stock).forEach((i) => { v.tavern.stock[i] = 0; }); VN.state.vars.tavern.lastBuy = { ale: 3, herb: 1, meat: 2 }; });
-    await r3.page.locator('.tv-row[data-id="herb"] .tv-buy[data-n="1"]').tap();   // 화면 갱신(고정 골드 반영)
+    await r3.page.locator('.tv-row[data-id="herb"] .tv-plus').tap();   // 화면 갱신(고정 골드 반영)
+    await r3.page.locator('#tv-shop-clear').tap();
     const g9 = (await vars(r3.page)).gold;
     await r3.page.locator('#tv-shop-last').tap(); await r3.page.waitForTimeout(250);
+    await r3.page.locator('#tv-shop-confirm').tap(); await r3.page.waitForTimeout(250);
     const v9 = await vars(r3.page);
     c3(v9.gold >= 0 && v9.gold < g9 && Object.values(v9.tavern.stock).reduce((a, b) => a + b, 0) >= 2, `골드 부족 시 일부만 사야 함 (${g9}->${v9.gold}, ${JSON.stringify(v9.tavern.stock)})`);
     await r3.ctx.close();
@@ -845,11 +854,12 @@ async function run(browser, problems, report, SHOTS) {
     const plan = await r4.page.evaluate(() => { const v = VN.state.vars; const q = TavernCore.queue(TAVERN, 'day2', v, VN.evalCond); return TavernCore.suggestBuy(TAVERN, v, q, v.gold, (id) => TavernCore.price(TAVERN, v, id)); });
     c4(plan.cost > 0 && Object.keys(plan.buy).length >= 2, `추천 구매 계산이 비어 있음 ${JSON.stringify(plan)}`);
     await r4.page.locator('#tv-shop-suggest').tap(); await r4.page.waitForTimeout(250);
+    await r4.page.locator('#tv-shop-confirm').tap(); await r4.page.waitForTimeout(250);
     const v4 = await vars(r4.page);
     c4(v4.gold === 200 - plan.cost && Object.keys(plan.buy).every((i) => v4.tavern.stock[i] === plan.buy[i]), `추천 구매 결과 이상 (골드 ${v4.gold}, 기대 ${200 - plan.cost}, ${JSON.stringify(v4.tavern.stock)} / ${JSON.stringify(plan.buy)})`);
     // 이미 충분하면 더 사지 않는다
     await r4.page.locator('#tv-shop-suggest').tap(); await r4.page.waitForTimeout(250);
-    c4((await vars(r4.page)).gold === v4.gold, '추천 구매를 두 번 누르면 더 사면 안 됨');
+    c4((await vars(r4.page)).gold === v4.gold && (await r4.page.locator('#tv-shop-confirm').isDisabled()), '추천 구매를 두 번 누르면 더 담으면 안 됨');
     // 추천대로 산 재료로 모든 손님 주문을 보통 이상으로 맞출 수 있다 (알려진 레시피 기준)
     const okAll = await r4.page.evaluate(() => { const v = VN.state.vars; const q = TavernCore.queue(TAVERN, 'day2', v, VN.evalCond); const st = Object.assign({}, v.tavern.stock); let ok = 0; q.forEach((c) => { const ids = TavernCore.bestKnown(TAVERN, { tavern: { known: v.tavern.known, stock: st } }, c.who, c.order, false); if (ids) { ok++; ids.forEach((i) => { st[i]--; }); } }); return { ok, n: q.length }; });
     c4(okAll.ok === okAll.n, `추천 구매 뒤에도 만들 수 없는 주문이 있음 ${JSON.stringify(okAll)}`);
@@ -954,6 +964,165 @@ async function run(browser, problems, report, SHOTS) {
     await c2.close();
     report.push('저장 v5: v4 세이브/자동 저장은 무시(이어하기·불러오기 꺼짐), 엔딩/CG/튜토리얼 기록은 v5 로 1회 이전(읽은 대사 기록은 제외), 새 게임 변수(lodge/inn/nev/gift/riv) 초기화');
   }
+
+  // ================= 장바구니 / 반품 =================
+  {
+    const BASE = `TavernCore.ensure(TAVERN, v); Object.keys(TAVERN.ingredients).forEach((i) => { v.tavern.stock[i] = 0; });`;
+    const plus = (page, id) => page.locator(`.tv-row[data-id="${id}"] .tv-plus`);
+    const minus = (page, id) => page.locator(`.tv-row[data-id="${id}"] .tv-minus`);
+    const qty = (page, id) => page.locator(`.tv-row[data-id="${id}"] .tv-qty`).innerText();
+
+    // 1) 장보기: 담기/빼기/합계·잔액/잔액 부족 비활성/비우기/확정
+    {
+      const c = mk('장바구니 장보기'); const r = await open();
+      await seedAt(r.page, 'd2_evening', `v.day = 2; v.time = '저녁'; v.gold = 20; ${BASE}`);
+      await until(r.page, () => VN.mode === 'tavern');
+      const pr = await r.page.evaluate(() => { const v = VN.state.vars, o = {}; Object.keys(TAVERN.ingredients).forEach((i) => { o[i] = TavernCore.price(TAVERN, v, i); }); return o; });
+      c(await r.page.locator('#tv-shop-confirm').isDisabled() && await r.page.locator('#tv-shop-clear').isDisabled(), '빈 장바구니인데 확정/비우기가 켜져 있음');
+      await plus(r.page, 'ale').tap(); await plus(r.page, 'ale').tap(); await plus(r.page, 'herb').tap();
+      c((await qty(r.page, 'ale')) === '+2' && (await qty(r.page, 'herb')) === '+1', '담은 수량 표시 이상');
+      const tot = 2 * pr.ale + pr.herb;
+      let sum = await r.page.locator('#tv-shop-sum').innerText();
+      c(sum.includes(String(tot)) && sum.includes(String(20 - tot)), `합계/잔액 표시 이상: ${sum}`);
+      c((await vars(r.page)).gold === 20 && (await vars(r.page)).tavern.stock.ale === 0, '확정 전에 골드/재고가 바뀜');
+      await minus(r.page, 'ale').tap();
+      c((await qty(r.page, 'ale')) === '+1', '[-] 로 뺄 수 없음');
+      c(await minus(r.page, 'meat').isDisabled(), '담지 않은(산 적 없는) 품목의 [-] 가 켜져 있음');
+      await shot(r.page, 'cart_01_shop');
+      // 잔액 부족이면 [+] 비활성: 골드 20 에서 가장 비싼 재료를 계속 담는다
+      const dear = Object.keys(pr).sort((a, b) => pr[b] - pr[a])[0];
+      for (let i = 0; i < 12 && !(await plus(r.page, dear).isDisabled()); i++) await plus(r.page, dear).tap();
+      c(await plus(r.page, dear).isDisabled(), '잔액이 모자란데 [+] 가 비활성화되지 않음');
+      const net = await r.page.evaluate(() => 0); void net;
+      c((await vars(r.page)).gold === 20, '담는 동안 골드가 바뀜');
+      // 비우기
+      await r.page.locator('#tv-shop-clear').tap();
+      c((await qty(r.page, 'ale')) === '0' && await r.page.locator('#tv-shop-confirm').isDisabled(), '비우기 후 장바구니가 비지 않음');
+      // 확정
+      await plus(r.page, 'ale').tap(); await plus(r.page, 'ale').tap(); await plus(r.page, 'herb').tap();
+      await r.page.locator('#tv-shop-confirm').tap(); await r.page.waitForTimeout(150);
+      let v = await vars(r.page);
+      c(v.gold === 20 - tot && v.tavern.stock.ale === 2 && v.tavern.stock.herb === 1, `구매 확정 결과 이상 (골드 ${v.gold}, ${JSON.stringify(v.tavern.stock)})`);
+      c((await r.page.locator('.tv-row[data-id="ale"] .tv-have').innerText()).includes('2'), '"오늘 산 물건" 표시가 없음');
+      c((await shift(r.page)) === 0, '장보기 가로 스크롤');
+      // 반품: [-] 로 전액 환불 (산 수량 아래로는 못 내려감)
+      await minus(r.page, 'ale').tap();
+      c((await qty(r.page, 'ale')) === '-1', '반품 수량 표시 이상');
+      sum = await r.page.locator('#tv-shop-sum').innerText();
+      c(sum.includes('환불') && sum.includes(String(pr.ale)), `환불 합계 표시 이상: ${sum}`);
+      await minus(r.page, 'ale').tap();
+      c(await minus(r.page, 'ale').isDisabled(), '산 수량보다 더 반품할 수 있음');
+      await shot(r.page, 'cart_03_return');
+      await r.page.locator('#tv-shop-confirm').tap(); await r.page.waitForTimeout(150);
+      v = await vars(r.page);
+      c(v.gold === 20 - tot + 2 * pr.ale && !v.tavern.stock.ale && v.tavern.stock.herb === 1, `반품 환불 결과 이상 (골드 ${v.gold}, ${JSON.stringify(v.tavern.stock)})`);
+      // 영업 시작 전: 담은 채 시작하면 확인 -> 취소하면 그대로, 확인하면 사지 않고 시작
+      await plus(r.page, 'ale').tap();
+      await r.page.locator('#tv-shop-start').tap(); await r.page.waitForTimeout(150);
+      c(await vis(r.page, 'confirm') && (await r.page.locator('#confirm-msg').innerText()).includes('담은 물건을 사지 않고 나갈까요'), '담은 채 영업 시작 시 확인창이 없음');
+      await r.page.locator('#confirm-no').tap(); await r.page.waitForTimeout(150);
+      c(await vis(r.page, 'tv-shop') && (await qty(r.page, 'ale')) === '+1', '확인창 취소 뒤 장바구니가 유지되지 않음');
+      await r.page.locator('#tv-shop-start').tap(); await r.page.locator('#confirm-yes').tap(); await r.page.waitForTimeout(250);
+      v = await vars(r.page);
+      c(!(await vis(r.page, 'tv-shop')) && v.gold === 20 - tot + 2 * pr.ale && !v.tavern.stock.ale, `사지 않고 나가면 골드/재고가 그대로여야 함 (골드 ${v.gold})`);
+      await r.ctx.close();
+    }
+
+    // 2) 장보기 "지난번처럼 사기": 담기만, 구매 후에는 영업 중 쓴 재고는 반품 불가(영업 시작 뒤에는 장보기 화면이 닫힘)
+    // 3) 선물 장터: 담기/빼기/잔액/확정/반품, 준 선물은 반품 불가, 닫기 확인
+    {
+      const c = mk('장바구니 선물'); const r = await open();
+      await seedAt(r.page, 'pick', `v.day = 2; v.time = '낮'; v.gold = 40;`);
+      await r.page.locator('#pick-shop').tap(); await r.page.waitForTimeout(350);
+      const gplus = (id) => r.page.locator(`.gift-row[data-id="${id}"] .tv-plus`), gminus = (id) => r.page.locator(`.gift-row[data-id="${id}"] .tv-minus`);
+      const gqty = (id) => r.page.locator(`.gift-row[data-id="${id}"] .tv-qty`).innerText();
+      c(await r.page.locator('#gift-confirm').isDisabled(), '빈 선물 장바구니인데 확정이 켜져 있음');
+      const P = await r.page.evaluate(() => { const o = {}; Object.keys(GIFTS.items).forEach((i) => { o[i] = GIFTS.items[i].price; }); return o; });
+      await gplus('flower').tap(); await gplus('flower').tap(); await gminus('flower').tap(); await gplus('sweets').tap();
+      c((await gqty('flower')) === '+1' && (await gqty('sweets')) === '+1', '선물 담기/빼기 수량 이상');
+      let sum = await r.page.locator('#gift-sum').innerText();
+      c(sum.includes(String(40 - P.flower - P.sweets)), `선물 합계/잔액 표시 이상: ${sum}`);
+      c((await vars(r.page)).gold === 40 && !(await vars(r.page)).gift.inv.flower, '선물 확정 전에 골드/보관함이 바뀜');
+      await shot(r.page, 'cart_02_gift');
+      // 잔액 부족: 40G 에서 비싼 것(trinket 20G 등)을 계속 담으면 [+] 잠김
+      const dear = Object.keys(P).sort((a, b) => P[b] - P[a])[0];
+      for (let i = 0; i < 6 && !(await gplus(dear).isDisabled()); i++) await gplus(dear).tap();
+      c(await gplus(dear).isDisabled(), '선물 잔액 부족인데 [+] 가 비활성화되지 않음');
+      await r.page.locator('#gift-clear').tap();
+      c((await gqty('flower')) === '0' && await r.page.locator('#gift-confirm').isDisabled(), '선물 비우기 이상');
+      // 닫기 확인: 담은 채 닫으면 확인창 -> 아니오면 유지, 예면 구매 없이 닫힘
+      await gplus('flower').tap();
+      await r.page.locator('#gift-close').tap(); await r.page.waitForTimeout(150);
+      c(await vis(r.page, 'confirm') && (await r.page.locator('#confirm-msg').innerText()).includes('사지 않고'), '담은 채 닫을 때 확인창이 없음');
+      await r.page.locator('#confirm-no').tap(); await r.page.waitForTimeout(150);
+      c(await vis(r.page, 'gift') && (await gqty('flower')) === '+1', '닫기 취소 뒤 선물 장바구니가 유지되지 않음');
+      await r.page.locator('#gift-close').tap(); await r.page.locator('#confirm-yes').tap(); await r.page.waitForTimeout(250);
+      c(!(await vis(r.page, 'gift')) && (await vars(r.page)).gold === 40 && !(await vars(r.page)).gift.inv.flower, '확인 후 닫으면 구매 없이 나가야 함');
+      // 다시 열면 장바구니는 비어 있다 (저장하지 않음)
+      await r.page.locator('#pick-shop').tap(); await r.page.waitForTimeout(300);
+      c((await gqty('flower')) === '0', '다시 열었는데 이전 장바구니가 남아 있음');
+      // 확정 -> 보관함 반영
+      await gplus('flower').tap(); await gplus('sweets').tap();
+      await r.page.locator('#gift-confirm').tap(); await r.page.waitForTimeout(150);
+      let v = await vars(r.page);
+      c(v.gold === 40 - P.flower - P.sweets && v.gift.inv.flower === 1 && v.gift.inv.sweets === 1 && v.gift.bought === 2, `선물 확정 결과 이상 (골드 ${v.gold}, ${JSON.stringify(v.gift.inv)})`);
+      // 반품: 오늘 산 선물은 [-] 로 환불, 주고 나면 반품 불가
+      await gminus('flower').tap();
+      c((await gqty('flower')) === '-1', '선물 반품 수량 표시 이상');
+      c(await gminus('flower').isDisabled(), '산 수량보다 더 반품할 수 있음 (선물)');
+      await r.page.locator('#gift-confirm').tap(); await r.page.waitForTimeout(150);
+      v = await vars(r.page);
+      c(v.gold === 40 - P.sweets && !v.gift.inv.flower && v.gift.inv.sweets === 1 && v.gift.bought === 1, `선물 반품 환불 이상 (골드 ${v.gold}, ${JSON.stringify(v.gift)})`);
+      // 과자를 리아에게 주면 반품 불가
+      await r.page.locator('#gift-tab-give').tap(); await r.page.locator('.gift-who[data-who="lia"]').tap();
+      await r.page.locator('.gift-row[data-id="sweets"] .gift-btn').tap(); await r.page.waitForTimeout(250);
+      await r.page.locator('#gift-react-ok').tap(); await r.page.waitForTimeout(200);
+      await r.page.locator('#gift-tab-shop').tap(); await r.page.waitForTimeout(150);
+      c(await gminus('sweets').isDisabled(), '이미 준 선물이 반품 가능으로 남아 있음');
+      c(!(await r.page.locator('.gift-row[data-id="sweets"] .tv-row-mid small').innerText()).includes('반품 가능'), '준 선물에 반품 가능 표시가 남음');
+      c((await shift(r.page)) === 0, '선물 장바구니 가로 스크롤');
+      // 하루가 지나면 반품 기록이 초기화
+      const ref = await r.page.evaluate(() => { const v = VN.state.vars; InnCore.buyGift(v, 'ink'); const a = InnCore.giftRefundable(v, 'ink'); v.day++; return [a, InnCore.giftRefundable(v, 'ink')]; });
+      c(ref[0] === 1 && ref[1] === 0, `반품 가능 수가 날짜를 따르지 않음 ${ref}`);
+      await r.ctx.close();
+    }
+
+    // 4) 업그레이드: 구입 후 그 밤 화면에서는 취소(전액 환불, 해금 레시피 되돌림), 화면을 떠나면 확정
+    {
+      const c = mk('업그레이드 취소'); const r = await open();
+      const sd = await findSeed(r.page, null, 2);
+      await seedAt(r.page, 'd2_upgrade', `v.day = 2; v.time = '밤'; v.gold = 300; ${SEEDV(sd)}`);
+      await r.page.locator('#lodge-done').tap(); await r.page.waitForTimeout(300);
+      c(await vis(r.page, 'tv-upg'), '손보기 화면이 아님');
+      const shelf = '.tv-upg-card[data-id="shelf"] .tv-upg-buy', bed = '.tv-upg-card.room[data-id="bedding"] .tv-upg-buy';
+      const known0 = await r.page.evaluate(() => JSON.stringify(VN.state.vars.tavern.known));
+      const g0 = (await vars(r.page)).gold;
+      const pS = await r.page.evaluate(() => TAVERN.upgrades.find((u) => u.id === 'shelf').price);
+      const pB = await r.page.evaluate(() => LODGING.upgrades.find((u) => u.id === 'bedding').price);
+      await r.page.locator(shelf).tap(); await r.page.locator(bed).tap();
+      let v = await vars(r.page);
+      c(v.tavern.upg.shelf && v.lodge.upg.bedding && v.gold === g0 - pS - pB, `구입 이상 (골드 ${v.gold})`);
+      c((await r.page.locator(shelf).innerText()).includes('취소') && await r.page.locator(shelf).isEnabled(), '산 업그레이드에 취소 버튼이 없음');
+      await shot(r.page, 'cart_04_upgrade_cancel');
+      await r.page.locator(shelf).tap(); await r.page.locator(bed).tap(); await r.page.waitForTimeout(100);
+      v = await vars(r.page);
+      c(!v.tavern.upg.shelf && !v.lodge.upg.bedding && v.gold === g0 && JSON.stringify(v.tavern.known) === known0, `취소 환불/레시피 되돌림 이상 (골드 ${v.gold}, 기대 ${g0})`);
+      c((await r.page.locator(shelf).innerText()).includes(String(pS)) && await r.page.locator(shelf).isEnabled(), '취소 뒤 다시 살 수 있어야 함');
+      // 취소 뒤 불러오기(이어하기)해도 구매가 되살아나지 않음
+      await r.page.reload(); await r.page.waitForSelector('#btn-continue:not([disabled])'); await r.page.tap('#btn-continue'); await r.page.waitForTimeout(300);
+      v = await vars(r.page);
+      c(!v.tavern.upg.shelf && v.gold === g0, `취소 뒤 이어하기에서 상태 이상 (골드 ${v.gold})`);
+      // 다시 사고 화면을 떠나면 확정: 다음 날 취소 불가
+      if (!(await vis(r.page, 'tv-upg'))) await until(r.page, () => VN.mode === 'tavern' || document.getElementById('tv-upg') && !document.getElementById('tv-upg').classList.contains('hidden'));
+      await r.page.locator(shelf).tap();
+      await r.page.locator('#tv-upg-next').tap(); await r.page.waitForTimeout(300);
+      v = await vars(r.page);
+      c(v.tavern.upg.shelf && v.gold === g0 - pS, `화면을 떠난 뒤 구매가 확정되지 않음 (골드 ${v.gold})`);
+      await r.ctx.close();
+    }
+    report.push('장바구니: 장보기/선물 장터 [-] 수량 [+] 담기·빼기, 합계·구매 후 잔액, 잔액 부족 [+] 잠김, 비우기, 구매 확정 때만 골드·재고 반영, 담은 채 나가면 확인, 오늘 산 재료/선물 반품(전액 환불, 준 선물 불가), 업그레이드·객실 개조 취소(레시피 해금 되돌림)');
+  }
+
   return T.ok;
 }
 

@@ -115,7 +115,8 @@ const DRIVER = () => {
     }
     if (vis('tv-shop')) {
       const ids = Object.keys(TAVERN.ingredients).sort((a, b) => TAVERN.ingredients[a].price - TAVERN.ingredients[b].price);
-      for (const id of ids) if ((t.stock[id] || 0) < P.stock && v.gold - TavernCore.price(TAVERN, v, id) >= P.reserve) return `.tv-row[data-id="${id}"] .tv-buy[data-n="1"]`;
+      if (!document.getElementById('tv-shop-confirm').disabled) return '#tv-shop-confirm';   // 장바구니에 담긴 게 있으면 확정
+      for (const id of ids) if ((t.stock[id] || 0) < P.stock && v.gold - TavernCore.price(TAVERN, v, id) >= P.reserve) return `.tv-row[data-id="${id}"] .tv-plus`;
       return '#tv-shop-start';
     }
     if (vis('tv-sum')) return '#tv-sum-btn';
@@ -139,6 +140,12 @@ const DRIVER = () => {
   };
 };
 const initDriver = async (page, pol) => { await page.evaluate(`(${DRIVER.toString()})()`); await page.evaluate((p) => window.__tvInit(p), pol); };
+
+// 장보기: [+] 를 n 번 눌러 장바구니에 담고 "구매 확정" 까지 누른다
+async function shopBuy(page, id, n) {
+  for (let i = 0; i < n; i++) await page.locator(`.tv-row[data-id="${id}"] .tv-plus`).tap();
+  await page.locator('#tv-shop-confirm').tap();
+}
 
 async function newPage(browser, problems, label, o) {
   o = Object.assign({ events: false, tut: false }, o);   // events: 아침 랜덤 사건을 켤지, tut: 튜토리얼을 아직 안 본 상태로 둘지
@@ -465,7 +472,7 @@ async function main() {
     chk(await vis('tv-shop'), '장보기 화면이 먼저 떠야 함');
     // 장보기
     let v0 = await vars();
-    await page.locator('.tv-row[data-id="ale"] .tv-buy[data-n="3"]').tap();
+    await shopBuy(page, 'ale', 3);
     let v1 = await vars();
     chk(v1.gold === v0.gold - 12 && v1.tavern.stock.ale === v0.tavern.stock.ale + 3, `장보기 +3 에일: 골드 ${v0.gold}->${v1.gold}, 재고 ${v0.tavern.stock.ale}->${v1.tavern.stock.ale}`);
     chk((await page.locator('#hud-gold').innerText()).includes(String(v1.gold)), 'HUD 골드가 장보기를 반영하지 않음');
@@ -566,7 +573,7 @@ async function main() {
     const v2 = await vars();
     chk(Object.keys(v2.tavern.upg).length === 4 && v2.gold === g0 - 140, `업그레이드 구매 이상: 골드 ${g0}->${v2.gold}, ${JSON.stringify(v2.tavern.upg)}`);
     chk(v2.tavern.known.magic_stew && v2.tavern.known.moon_ale && v2.tavern.known.berry_milk, '향신료 선반으로 레시피 3개가 해금되지 않음');
-    chk(await page.locator('.tv-upg-card[data-id="sign"] .tv-upg-buy').isDisabled(), '구입한 업그레이드 버튼이 잠기지 않음');
+    chk((await page.locator('.tv-upg-card[data-id="sign"] .tv-upg-buy').innerText()).includes('취소'), '이 밤에 구입한 업그레이드 버튼이 취소로 바뀌지 않음');
     await page.locator('#tv-upg-next').tap(); await page.waitForTimeout(250);
     chk((await page.evaluate(() => VN.state.vars.day)) === 2 || (await page.evaluate(() => VN.mode)) === 'card', '업그레이드 후 다음 날로 넘어가지 않음');
     // 간판을 샀으니 2일차 영업 손님이 1명 늘어난다
@@ -587,7 +594,7 @@ async function main() {
     await page.tap('#btn-new');
     await toTavern(page);
     const v0 = await vars();
-    await page.locator('.tv-row[data-id="meat"] .tv-buy[data-n="3"]').tap();
+    await shopBuy(page, 'meat', 3);
     await page.locator('#tv-shop-start').tap();
     for (let i = 0; i < 40 && (await page.evaluate(() => VN.tavern.phase)) !== 'brew'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(40); }
     const vMid = await vars();
@@ -1191,7 +1198,7 @@ async function main() {
     const info = await page.locator('#tv-shop-info').innerText();
     chk(info.includes('오늘의 사정') && info.includes('팁이 후하다'), `장보기 화면에 오늘의 사정이 없음: ${info}`);
     const g0 = (await vars()).gold;
-    await page.locator('.tv-row[data-id="ale"] .tv-buy[data-n="1"]').tap();
+    await shopBuy(page, 'ale', 1);
     chk((await vars()).gold === g0 - 3, `재료 값 -25% 미반영: 에일 4G -> ${g0 - (await vars()).gold}G`);
     chk((await page.locator('.tv-row[data-id="ale"] .tv-row-mid small').innerText()).includes('3G'), '할인 가격 표시가 없음');
     await page.screenshot({ path: `${SHOTS}/ev_02_shop_modifier.png` });

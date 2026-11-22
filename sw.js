@@ -1,6 +1,6 @@
 // 서비스 워커: 오프라인 캐시 (네트워크 우선, 실패하면 캐시)
 // 파일을 추가/수정한 뒤 배포할 때는 아래 VERSION 숫자를 올리면 예전 캐시가 정리됩니다.
-const VERSION = 'v9-seven-days'; // 7일 구성 + 진/명가 엔딩 + 영업 편의 기능 버전 (이전: v8-inn-life) (배포 때마다 올려서 폰의 옛 캐시를 정리)
+const VERSION = 'v10-cart'; // 장바구니(장보기/선물 장터) + 반품/업그레이드 취소 버전 (이전: v9-seven-days) (배포 때마다 올려서 폰의 옛 캐시를 정리)
 const CACHE = 'inn-vn-' + VERSION;
 // 미리 캐시할 파일 (tools/check-story.js 가 이 목록과 실제 파일을 비교해 줍니다)
 const ASSETS = [

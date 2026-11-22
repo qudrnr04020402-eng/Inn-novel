@@ -22,6 +22,7 @@
     if (!L.upg) L.upg = {}; if (!L.hosted) L.hosted = {}; if (!Array.isArray(L.seen)) L.seen = []; if (!Array.isArray(L.report)) L.report = []; if (!Array.isArray(L.log)) L.log = [];
     if (!L.roster) L.roster = null;
     var G = vars.gift;
+    if (!G.today || typeof G.today !== 'object') G.today = { day: 0, n: {} };   // 오늘 산 선물(반품용): { day, n:{선물id:개수} }
     if (!G.inv) G.inv = {}; if (!G.given) G.given = {}; if (!G.known) G.known = {}; if (!Array.isArray(G.met)) G.met = [];
     return vars;
   };
@@ -215,6 +216,26 @@
     vars.gold -= d.price;
     vars.gift.inv[item] = (vars.gift.inv[item] || 0) + 1;
     vars.gift.bought = (vars.gift.bought || 0) + 1;
+    var T = vars.gift.today;
+    if (T.day !== vars.day) { T.day = vars.day; T.n = {}; }   // 날이 바뀌면 반품 기록을 새로 시작
+    T.n[item] = (T.n[item] || 0) + 1;
+    return true;
+  };
+  // 오늘 산 선물 중 아직 주지 않아 반품할 수 있는 개수 (보관함에 남은 수를 넘지 않는다)
+  I.giftRefundable = function (vars, item) {
+    I.ensure(vars);
+    var T = vars.gift.today;
+    if (T.day !== vars.day) return 0;
+    return Math.max(0, Math.min(T.n[item] || 0, vars.gift.inv[item] || 0));
+  };
+  // 반품: 전액 환불. 성공하면 true
+  I.refundGift = function (vars, item) {
+    if (!root.GIFTS.items[item] || I.giftRefundable(vars, item) < 1) return false;
+    var G = vars.gift;
+    vars.gold = (vars.gold || 0) + root.GIFTS.items[item].price;
+    G.inv[item]--; if (!G.inv[item]) delete G.inv[item];
+    G.today.n[item]--; if (!G.today.n[item]) delete G.today.n[item];
+    G.bought = Math.max(0, (G.bought || 0) - 1);
     return true;
   };
   // 선물 주기: 호감도는 호출한 쪽(엔진/시뮬레이션)이 points 만큼 올린다. 실패하면 null.
