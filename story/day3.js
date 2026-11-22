@@ -59,7 +59,7 @@ Object.assign(STORY.scenes, {
     { narr: '붕대 아래로 붉게 번진 화상이 보인다. 어젯밤 봉인을 다지다 마력이 역류한 모양이다.' },
     { cg: 'erion_cave' },
     { show: 'erion', face: 'angry' },
-    { say: 'erion', text: '이건 내 일이야. 인간 따위가 낄 일이 아니라고. 사흘 후 이 마을이 어떻게 되든, 내가 어떻게든 해.' },
+    { say: 'erion', text: '이건 내 일이야. 인간 따위가 낄 일이 아니라고. 며칠 후 이 마을이 어떻게 되든, 내가 어떻게든 해.' },
     { cg: 'hide' },
     { choice: [
       { text: '말없이 붕대를 풀고 상처를 다시 정성껏 감아 준다', set: { 'aff.erion': 2 }, goto: 'erion_3_bandage' },
@@ -395,7 +395,7 @@ Object.assign(STORY.scenes, {
     { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '동굴 쪽에서 푸른 빛줄기가 하늘로 치솟았다. 등불들이 그 빛에 빨려들 듯 모여든다.' },
     { show: 'erion', face: 'surprised', pos: 'center' },
-    { say: 'erion', text: '…이렇게 빨리. 사흘이 아니라 이틀도 안 남았어.' },
+    { say: 'erion', text: '…이렇게 빨리. 닷새가 아니라 나흘도 안 남았어.' },
     { show: 'kaela', face: 'surprised', pos: 'left' },
     { show: 'lia', face: 'surprised', pos: 'right' },
     { say: 'kaela', text: '주, 주민들을 대피시켜야 한다! 주인장, 지시를!' },

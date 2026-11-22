@@ -160,6 +160,7 @@
     note.met = true;
     var tasteHit = !cu.heroine && C.tasteMatch(cu, recipe) && (result === 'perfect' || result === 'good');
     if (tasteHit) { tip += R.tasteTip || 0; out.taste = true; out.tasteNew = !note.taste; note.taste = true; t.tasteHits++; }
+    if (ctx && ctx.free) { out.sale = 0; tip = 0; out.free = true; }   // 무료 배식: 매출과 팁 없음 (평판/호감도는 그대로)
     out.tip = tip;
     out.gold = out.sale + out.tip;
 
@@ -229,6 +230,31 @@
       if (s > bs) { bs = s; best = r.ing.slice(); }
     });
     return best;
+  };
+
+  // "추천 구매" 계산: 오늘 손님 줄(queue)의 주문을 지금 아는 레시피로 맞추는 데 모자라는 재료만 골라 돌려준다.
+  //  손님 순서대로 가장 잘 맞고 재료가 덜 드는 레시피를 정하고, 가진 재고(가상)를 깎으며 부족분만 센다. 골드가 허락하는 만큼만.
+  //  priceOf(id) = 재료 값. 반환 { buy: {재료id: 개수}, cost: 필요한 총 골드(살 수 있는 만큼) }
+  C.suggestBuy = function (T, vars, queue, gold, priceOf) {
+    var t = C.ensure(T, vars), stock = Object.assign({}, t.stock), buy = {}, cost = 0, left = gold;
+    var score = { perfect: 3, good: 2, fail: 1, mystery: 0 };
+    queue.forEach(function (entry) {
+      var cu = T.customers[entry.who] || {}, best = null, bs = -1e9;
+      Object.keys(T.recipes).forEach(function (id) {
+        if (!t.known[id]) return;
+        var r = T.recipes[id], res = C.judge(entry.order, Object.assign({ id: id }, r));
+        var mc = r.ing.reduce(function (a, i) { return a + ((stock[i] || 0) > 0 ? 0 : priceOf(i)); }, 0);
+        var sc = score[res] * 100 - mc + r.price / 10 + (cu.fav === id ? 60 : 0) - (cu.dislike && cu.dislike.indexOf(id) >= 0 ? 500 : 0);
+        if (sc > bs) { bs = sc; best = r; }
+      });
+      if (!best) return;
+      best.ing.forEach(function (i) {
+        if ((stock[i] || 0) > 0) { stock[i]--; return; }
+        var pr = priceOf(i);
+        if (pr <= left) { left -= pr; cost += pr; buy[i] = (buy[i] || 0) + 1; }
+      });
+    });
+    return { buy: buy, cost: cost };
   };
 
   root.TavernCore = C;

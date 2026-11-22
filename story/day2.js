@@ -305,8 +305,8 @@ Object.assign(STORY.scenes, {
   d2_ev_after: [
     { show: 'erion', face: 'normal', pos: 'center' },
     { say: 'erion', text: '…이제 말해 줘야겠네. 이 벽 너머는 오래전에 봉인된 곳이야. 그 봉인이 약해지고 있어.' },
-    { say: 'erion', text: '이 상태로 가면 길어야 사흘. 사흘 뒤에는 틈이 완전히 열릴 거야.' },
-    { narr: '사흘. 다시 말해, 5일차다. 모두가 숨을 죽였다.' },
+    { say: 'erion', text: '이 상태로 가면 길어야 닷새. 닷새 뒤에는 틈이 완전히 열릴 거야.' },
+    { narr: '닷새. 다시 말해, 7일차다. 모두가 숨을 죽였다.' },
     { narr: '당장 눈앞의 균열을 어떻게든 해야 한다. 이 여관은 내 집이고, 저장고는 여관의 심장이다.' },
     { choice: [
       { text: '석공을 불러 응급 보수를 한다 (20G)', cost: 20, set: { rep: 1 }, goto: 'd2_ev_mason' },

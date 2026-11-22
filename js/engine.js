@@ -85,17 +85,19 @@
   // v3: 저녁 영업 변수(vars.tavern)가 추가되어 v2 세이브는 읽지 않고 무시한다
   // v4: 숙박/여관 등급/선물/밤 사건/신경전 변수(vars.lodge, inn, nev, gift, riv)가 추가되어 v3 세이브는 읽지 않고 무시한다
   //     (엔딩/CG/레시피/메모/튜토리얼/설정/읽은 대사 기록은 회차 공통이라 처음 한 번 v3 에서 v4 로 옮겨 온다)
-  var SAVE_VER = 4;
-  var KEY = 'inn_vn_v4_';
+  // v5: 7일 구성(씬 id 변경) + 진/명가 엔딩 + 영업 보조 변수(vars.tavern.lastBuy, free)가 추가되어 v4 세이브는 읽지 않고 무시한다
+  //     (엔딩/CG/레시피/메모/튜토리얼/설정은 회차 공통이라 처음 한 번 v4 에서 v5 로 옮겨 온다. 읽은 대사 기록은 씬 id 가 달라져 옮기지 않는다)
+  var SAVE_VER = 5;
+  var KEY = 'inn_vn_v5_';
   var store = {
     get: function (k) { try { return localStorage.getItem(KEY + k); } catch (e) { return null; } },
     set: function (k, v) { try { localStorage.setItem(KEY + k, v); return true; } catch (e) { return false; } }
   };
-  (function migrateV3() {
+  (function migrateV4() {
     try {
       if (localStorage.getItem(KEY + 'migrated')) return;
-      ['endings', 'cg', 'recipes', 'notes', 'tut', 'opt', 'read'].forEach(function (k) {
-        var old = localStorage.getItem('inn_vn_v3_' + k);
+      ['endings', 'cg', 'recipes', 'notes', 'tut', 'opt'].forEach(function (k) {
+        var old = localStorage.getItem('inn_vn_v4_' + k);
         if (old != null && localStorage.getItem(KEY + k) == null) localStorage.setItem(KEY + k, old);
       });
       localStorage.setItem(KEY + 'migrated', '1');
@@ -169,8 +171,8 @@
   }
 
   // ---------- 설정 (옵션 화면) ----------
-  // localStorage 'inn_vn_v4_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
-  var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false, allRecipes: false };
+  // localStorage 'inn_vn_v5_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
+  var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false, allRecipes: false, fastTv: false, autoSkipUpg: false };
   var OPT = Object.assign({}, OPT_DEF);
   var TYPE_TABLE = [70, 45, 28, 16, 7];           // 글자 속도 1~5 -> 글자당 ms
   var AUTO_BASE = [1400, 1100, 800, 550, 350];    // 오토 속도 1~5: 기본 지연(ms)
@@ -183,7 +185,7 @@
     OPT = {
       textSpeed: clampNum(o.textSpeed, 1, 5, OPT_DEF.textSpeed), autoSpeed: clampNum(o.autoSpeed, 1, 5, OPT_DEF.autoSpeed),
       bgm: clampNum(o.bgm, 0, 100, OPT_DEF.bgm), sfx: clampNum(o.sfx, 0, 100, OPT_DEF.sfx),
-      mute: !!o.mute, skipUnread: !!o.skipUnread, easy: !!o.easy, allRecipes: !!o.allRecipes
+      mute: !!o.mute, skipUnread: !!o.skipUnread, easy: !!o.easy, allRecipes: !!o.allRecipes, fastTv: !!o.fastTv, autoSkipUpg: !!o.autoSkipUpg
     };
   }
   function saveOpt() { store.set('opt', JSON.stringify(OPT)); }
@@ -195,7 +197,7 @@
   function sfx(name) { if (!F.skip && globalThis.SFX) SFX.play(name); }   // 스킵 중에는 효과음을 내지 않는다
 
   // ---------- 읽은 대사 기록 (회차 공통) ----------
-  // { 씬id: { 줄번호: 1 } } 를 localStorage 'inn_vn_v4_read' 에 { 씬id: [줄번호...] } 로 저장 (영업 임시 씬 __tv 는 기록하지 않음)
+  // { 씬id: { 줄번호: 1 } } 를 localStorage 'inn_vn_v5_read' 에 { 씬id: [줄번호...] } 로 저장 (영업 임시 씬 __tv 는 기록하지 않음)
   var READ = {}, readTimer = 0;
   function loadRead() {
     READ = {};
@@ -1236,7 +1238,7 @@
       id: dayId, def: def, ret: { scene: S.scene, pc: S.pc },
       queue: TavernCore.queue(TAVERN, dayId, S.vars, evalCond), idx: -1, cur: null,
       results: [], sold: 0, tips: 0, spent: 0, repSum: 0, sel: [], phase: 'shop', note: '', startGold: tvGold(), startRep: S.vars.rep || 0,
-      spGold: 0, spResult: null, tasteHits: 0, reward: null
+      spGold: 0, spResult: null, tasteHits: 0, reward: null, free: !!def.free, bought: {}
     };
     if (def.bg) { S.bg = def.bg; renderBg(def.bg, true); }
     POS.forEach(function (p) { S.sprites[p] = null; });
@@ -1268,9 +1270,11 @@
     TVE.shopGold.textContent = tvGold();
     var sp = TAVERN.specials && TAVERN.specials[TV.id];
     var tdn = (S.vars.today && S.vars.today.note) || '';   // 아침 랜덤 사건이 남긴 오늘의 사정
-    TVE.shopInfo.textContent = '오늘 손님 ' + TV.queue.length + '명. 요리 하나에 재료가 2~3개 들어요. 모자라면 영업 중에 정중히 거절할 수 있지만 평판이 조금 깎입니다.' +
+    TVE.shopInfo.textContent = (TV.free ? '무료 배식이라 오늘 매출과 팁은 없어요. 대신 평판과 호감도가 올라요.\n' : '') + '오늘 손님 ' + TV.queue.length + '명. 요리 하나에 재료가 2~3개 들어요. 모자라면 영업 중에 정중히 거절할 수 있지만 평판이 조금 깎입니다.' +
       (tdn ? '\n☆ 오늘의 사정 — ' + tdn : '') +
       (sp ? '\n★ 특별 주문 예고 — ' + sp.title + ': ' + sp.brief : '');
+    var lb = S.vars.tavern.lastBuy || {}, lbN = Object.keys(lb).reduce(function (a, k) { return a + (lb[k] || 0); }, 0);
+    TVE.shopLast.disabled = !lbN; TVE.shopLast.title = lbN ? '지난 장보기: ' + Object.keys(lb).map(function (k) { return TAVERN.ingredients[k].name + '×' + lb[k]; }).join(', ') : '지난 장보기 기록이 없어요';
     TVE.shopList.innerHTML = '';
     Object.keys(TAVERN.ingredients).forEach(function (id) {
       var g = TAVERN.ingredients[id], pr = TavernCore.price(TAVERN, S.vars, id);
@@ -1295,7 +1299,33 @@
     sfx('select');
     S.vars.gold -= cost; TV.spent += cost;
     S.vars.tavern.stock[id] = (S.vars.tavern.stock[id] || 0) + n;
+    TV.bought[id] = (TV.bought[id] || 0) + n;
     updateHud(); renderShop();
+  }
+  // 한꺼번에 사기: want = { 재료id: 개수 }. 골드가 허락하는 만큼만 (재료 정의 순서대로). 산 개수와 비용을 돌려준다.
+  function buyMany(want) {
+    var n = 0, cost = 0;
+    Object.keys(TAVERN.ingredients).forEach(function (id) {
+      for (var k = 0; k < (want[id] || 0); k++) {
+        var pr = TavernCore.price(TAVERN, S.vars, id);
+        if (tvGold() < pr) break;
+        S.vars.gold -= pr; TV.spent += pr; cost += pr; n++;
+        S.vars.tavern.stock[id] = (S.vars.tavern.stock[id] || 0) + 1;
+        TV.bought[id] = (TV.bought[id] || 0) + 1;
+      }
+    });
+    updateHud(); renderShop();
+    return { n: n, cost: cost };
+  }
+  function buyLast() {   // "지난번처럼 사기"
+    var lb = S.vars.tavern.lastBuy || {};
+    var r = buyMany(lb);
+    if (r.n) { sfx('coin'); toast('지난번처럼 ' + r.n + '개 구입 (-' + r.cost + 'G)', 'up'); } else toast('살 수 있는 게 없어요', 'down');
+  }
+  function buySuggest() {   // "추천 구매": 오늘 손님 주문을 아는 레시피로 맞추는 데 모자라는 재료만
+    var plan = TavernCore.suggestBuy(TAVERN, S.vars, TV.queue, tvGold(), function (id) { return TavernCore.price(TAVERN, S.vars, id); });
+    var r = buyMany(plan.buy);
+    if (r.n) { sfx('coin'); toast('추천 구매 ' + r.n + '개 (-' + r.cost + 'G)', 'up'); } else toast(plan.cost ? '골드가 모자라요' : '이미 재료가 충분해요', plan.cost ? 'down' : 'up');
   }
 
   // ----- 손님 한 명 -----
@@ -1323,7 +1353,9 @@
     TVE.prog.textContent = progText(); TVE.prog.classList.remove('hidden');
     var cmds = [{ hide: 'all' }, { show: cu.who, face: 'normal', pos: 'center' }];
     if (cu.sp && cu.sp.i === 0) cmds.splice(1, 0, { narr: '★ 특별 주문이 들어왔다! — ' + cu.sp.title }, { sfx: 'mystery' });
-    (cu.say || []).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who)); });
+    var sayList = cu.say || [];
+    if (OPT.fastTv && sayList.length > 1) sayList = sayList.slice(0, 1);   // 영업 빠른 모드: 등장 대사는 한 줄만
+    sayList.forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who)); });
     // 단골의 숨은 취향: 첫 방문 때 은근한 힌트를 흘리고 메모장에 적어 둔다
     var cdef = TAVERN.customers[cu.who] || {}, note = TavernCore.note(S.vars, cu.who);
     note.met = true;
@@ -1415,7 +1447,7 @@
     TVE.stamp.innerHTML = '<b>' + RES_LABEL[out.result] + '</b><small>' + out.dish + (out.gold ? ' · +' + out.gold + 'G' + (out.tip ? ' (팁 ' + out.tip + ')' : '') : '') + '</small>';
     void TVE.stamp.offsetWidth; TVE.stamp.classList.add('go');
     clearTimeout(stampTimer);
-    stampTimer = setTimeout(function () { if (TVE.stamp) TVE.stamp.classList.add('hidden'); }, 2300);
+    stampTimer = setTimeout(function () { if (TVE.stamp) TVE.stamp.classList.add('hidden'); }, OPT.fastTv ? 900 : 2300);
   }
   function doServe() {
     if (!TV || TV.phase !== 'brew' || TV.sel.length < 2) return;
@@ -1469,7 +1501,7 @@
     }
     var cmds = [];
     lines.forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who, vars)); });
-    asList(cu.after).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who, vars)); });
+    if (!OPT.fastTv) asList(cu.after).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who, vars)); });   // 빠른 모드는 덧붙는 대사를 생략
     // 단골 취향: 맞췄으면 보너스 대사, 주문은 맞췄는데 취향은 못 맞췄으면 (처음 한 번) 힌트 대사를 흘린다
     var td = def.taste, nt = TavernCore.note(S.vars, cu.who);
     if (td && out.taste) { var bl = TavernCore.pick(td.bonus); if (bl) cmds = cmds.concat(lineCmds(bl, cu.who, vars)); }
@@ -1505,6 +1537,7 @@
     cmds.push({ narr: v.ok ? '★ 특별 주문 성공! — ' + v.title : '특별 주문을 채우지 못했다… — ' + v.title });
     asList(v.lines).forEach(function (l) { cmds = cmds.concat(lineCmds(l, cu.who)); });
     v.rep = TavernCore.capRep(TAVERN, TV, v.rep);   // 평판은 하루 한계(+2/-3) 안에서만 반영
+    if (TV.free) v.gold = 0;   // 무료 배식: 특별 주문 사례금도 없다 (평판만)
     var st = {};
     if (v.gold) st.gold = v.gold;
     if (v.rep) st.rep = v.rep;
@@ -1670,11 +1703,21 @@
   }
 
   // ----- 밤: 여관 업그레이드 -----
+  // 지금 골드로 살 수 있는 여관 업그레이드/객실 개조가 하나라도 있나
+  function anyBuyable() {
+    InnCore.ensure(S.vars);
+    var have = S.vars.tavern.upg, g = tvGold();
+    return TAVERN.upgrades.some(function (u) { return !have[u.id] && g >= u.price; }) ||
+      LODGING.upgrades.some(function (u) { return InnCore.buyRoomUpg(S.vars, u) === 'ok'; });
+  }
   function openUpgrades() {
     stopFast();
     TavernCore.ensure(TAVERN, S.vars);
+    if (OPT.autoSkipUpg && !anyBuyable()) {   // 설정: 살 게 없으면 손보기 화면을 건너뛴다
+      toast('살 수 있는 개조가 없어 손보기를 건너뛰었어요', 'up');
+      next(); run(); return;
+    }
     takeSnap('여관 업그레이드');
-    E.toasts.innerHTML = '';
     stopTyping();
     E.dialog.classList.add('hidden'); E.choices.classList.add('hidden');
     TVE.root.classList.remove('hidden');
@@ -1842,30 +1885,21 @@
     if (LG.rej[gid]) delete LG.rej[gid]; else { LG.rej[gid] = true; delete LG.assign[gid]; if (LG.sel === gid) LG.sel = ''; }
     renderLodging();
   }
-  function lodgeFinish() {
-    if (!LG) return;
-    if (LG.stage === 'done') {   // 정산 결과를 본 뒤 "다음" -> 다음 명령
-      LG = null; TVE.lodge.classList.add('hidden'); TVE.root.classList.add('hidden');
-      run(); return;
-    }
+  function lodgeRecommend() {   // "추천 배정": 가장 잘 맞는 배정으로 채운다 (이후 직접 고쳐도 됨)
+    if (!LG || LG.stage !== 'pick') return;
+    LG.assign = InnCore.recommend(S.vars, LG.guests); LG.rej = {}; LG.sel = '';
+    sfx('select'); renderLodging();
+  }
+  function lodgeFinish() {   // "접수 마감": 한 번 눌러 정산하고 곧바로 다음으로 (결과는 알림으로)
+    if (!LG || LG.stage !== 'pick') return;
     var out = InnCore.settle(S.vars, LG.day, LG.assign);
-    LG.stage = 'done'; LG.out = out;
     pushLog({ name: '', color: '', text: '— 숙박 정산: 수입 +' + out.gold + 'G' + (out.sat ? ', 만족 ' + out.sat : '') + ' —' });
     updateHud(); sfx(out.gold > 0 ? 'coin' : 'tap');
+    LG = null; TVE.lodge.classList.add('hidden'); TVE.root.classList.add('hidden');
     next();                      // 정산 직후 스냅샷은 다음 명령을 가리킨다 (불러와도 정산을 다시 하지 않음)
     takeSnap('숙박 정산');
-    TVE.lodgeRooms.classList.add('hidden'); TVE.lodgeGuests.classList.add('hidden');
-    var h = '';
-    out.rows.forEach(function (r) {
-      var g = InnCore.guestDef(r.id), rm = r.room ? LODGING.rooms[r.room].short : '';
-      h += '<div class="lodge-res ' + (!r.room ? 'rej' : (r.match ? 'ok' : 'meh')) + '"><span class="lodge-glyph" style="background:' + g.color + '">' + g.glyph + '</span>' +
-        '<div><b>' + g.name + '</b><small>' + (r.room ? rm + ' · ' + (r.match ? '요청 만족' : '요청과 달랐어요') : '돌려보냈어요') + '</small></div><em>' + (r.pay ? '+' + r.pay + 'G' : '-') + '</em></div>';
-    });
-    h += '<div class="sum-row total"><span>오늘 밤 숙박 수입</span><b class="plus">+' + out.gold + ' G</b></div>';
-    if (out.sat) h += '<div class="sum-row"><span>여관 평가 (만족 ' + out.sat + ')</span><b class="plus">★ +' + out.sat + '</b></div>';
-    TVE.lodgeResult.innerHTML = h; TVE.lodgeResult.classList.remove('hidden');
-    TVE.lodgeDone.textContent = '다음';
-    TVE.lodgeInfo.textContent = '손님들은 방으로 올라갔어요. 내일 아침에 평가가 들려올 거예요.';
+    toast('숙박 수입 +' + out.gold + 'G' + (out.sat ? ' · 만족 ' + out.sat : ''), out.gold > 0 ? 'up' : 'down');
+    run();
   }
 
   // ---------- 여관 등급 상승 연출 ----------
@@ -2103,7 +2137,7 @@
 
   // ---------- 설정 화면 ----------
   var SPEED_NAMES = ['매우 느림', '느림', '보통', '빠름', '매우 빠름'];
-  var OPT_TOGGLES = [['opt-mute', 'mute'], ['opt-unread', 'skipUnread'], ['opt-easy', 'easy']];
+  var OPT_TOGGLES = [['opt-mute', 'mute'], ['opt-unread', 'skipUnread'], ['opt-easy', 'easy'], ['opt-fasttv', 'fastTv'], ['opt-autoupg', 'autoSkipUpg']];
   function renderOptions() {
     $('opt-text').value = OPT.textSpeed; $('opt-auto').value = OPT.autoSpeed; $('opt-bgm').value = OPT.bgm; $('opt-sfx').value = OPT.sfx;
     $('opt-text-v').textContent = SPEED_NAMES[OPT.textSpeed - 1]; $('opt-auto-v').textContent = SPEED_NAMES[OPT.autoSpeed - 1];
@@ -2416,10 +2450,16 @@
     $('tv-notes-close').addEventListener('click', function () { TVE.notes.classList.add('hidden'); });
     $('tv-shop-board').addEventListener('click', function () { openBoard(false); });
     $('tv-board-close').addEventListener('click', function () { TVE.menu.classList.add('hidden'); });
-    $('tv-shop-start').addEventListener('click', function () { TVE.shop.classList.add('hidden'); tvNextCustomer(); });
+    $('tv-shop-start').addEventListener('click', function () {
+      if (TV && Object.keys(TV.bought).length) S.vars.tavern.lastBuy = Object.assign({}, TV.bought);   // 다음 "지난번처럼 사기"용
+      TVE.shop.classList.add('hidden'); tvNextCustomer();
+    });
+    TVE.shopLast = $('tv-shop-last'); TVE.shopLast.addEventListener('click', buyLast);
+    $('tv-shop-suggest').addEventListener('click', buySuggest);
     $('tv-sum-btn').addEventListener('click', tvClose);
     $('tv-upg-next').addEventListener('click', closeUpgrades);
     $('lodge-done').addEventListener('click', lodgeFinish);
+    $('lodge-recommend').addEventListener('click', lodgeRecommend);
     $('rankup-btn').addEventListener('click', rankClose);
     $('gift-close').addEventListener('click', giftClose);
     $('gift-react-ok').addEventListener('click', giftReactOk);
@@ -2587,7 +2627,7 @@
   Object.defineProperty(VN, 'gift', { get: function () { return { tab: GF.tab, target: GF.target, fixed: GF.fixed, stage: GF.stage, shopOk: GF.shopOk, open: !!E.gift && !E.gift.classList.contains('hidden') }; } });
   Object.defineProperty(VN, 'rankPopup', { get: function () { return !!E.rankup && !E.rankup.classList.contains('hidden'); } });
   // 영업 상태 (테스트/디버그용): 단계, 손님 순번, 고른 재료, 결과 목록
-  Object.defineProperty(VN, 'tavern', { get: function () { return TV ? { phase: TV.phase, idx: TV.idx, total: TV.queue.length, cur: TV.cur && TV.cur.who, order: TV.cur && TV.cur.order, sp: TV.cur && TV.cur.sp || null, spResult: TV.spResult, tasteHits: TV.tasteHits, sel: TV.sel.slice(), results: TV.results.map(function (r) { return { who: r.who, result: r.result, dish: r.dish, gold: r.gold, aff: r.aff, rep: r.rep, fav: r.fav, hate: r.hate, taste: r.taste, sp: r.sp, ids: r.ids }; }), repSum: TV.repSum } : null; } });
+  Object.defineProperty(VN, 'tavern', { get: function () { return TV ? { id: TV.id, free: !!TV.free, bought: Object.assign({}, TV.bought), phase: TV.phase, idx: TV.idx, total: TV.queue.length, cur: TV.cur && TV.cur.who, order: TV.cur && TV.cur.order, sp: TV.cur && TV.cur.sp || null, spResult: TV.spResult, tasteHits: TV.tasteHits, sel: TV.sel.slice(), results: TV.results.map(function (r) { return { who: r.who, result: r.result, dish: r.dish, gold: r.gold, aff: r.aff, rep: r.rep, fav: r.fav, hate: r.hate, taste: r.taste, sp: r.sp, ids: r.ids }; }), repSum: TV.repSum } : null; } });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

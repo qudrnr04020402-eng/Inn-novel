@@ -29,5 +29,9 @@ window.CHARACTERS = {
 
   // ----- 여관 등급으로 찾아오는 손님 (story/inn-rank.js) -----
   rosa:  { name: '로사',        color: '#a8e08a', tag: '떠돌이 약초 상인 / 느긋 · 향기 (여관 ★2 단골)', faces: faces('rosa') },
-  noble: { name: '벨라르 경',   color: '#d0a0e8', tag: '왕도의 귀족 미식가 / 까다로움 (여관 ★5 특별 손님)', faces: faces('noble') }
+  noble: { name: '벨라르 경',   color: '#d0a0e8', tag: '왕도의 귀족 미식가 / 까다로움 (여관 ★5 특별 손님)', faces: faces('noble') },
+
+  // ----- 5일차 왕도 사절단 (story/day5.js, 영업 특별 손님) -----
+  envoy:    { name: '사절단장 이졸데', color: '#b3a8e8', tag: '왕립 학술원 봉인 조사단장 / 차분 · 깐깐', faces: faces('envoy') },
+  examiner: { name: '시험관 하이덴 경', color: '#a8c0e0', tag: '왕국 기사단 시험관 / 엄격 · 과묵 (카엘라의 옛 시험관)', faces: faces('examiner') }
 };

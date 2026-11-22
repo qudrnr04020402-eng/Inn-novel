@@ -1,5 +1,5 @@
 // ============================================================
-//  아침 랜덤 사건 — 2~5일차 아침 장면이 끝난 뒤, 낮 시간으로 넘어가기 전에 끼어드는 짧은 돌발 사건
+//  아침 랜덤 사건 — 2~6일차 아침 장면이 끝난 뒤, 낮 시간으로 넘어가기 전에 끼어드는 짧은 돌발 사건
 //  - 확률(chance)로 하루 최대 1개. 같은 회차에서 같은 사건은 두 번 나오지 않습니다.
 //  - 난수는 세이브에 저장된 시드로 정해지므로 저장/불러오기로 다시 뽑을 수 없습니다. (js/event-core.js)
 //  - 사건 장면은 STORY.scenes 의 'rev_<id>' 씬입니다. 마지막은 {randret:true} (아침 장면으로 복귀).
@@ -11,20 +11,23 @@
 //  - 검사: node tools/check-story.js (데이터 무결성 + 시뮬레이션에 포함)
 // ============================================================
 window.RANDOM_EVENTS = {
-  chance: 0.6,          // 사건이 일어날 확률 (하루 한 번 굴림)
-  days: [2, 3, 4, 5],   // 사건이 일어날 수 있는 일차
+  chance: 0.65,         // 사건이 일어날 확률 (하루 한 번 굴림)
+  days: [2, 3, 4, 5, 6], // 사건이 일어날 수 있는 일차 (7일차는 결전의 날이라 없음)
   events: {
     //  title: 이름(알림에 표시) / days: 나올 수 있는 일차 / weight: 상대 확률 / if: 조건식(생략 가능)
-    lost_purse:      { title: '분실물 주인 찾기',   days: [2, 3, 4, 5], weight: 1 },
-    rowdy_guest:     { title: '진상 손님',          days: [2, 3, 4, 5], weight: 1 },
-    rainy_day:       { title: '비 오는 날',         days: [3, 4, 5],    weight: 1 },
-    bard:            { title: '떠돌이 음유시인',    days: [2, 3, 4, 5], weight: 1 },
-    rats:            { title: '쥐 소동',            days: [2, 3, 4],    weight: 1 },
-    merchant_sale:   { title: '재료 상인 떨이',     days: [2, 3, 4, 5], weight: 1 },
-    errand_child:    { title: '아이의 심부름',      days: [2, 3, 4, 5], weight: 1 },
-    strange_letter:  { title: '수상한 편지',        days: [2, 3, 4],    weight: 1 },
-    heroine_meet:    { title: '뜻밖의 마주침',      days: [2, 3, 4, 5], weight: 1.4, if: 'aff.erion>=2 || aff.kaela>=2 || aff.miho>=2 || aff.lia>=2' },
-    hungry_traveler: { title: '배고픈 나그네',      days: [2, 3, 4, 5], weight: 1 }
+    lost_purse:      { title: '분실물 주인 찾기',   days: [2, 3, 4, 5, 6], weight: 1 },
+    rowdy_guest:     { title: '진상 손님',          days: [2, 3, 4, 5],    weight: 1 },
+    rainy_day:       { title: '비 오는 날',         days: [3, 4],          weight: 1 },
+    bard:            { title: '떠돌이 음유시인',    days: [2, 3, 4, 5],    weight: 1 },
+    rats:            { title: '쥐 소동',            days: [2, 3, 4],       weight: 1 },
+    merchant_sale:   { title: '재료 상인 떨이',     days: [2, 3, 4, 5],    weight: 1 },
+    errand_child:    { title: '아이의 심부름',      days: [2, 3, 4, 5, 6], weight: 1 },
+    strange_letter:  { title: '수상한 편지',        days: [2, 3, 4],       weight: 1 },
+    heroine_meet:    { title: '뜻밖의 마주침',      days: [2, 3, 4, 5, 6], weight: 1.4, if: 'aff.erion>=2 || aff.kaela>=2 || aff.miho>=2 || aff.lia>=2' },
+    hungry_traveler: { title: '배고픈 나그네',      days: [2, 3, 4, 5, 6], weight: 1 },
+    leaky_roof:      { title: '새는 지붕',          days: [3, 4, 6],       weight: 1 },
+    kind_neighbor:   { title: '인심 좋은 이웃',     days: [2, 3, 4, 5, 6], weight: 1 },
+    tax_collector:   { title: '세금 징수관',        days: [2, 3, 4, 5],    weight: 0.8 }
   }
 };
 
@@ -333,6 +336,60 @@ Object.assign(STORY.scenes, {
   ],
   rev_traveler_no: [
     { narr: '나그네는 말없이 일어나 길을 떠났다. 지켜보던 마을 사람이 혀를 찼다. "여관 주인이 쯧쯧…" 마음이 조금 무겁다.' },
+    { goto: 'rev_end' }
+  ],
+
+  // ---------- 새는 지붕 ----------
+  rev_leaky_roof: [
+    { bg: 'inn_day' }, { hide: 'all' },
+    { narr: '아침에 일어나 보니 복도 한쪽에 물웅덩이가 생겨 있었다. 천장 모서리에서 똑, 똑, 물방울이 떨어진다.' },
+    { choice: [
+      { tag: '평판 +1', text: '지붕에 올라가 바로 수리한다 (8G)', cost: 8, set: { rep: 1 }, goto: 'rev_roof_fix' },
+      { tag: '오늘 손님 -1', text: '양동이를 받쳐 두고 일단 버틴다', set: { 'today.cust': -1, 'today.note': '지붕이 새서 오늘은 손님이 조금 줄었어요.' }, goto: 'rev_roof_bucket' }
+    ] }
+  ],
+  rev_roof_fix: [
+    { narr: '사다리를 타고 올라가 기와를 갈았다. 햇볕이 쨍쨍하게 내리쬐는 지붕 위에서 땀을 닦자, 아래에서 손님이 손을 흔들었다. "주인장, 솜씨가 좋구먼!"' },
+    { goto: 'rev_end' }
+  ],
+  rev_roof_bucket: [
+    { narr: '양동이 세 개가 복도를 차지했다. 똑, 똑, 똑. 박자는 맞지만 손님이 지나갈 때마다 눈치가 보인다.' },
+    { goto: 'rev_end' }
+  ],
+
+  // ---------- 인심 좋은 이웃 ----------
+  rev_kind_neighbor: [
+    { bg: 'inn_front' }, { hide: 'all' },
+    { narr: '문을 열자 바구니가 하나 놓여 있었다. 옆집 아주머니가 담벼락 너머로 손을 흔든다. "텃밭에서 남은 거예요! 여관 일 바쁘시죠?"' },
+    { choice: [
+      { tag: '오늘 장보기 -25%', text: '"감사히 받겠습니다!" 바구니를 받아 든다', set: { 'today.price': -25, 'today.note': '이웃에게 받은 채소와 빵 덕에 오늘 재료 값이 25% 내렸어요.' }, goto: 'rev_neighbor_take' },
+      { tag: '평판 +1 · 장보기 -10%', text: '"오늘 저녁에 한 잔 대접할게요." 답례를 약속한다', set: { rep: 1, 'today.price': -10, 'today.note': '이웃에게 받은 허브 덕에 오늘 재료 값이 10% 내렸어요.' }, goto: 'rev_neighbor_return' }
+    ] }
+  ],
+  rev_neighbor_take: [
+    { narr: '바구니에는 싱싱한 허브와 갓 구운 빵이 가득했다. 오늘 장보기 비용이 한결 가벼워질 것 같다.' },
+    { goto: 'rev_end' }
+  ],
+  rev_neighbor_return: [
+    { narr: '아주머니는 손사래를 치면서도 입이 귀에 걸렸다. "그럼 저녁에 들를게요!" 바구니에서 허브 한 줌만 받고 인사를 나눴다.' },
+    { goto: 'rev_end' }
+  ],
+
+  // ---------- 세금 징수관 ----------
+  rev_tax_collector: [
+    { bg: 'inn_front' }, { hide: 'all' },
+    { narr: '말쑥한 옷의 징수관이 장부를 들고 여관 문 앞에 서 있다. "은빛 여우관이죠? 이번 분기 영업세 납부 안내입니다."' },
+    { choice: [
+      { tag: '평판 +1', text: '"바로 내겠습니다." 영업세를 낸다 (10G)', cost: 10, set: { rep: 1 }, goto: 'rev_tax_pay' },
+      { tag: '평판 -1', text: '"지금은 사정이 어렵습니다. 다음에 내면 안 될까요?"', set: { rep: -1 }, goto: 'rev_tax_delay' }
+    ] }
+  ],
+  rev_tax_pay: [
+    { narr: '징수관은 도장을 쾅 찍고 만족한 듯 고개를 끄덕였다. "이 마을에서 가장 깔끔한 장부군요. 소문대로입니다."' },
+    { goto: 'rev_end' }
+  ],
+  rev_tax_delay: [
+    { narr: '징수관은 한숨을 쉬며 수첩에 무언가를 적었다. "…기한은 지켜 주세요." 이웃들의 시선이 조금 따갑다.' },
     { goto: 'rev_end' }
   ],
 

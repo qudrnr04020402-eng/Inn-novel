@@ -1,31 +1,32 @@
 // ============================================================
-//  4일차 — 봉인의 진실
-//  아침(평판에 따라 달라지는 마을 분위기) -> 낮(히로인 이벤트 4) -> 저녁(작전 회의 + 선물) -> 밤(전야 방문)
+//  4일차 — 술렁이는 마을
+//  아침(평판에 따라 달라지는 마을 분위기) -> 낮(히로인 이벤트) -> 저녁 영업 -> 왕도 사절단이 온다는 소식 -> 밤(짧은 방문)
+//  (옛 4일차의 작전 회의/전야의 선물/전야 방문은 6일차(story/day6.js)로 옮겼습니다)
 // ============================================================
 Object.assign(STORY.scenes, {
 
   // ================= 아침 =================
   d4_open: [
     { bgm: 'inn_day' },
-    { day: 4, time: '아침', tip: '내일이 마지막 날이에요.\n오늘 밤 이후에는 마음을 정해야 해요.' },
+    { day: 4, time: '아침', tip: '마을이 술렁이기 시작했어요.\n평판에 따라 이웃의 반응이 달라져요.' },
     { bg: 'inn_front' }, { hide: 'all' },
     { narr: '동이 트기 전부터 뒷산에서 푸른 안개가 흘러내리고 있다. 동굴 입구에서 올라오는 빛은 어젯밤보다 한층 짙어졌다.' },
-    { narr: '마을 길에는 짐수레가 줄지어 섰다. 불안해진 사람들이 하나둘 마을을 떠나기 시작한 것이다.' },
+    { narr: '마을 길에서는 불안한 얼굴로 수군거리는 사람들이 눈에 띄게 늘었다. 몇몇은 벌써 친척 집으로 짐을 옮기기 시작했다.' },
     { if: 'rep>=2', goto: 'd4_open_trust' },
     { if: 'rep<=-1', goto: 'd4_open_cold' },
     { goto: 'd4_open_plain' }
   ],
   d4_open_trust: [
     { narr: '그런데 몇몇 이웃이 여관 문 앞에 모여들었다. 어느새 얼굴이 익은 마을 사람들이다.' },
-    { narr: '"주인장, 이럴 때일수록 은빛 여우관에 모여 있는 게 안전하다고들 하더군. 우리 좀 쉬게 해 주겠나?" 꿀빵을 사 가던 아주머니가 먼저 입을 뗐다.' },
-    { set: { gold: 20, rep: 1 } },
-    { narr: '쌓아 온 신뢰 덕분에 여관은 대피소가 되었고, 사람들이 내놓은 식재료와 사례가 금고를 채웠다.' },
+    { narr: '"주인장, 이럴 때일수록 은빛 여우관이 중심을 잡아 줘야지. 우리가 일손을 거들 테니 걱정 말게나." 꿀빵을 사 가던 아주머니가 먼저 입을 뗐다.' },
+    { set: { gold: 12, rep: 1 } },
+    { narr: '쌓아 온 신뢰 덕분에 이웃들이 식재료와 일손을 보태 주었다. 금고가 조금 두둑해졌다.' },
     { goto: 'd4_pick' }
   ],
   d4_open_cold: [
     { narr: '여관 앞을 지나던 사람들은 눈을 마주치지 않으려는 듯 고개를 돌렸다. "저 여관 주인, 이번에도 돈 생각만 하더니…" 하는 속삭임이 귀에 박혔다.' },
     { narr: '투숙하던 손님 몇이 방값 환불을 요구하며 짐을 쌌다. 어쩔 수 없이 돌려주었다.' },
-    { set: { gold: -15 } },
+    { set: { gold: -10 } },
     { narr: '금고가 얄팍해졌다. 신뢰를 쌓는 일은 오래 걸리지만 잃는 건 순식간이라는 걸 새삼 느꼈다.' },
     { goto: 'd4_pick' }
   ],
@@ -39,7 +40,7 @@ Object.assign(STORY.scenes, {
   d4_pick: [{ rand: 'morning', then: 'd4_pick_day' }],
   d4_pick_day: [
     { time: '낮' }, { bg: 'inn_day' }, { hide: 'all' },
-    { narr: '오늘이 사실상 마지막으로 마음 편히 시간을 보낼 수 있는 날이다. 누구와 함께할까?' },
+    { narr: '마을 분위기가 점점 무거워지고 있다. 그래도 오늘 하루는 내 몫이다. 누구와 함께할까?' },
     { goto: 'pick' }
   ],
 
@@ -52,7 +53,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', face: 'sad', text: '이 책은 봉인의 열쇠야. 스승님이 맡기셨지. 스승님은 삼백 년 전, 저 동굴 안의 것을 혼자 봉인하셨어.' },
     { say: 'erion', text: '봉인을 다시 맺으려면 대가가 필요해. 봉인지기의 이름과 기억. 스승님은 그걸 내놓았고, 그래서 나는 스승님의 이름을… 이제 떠올릴 수 없어.' },
     { narr: '에리온의 손끝이 책 표지를 천천히 쓸었다. 그것이 기억을 대신하는 유일한 물건이라는 듯.' },
-    { say: 'erion', face: 'normal', text: '내일, 내가 똑같이 할 거야. 그걸 말해 주려고 한 건 아니고… 아니, 맞아. 누군가에게는 말하고 싶었어. 왜 너인지는 묻지 마.' },
+    { say: 'erion', face: 'normal', text: '그때가 오면, 나도 똑같이 할 거야. 그걸 말해 주려고 한 건 아니고… 아니, 맞아. 누군가에게는 말하고 싶었어. 왜 너인지는 묻지 마.' },
     { say: 'erion', text: '…너는 왜 이렇게까지 해? 손님일 뿐인 나한테. 이유가 뭐야?' },
     { choice: [
       { text: '"네가 걱정돼서요. 손님이 아니라, 그냥 에리온이."', set: { 'aff.erion': 2, 'flag.erion_told': true }, goto: 'erion_4_worry' },
@@ -195,7 +196,7 @@ Object.assign(STORY.scenes, {
     { show: 'lia', face: 'normal', pos: 'center' },
     { say: 'lia', text: '…왔네. 올 줄 알았어. 이거 기억나? 어릴 때 네가 내게 준 부적. 여관 앞 도랑에서 주운 돌에 이름을 쓴 거였지.' },
     { say: 'lia', face: 'smile', text: '웃기지? 이것 때문에 신전에 들어간 거야. 이 부적이 진짜 힘이 있는지 알고 싶어서. 그리고, 다음에 만날 때 당당하게 말하고 싶어서.' },
-    { say: 'lia', face: 'sad', text: '…내일, 위험한 일을 하러 가는 거지? 말 안 해도 알아. 네 얼굴에 다 쓰여 있어.' },
+    { say: 'lia', face: 'sad', text: '…곧, 위험한 일을 하러 가는 거지? 말 안 해도 알아. 네 얼굴에 다 쓰여 있어.' },
     { narr: '리아의 손이 내 소매 끝을 꼭 쥐었다. 힘이 너무 세서 조금 아팠다.' },
     { cg: 'lia_charm' },
     { say: 'lia', text: '약속해 줘. 꼭 돌아오겠다고. 그것만 약속해 줘.' },
@@ -239,200 +240,96 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ================= 저녁: 마지막 평화로운 영업 -> 작전 회의 =================
-  // 저녁 영업(story/tavern.js 의 day4) 뒤, 가게 문을 닫고 모두가 모여 작전 회의를 한다
+  // ================= 저녁: 영업 -> 왕도 사절단 소식 =================
   d4_evening: [
     { bgm: 'tavern' },
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '짐을 싸던 마을 사람들도 해가 지자 한 잔 마시러 하나둘 들른다. 어쩌면 이 식당에서 보내는 마지막 평범한 저녁일지도 모른다.' },
+    { narr: '술렁이는 마을에서도 저녁이 되면 사람들은 한 잔 마시러 하나둘 들른다. 걱정은 걱정이고, 배는 고픈 법이다.' },
     { tavern: 'day4' },
-    { goto: 'd4_ev_meeting' }
+    { goto: 'd4_ev_end' }
   ],
-  d4_ev_meeting: [
-    { bgm: 'tension' },
+  d4_ev_end: [
+    { bgm: 'inn_night' },
     { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '영업이 끝나고, 식당에 모두가 모였다. 문은 닫혀 있고, 창문 너머로 푸른 안개가 흘러들고 있다.' },
-    { show: 'kaela', face: 'normal', pos: 'left' },
-    { show: 'erion', face: 'normal', pos: 'center' },
-    { show: 'miho', face: 'normal', pos: 'right' },
-    { say: 'erion', text: '…이제 말해야겠지. 내가 왜 이 마을에 왔는지.' },
-    { say: 'erion', text: '동굴 안에는 삼백 년 전 스승님이 봉인한 \'어둠의 문지기\'가 있어. 봉인이 풀리면 문지기는 마을을 삼키고, 다음은 인간 영토 전체야.' },
-    { say: 'erion', text: '이 책은 봉인의 열쇠. 다시 봉인하려면 봉인지기가 이름과 기억을 바쳐야 해. 내일 해 질 녘, 봉인은 완전히 풀려. 그 전에 내가 한다.' },
-    { if: 'flag.erion_told', goto: 'd4_ev_told' },
-    { goto: 'd4_ev_untold' }
-  ],
-  d4_ev_told: [
-    { narr: '에리온이 잠깐 내 쪽을 흘끔 보았다. 이미 알고 있는 사람에게는 눈이 그렇게 말하고 있었다. \'…모두에게 말하게 해 줘서 고마워.\'' },
-    { goto: 'd4_ev_react' }
-  ],
-  d4_ev_untold: [
-    { narr: '식당 안이 쥐 죽은 듯 조용해졌다. 에리온의 이야기는 모두에게 처음이었다.' },
-    { goto: 'd4_ev_react' }
-  ],
-  d4_ev_react: [
-    { show: 'kaela', face: 'angry' },
-    { say: 'kaela', text: '이름과 기억을 바친다고!? 그게 무슨 소리냐! 그런 건 영웅의 방식이 아니다! 영웅은 모두를 살리고 자기도 살아 돌아온다!' },
-    { show: 'miho', face: 'sad' },
-    { say: 'miho', text: '…솔직히 이름 팔아서 사는 건 저도 해 본 적 없어요. 근데 에리온 씨는 그걸 그냥 하겠다는 거잖아요. 공짜로.' },
-    { hide: 'miho' },
-    { show: 'lia', face: 'sad', pos: 'right' },
-    { say: 'lia', text: '신께서도 그런 희생을 바라지는 않으실 거예요. 분명히. 다른 방법이 있을 거예요.' },
-    { show: 'erion', face: 'angry' },
-    { say: 'erion', text: '다른 방법은 없어! 있었다면 삼백 년 동안 스승님이 찾았을 거야!' },
-    { narr: '다툼이 번지고 식당 공기가 서늘해졌다. 모두의 시선이 나를 향한다. 여관 주인이 결정해야 한다. 이 마을에서 가장 많은 사람을 지켜보고 있는 사람은 바로 나니까.' },
-    { choice: [
-      { text: '"에리온 혼자 보낼 순 없어요. 모두 함께 갑니다. 방법은 같이 찾아요."', set: { 'aff.erion': 1, 'aff.kaela': 1, 'aff.miho': 1, 'aff.lia': 1, rep: 1, 'flag.plan_team': true }, goto: 'd4_ev_team' },
-      { text: '"에리온의 계획을 믿겠어요. 대신 우리가 끝까지 곁에서 지킬게요."', set: { 'aff.erion': 2, 'flag.plan_trust': true }, goto: 'd4_ev_trust' },
-      { text: '"…마을 사람들을 데리고 일단 도망치죠. 목숨이 우선이에요."', set: { 'aff.erion': -1, 'aff.kaela': -1, 'aff.miho': -1, 'aff.lia': -1, rep: -3, 'flag.plan_run': true }, goto: 'd4_ev_run' }
-    ] }
-  ],
-  d4_ev_team: [
-    { show: 'erion', face: 'surprised' },
-    { say: 'erion', text: '…함께? 그런 말을 해 준 사람은 스승님 이후로 처음이야.' },
-    { show: 'kaela', face: 'smile' },
-    { say: 'kaela', text: '하하! 역시 주인장이다! 영웅단 결성이군! 이름은 \'은빛 여우 기사단\'으로 하자!' },
-    { hide: 'lia' },
-    { show: 'miho', face: 'smile', pos: 'right' },
-    { say: 'miho', text: '보수는 후불인 거죠? 그럼 계약 성립! 도적단 부업 시작입니다!' },
-    { hide: 'miho' },
-    { show: 'lia', face: 'smile', pos: 'right' },
-    { say: 'lia', text: '신께서 지켜보고 계실 거야. 내일, 모두 같이 돌아오자.' },
-    { show: 'erion', face: 'shy' },
-    { say: 'erion', text: '…바보들. 정말로.' },
-    { goto: 'd4_ev_gift' }
-  ],
-  d4_ev_trust: [
-    { show: 'erion', face: 'surprised' },
-    { say: 'erion', text: '…믿는다고? 나를?' },
-    { show: 'erion', face: 'shy' },
-    { say: 'erion', text: '…그래. 그럼 나도, 한 번만 믿어 볼게. 모두를.' },
+    { narr: '마지막 손님을 배웅하고 식기를 정리하는데, 문이 벌컥 열렸다. 청년단 핀이 숨을 헐떡이며 뛰어 들어왔다.' },
+    { show: 'fin', face: 'surprised', pos: 'center' },
+    { say: 'fin', text: '사, 사장님! 큰일… 아니, 좋은 소식이에요! 촌장님이 왕도에 보낸 급사가 돌아왔어요. 내일 왕립 학술원 봉인 조사 사절단이 이 마을에 도착한대요!' },
+    { hide: 'fin' },
+    { show: 'erion', face: 'angry', pos: 'center' },
+    { say: 'erion', text: '…학술원? 하필 지금. 그쪽 사람들은 봉인이 아니라 책에만 관심이 있을 텐데.' },
+    { show: 'kaela', face: 'surprised', pos: 'left' },
+    { say: 'kaela', text: '왕도의 사절단…! 기사단 사람도 같이 오는 건가? 그, 그렇다면 이 몸도 의관을 정제해야…' },
     { show: 'kaela', face: 'sad' },
-    { say: 'kaela', text: '…어쩐지 납득이 안 간다. 하지만 주인장의 판단이라면 따르겠다.' },
-    { goto: 'd4_ev_gift' }
-  ],
-  d4_ev_run: [
-    { show: 'kaela', face: 'angry' },
-    { say: 'kaela', text: '…도망? 주인장, 진심이냐?' },
-    { hide: 'miho' },
-    { show: 'lia', face: 'sad', pos: 'right' },
-    { say: 'lia', text: '…그건 안 돼. 마을은 어떡하고…' },
-    { narr: '차가운 침묵이 식당을 짓눌렀다. 다들 실망한 얼굴이다. 나 역시 입 밖으로 낸 말이 마음에 걸렸다.' },
-    { show: 'erion', face: 'normal' },
-    { say: 'erion', text: '…좋아. 그럼 나 혼자 가겠어. 인간의 마을은 인간이 지키는 거라고 생각한 내가 바보였지.' },
-    { narr: '하룻밤을 더 생각해 보기로 했다. 정말로 이게 옳은 걸까.' },
-    { goto: 'd4_ev_gift' }
-  ],
-
-  // ----- 전야의 선물 -----
-  d4_ev_gift: [
-    { bgm: 'romance' },
-    { hide: 'all' },
-    { narr: '회의가 끝나고 각자 흩어졌다. 내일을 위한 마지막 준비 시간이다. 가진 돈으로 누군가에게 도움이 될 물건을 마련할 수 있다.' },
-    // 이 선물도 "하루에 한 사람당 선물 1개" 한도를 씁니다 (gift.given.<id> = 4). 낮에 이미 선물한 사람은 선택지에서 빠집니다.
+    { narr: '카엘라의 목소리가 이상하게 작아졌다. 왕도라는 말이 나온 순간 표정이 굳은 것 같다.' },
+    { narr: '손님이 올 것이다. 여관 주인으로서 어떻게 맞이할까?' },
     { choice: [
-      { who: 'erion', if: 'gift.given.erion!=4', put: { 'gift.given.erion': 4 }, text: '마력 회복 물약을 준비해 준다. "무리하지 마요."', cost: 15, set: { 'aff.erion': 2 }, goto: 'd4_gift_erion' },
-      { who: 'kaela', if: 'gift.given.kaela!=4', put: { 'gift.given.kaela': 4 }, text: '갑옷을 새로 수리해 주고 가격표를 떼어 준다', cost: 15, set: { 'aff.kaela': 2 }, goto: 'd4_gift_kaela' },
-      { who: 'miho', if: 'gift.given.miho!=4', put: { 'gift.given.miho': 4 }, text: '튼튼한 로프와 도구 세트를 사 준다', cost: 15, set: { 'aff.miho': 2 }, goto: 'd4_gift_miho' },
-      { who: 'lia', if: 'gift.given.lia!=4', put: { 'gift.given.lia': 4 }, text: '신전에서 성수를 사 와서 건넨다', cost: 15, set: { 'aff.lia': 2 }, goto: 'd4_gift_lia' },
-      { text: '모두에게 따뜻한 야식을 나눠 준다 (무료)', set: { rep: 1 }, goto: 'd4_gift_all' }
+      { text: '"여관을 정돈하고 정중히 맞이합시다." (10G)', cost: 10, set: { rep: 1, 'flag.envoy_prep': true }, goto: 'd4_ev_prep' },
+      { text: '"평소처럼 맞이하면 되죠. 우리다운 여관이니까요."', goto: 'd4_ev_plain' }
     ] }
   ],
-  d4_gift_erion: [
-    { show: 'erion', face: 'surprised', pos: 'center' },
-    { say: 'erion', text: '…내가 부탁한 적도 없는데. 이런 건 비싸잖아.' },
-    { show: 'erion', face: 'shy' },
-    { say: 'erion', text: '…받을게. 하지만 쓰지 않아도 되도록 노력할게. 그게 네가 원하는 거잖아.' },
+  d4_ev_prep: [
+    { show: 'lia', face: 'smile', pos: 'right' },
+    { say: 'lia', text: '그럼 시트부터 다 갈아야겠네! 내가 복도랑 객실을 맡을게. 다락방은 먼지가 많으니까 오늘 밤에 환기부터 해 두자.' },
+    { narr: '다 같이 밤늦게까지 객실을 쓸고 닦았다. 내일은 왕도의 손님이 올 것이다.' },
     { goto: 'd4_night' }
   ],
-  d4_gift_kaela: [
-    { show: 'kaela', face: 'surprised', pos: 'center' },
-    { say: 'kaela', text: '갑옷이… 반짝반짝하다! 아니, 가격표가 없다!' },
-    { show: 'kaela', face: 'shy' },
-    { say: 'kaela', text: '…이제 진짜 내 갑옷 같다. 고맙다, 주인장. 이건 평생 소중히 입겠다.' },
-    { goto: 'd4_night' }
-  ],
-  d4_gift_miho: [
-    { show: 'miho', face: 'surprised', pos: 'center' },
-    { say: 'miho', text: '이거 최신형 갈고리 로프잖아요! 가격이 얼마… 아니, 아니에요! 받을게요!' },
-    { show: 'miho', face: 'smile' },
-    { say: 'miho', text: '이거 쓰고 살아서 돌아오면 이자 포함해서 갚을게요. 아, 이자는 제가 정하는 거죠?' },
-    { goto: 'd4_night' }
-  ],
-  d4_gift_lia: [
-    { show: 'lia', face: 'surprised', pos: 'center' },
-    { say: 'lia', text: '이거 성수 아니야? 신전에서도 구하기 힘든 건데…' },
-    { show: 'lia', face: 'smile' },
-    { say: 'lia', text: '고마워. 이거, 네가 위험할 때 대신 쓸게. 약속이야.' },
-    { goto: 'd4_night' }
-  ],
-  d4_gift_all: [
-    { show: 'kaela', face: 'smile', pos: 'left' },
+  d4_ev_plain: [
     { show: 'miho', face: 'smile', pos: 'right' },
-    { say: 'kaela', text: '야식이다! 전투 전에는 든든히 먹어야지!' },
-    { say: 'miho', text: '사장님, 오늘만은 공짜죠? 그렇게 알고 먹을게요!' },
-    { narr: '다 같이 둘러앉아 먹는 야식은 소박했지만 따뜻했다. 모두의 얼굴이 조금 풀렸다.' },
+    { say: 'miho', text: '왕도 손님이면 팁도 클 텐데… 아, 아니에요. 그래도 사장님 말이 맞아요. 꾸미면 금방 들켜요.' },
+    { narr: '평소처럼 장부를 정리하고 불을 껐다. 내일은 낯선 얼굴들이 여관을 찾아올 것이다.' },
     { goto: 'd4_night' }
   ],
 
-  // ================= 밤 (전야) =================
+  // ================= 밤 =================
   d4_night: [
     { bgm: 'inn_night' },
     { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
-    { narr: '마지막 밤이다. 모두가 각자 방으로 돌아가고 여관이 조용해졌다. 내일 일을 생각하며 천장을 보고 있는데, 방문이 조용히 열렸다.' },
-    { if: WIN('erion', 11), goto: 'd4_night_erion' },
-    { if: WIN('kaela', 11), goto: 'd4_night_kaela' },
-    { if: WIN('miho', 11), goto: 'd4_night_miho' },
-    { if: WIN('lia', 11), goto: 'd4_night_lia' },
+    { narr: '긴 하루를 마치고 방에 누웠는데, 조용히 문 두드리는 소리가 났다.' },
+    { if: WIN('erion', HEART(3)), goto: 'd4_night_erion' },
+    { if: WIN('kaela', HEART(3)), goto: 'd4_night_kaela' },
+    { if: WIN('miho', HEART(3)), goto: 'd4_night_miho' },
+    { if: WIN('lia', HEART(3)), goto: 'd4_night_lia' },
     { goto: 'd4_night_none' }
   ],
   d4_night_none: [
-    { narr: '…아무도 오지 않았다. 바람이 문을 흔든 것 같다. 복도 끝에서 에리온이 책 읽는 소리, 카엘라의 코 고는 소리, 미호가 동전을 세는 소리, 리아의 기도 소리가 조금씩 들린다.' },
-    { narr: '이 여관에 사람이 가득 찬 게 얼마 만일까. 내일, 반드시 모두 무사히 돌아오게 하겠다고 다짐하며 눈을 감았다.' },
+    { narr: '문을 열어 봐도 복도에는 아무도 없었다. 창밖에는 푸른 안개가 낮게 깔려 있다.' },
+    { narr: '내일은 왕도에서 손님이 온다. 마음을 다잡고 눈을 감았다.' },
     { goto: 'd4_upgrade' }
   ],
   d4_night_erion: [
     { bgm: 'romance' },
-    { bg: 'roof_night' },
     { show: 'erion', face: 'shy', pos: 'center' },
-    { say: 'erion', text: '…자? 안 잤지. 지붕 위로 와 줄래. 잠깐이면 돼.' },
-    { narr: '달빛 아래 에리온의 은빛 머리카락이 부드럽게 빛났다. 그녀는 책을 품에 안고 한참을 말없이 앉아 있다가 입을 열었다.' },
-    { say: 'erion', face: 'normal', text: '…만약 내일, 내가 네 이름을 잊어버린다면. 그래도 나를 다시 불러 줄 수 있어? 몇 번이고. 내가 기억할 때까지.' },
-    { say: 'erion', face: 'shy', text: '…이상하지. 이름을 잃는 게 무섭다고 생각한 건 처음이야. 지금까지는 그저 의무라고만 생각했는데.' },
+    { say: 'erion', text: '…잠깐만. 학술원 사람들이 오면, 나는 한동안 방에서 안 나올 거야. 그러니까 미리 말해 두는 건데.' },
+    { say: 'erion', face: 'normal', text: '…내가 책을 빼앗기면 그건 네 탓이 아니야. 그냥, 알고 있으라고.' },
     { set: { 'aff.erion': 1 } },
-    { narr: '그녀의 어깨가 내 어깨에 조용히 기댔다. 떨고 있는 게 느껴졌다. 나는 말없이 곁을 지켰다.' },
+    { narr: '에리온은 그 말만 남기고 복도 어둠 속으로 사라졌다. 문 앞에 작은 별꽃 사탕 하나가 놓여 있었다.' },
     { goto: 'd4_upgrade' }
   ],
   d4_night_kaela: [
     { bgm: 'romance' },
     { show: 'kaela', face: 'shy', pos: 'center' },
-    { say: 'kaela', text: '주, 주인장. 자고 있었나? 아니, 이 시간에 불쑥 오다니 영웅의 체면이 말이 아니군.' },
-    { narr: '카엘라는 갑옷을 입지 않은 평상복 차림이었다. 처음 보는 모습이다. 붉은 머리를 풀어 내린 채 문 앞에 서 있다.' },
-    { say: 'kaela', face: 'normal', text: '내일이 두렵다. 하지만, 그것보다 더 두려운 건 내일 이후에 주인장을 못 보게 되는 것이다. …이게 무슨 감정인지는 잘 모르겠지만.' },
-    { say: 'kaela', face: 'smile', text: '그러니까 맹세하겠다. 내 검은, 주인장과 이 여관을 지키는 데 쓰겠다고. 정식 기사가 아니어도 상관없다. 나만의 기사도다!' },
+    { say: 'kaela', text: '주, 주인장. 아직 안 잤나? …내일 올 사절단 말이다. 기사단 사람이 올지도 모른다는 얘기를 들었다.' },
+    { say: 'kaela', face: 'sad', text: '이 몸은 그 사람들 앞에서 영웅이어야 한다. …하지만 사실은 조금 무섭다. 한 번도 합격하지 못했으니까.' },
     { set: { 'aff.kaela': 1 } },
-    { narr: '카엘라는 대검 대신 손바닥을 내 앞에 내밀었다. 악수하자는 뜻이다. 그 손은 아주 따뜻했다.' },
+    { narr: '카엘라는 억지로 웃어 보이고는 문을 닫았다. 문틀에 부딪히는 소리가 나지 않은 건 오늘이 처음이었다.' },
     { goto: 'd4_upgrade' }
   ],
   d4_night_miho: [
     { bgm: 'romance' },
-    { show: 'miho', face: 'normal', pos: 'center' },
-    { say: 'miho', text: '사장님. 안 자는 거 알아요. 귀가 좋거든요. 한숨 소리가 다 들려요.' },
-    { narr: '미호가 침대 모서리에 걸터앉았다. 평소의 장난기가 없다. 꼬리가 천천히 내 다리 위로 올라온다.' },
-    { say: 'miho', face: 'shy', text: '저, 내일 무서워요. 도망치는 건 전문인데, 이번엔 도망치고 싶지 않아요. 이유는 사장님이 알잖아요.' },
-    { say: 'miho', face: 'smile', text: '…돌아오면, 이자 대신 부탁 하나만 들어줘요. 아직 말 안 할래요. 비밀이니까.' },
+    { show: 'miho', face: 'smile', pos: 'center' },
+    { say: 'miho', text: '사장님, 사절단이 오면 객실이 꽉 찬다는 거 알죠? 특실 수요가 엄청나요. 다락 개조할 돈이 있으면 지금이 타이밍이에요!' },
+    { say: 'miho', face: 'shy', text: '…물론 그건 핑계고요. 사실은 오늘 하루 종일 사장님 얼굴을 못 봐서 와 본 거예요. 비밀이에요, 아시죠?' },
     { set: { 'aff.miho': 1 } },
-    { narr: '미호가 내 귓가에 작게 속삭이고는 도망치듯 방을 나갔다. 방에는 여우 귀 같은 따뜻한 온기만 남았다.' },
+    { narr: '미호는 꼬리를 한 번 흔들고 도망치듯 사라졌다. 어쩐지 방 안이 한층 따뜻해졌다.' },
     { goto: 'd4_upgrade' }
   ],
   d4_night_lia: [
     { bgm: 'romance' },
     { show: 'lia', face: 'shy', pos: 'center' },
-    { say: 'lia', text: '…자? 안 자지? 나도 못 자겠어서.' },
-    { narr: '리아가 숄을 두른 채 조심스럽게 들어왔다. 침대 곁 의자에 앉아 무릎을 끌어안는다. 어릴 때 천둥 치는 밤에 그랬던 것처럼.' },
-    { say: 'lia', face: 'normal', text: '있잖아. 아까 낮에 말한 거, 약속 지켜 줄 거지? …난 내일이 어떻게 되든 이 여관이 좋아. 그리고, 이 여관에 있는 네가 제일 좋아.' },
-    { say: 'lia', face: 'shy', text: '…아, 이상한 뜻 아니야! 아니, 이상한 뜻이긴 한데! 내일 이후에, 제대로 말해도 될까?' },
+    { say: 'lia', text: '자, 자고 있었어? …내일 손님들 맞을 준비 때문에 잠이 안 와서. 시트도 다 갈았는데 괜히 불안해.' },
+    { say: 'lia', face: 'smile', text: '그래도 네가 옆에 있으니까 괜찮아. 어릴 때부터 그랬어. 네가 괜찮다고 하면 정말 괜찮았거든.' },
     { set: { 'aff.lia': 1 } },
-    { narr: '리아가 내 손을 살며시 잡았다가 놓았다. 그 손끝이 조금 떨렸다.' },
+    { narr: '리아가 문 앞에 서서 한참 인사를 하고 갔다. 복도에 따뜻한 빵 냄새가 남았다.' },
     { goto: 'd4_upgrade' }
   ]
 });

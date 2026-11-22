@@ -275,6 +275,38 @@ const CUSTOMERS = {
     },
     defs: '',
     acc: ''
+  },
+  // 사절단장 이졸데: 7일 중 5일차에 찾아오는 왕도 학술원 봉인 조사단장. 보랏빛 쪽머리, 둥근 안경, 남색 코트와 은빛 사자 문장
+  envoy: {
+    hair: ['#b3a8e8', '#7a6cc0', '#3a2e78'], iris: ['#5a3a9a', '#cdb4ff'], brow: '#3a2e78', pupil: '#1c1048',
+    back: 'M122,226 C108,142 150,106 200,106 C250,106 292,142 278,226 L286,330 C290,356 276,372 258,368 L142,368 C124,372 110,356 114,330Z',
+    ears() { return ''; },
+    front: 'M126,242 C118,164 150,124 200,122 C250,124 282,164 274,242 C268,212 254,192 236,182 C220,202 204,204 192,200 C172,204 156,198 144,188 C134,204 128,222 126,242Z',
+    strands: 'M126,242 C122,278 122,310 128,340 C136,310 142,278 150,256Z M274,242 C278,278 278,310 272,340 C264,310 258,278 250,256Z', hl: 'M156,148 C176,132 226,132 246,148',
+    outfit() {
+      return ROBE('#2c3f7a', '#18244e') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#f4f1ff"/>` + COLLAR('#dfe6ff') +
+        `<path d="M92,470 H150 M250,470 H308" stroke="#cfd8e6" stroke-width="5" opacity=".85"/>` +
+        `<circle cx="200" cy="470" r="22" fill="#e8eef8" stroke="#8a96b0" stroke-width="3"/><path d="M200,452 L206,466 L220,468 L210,478 L213,492 L200,485 L187,492 L190,478 L180,468 L194,466Z" fill="#7a6cc0"/>` +
+        `<path d="M122,520 H278" stroke="#cfd8e6" stroke-width="3" opacity=".6"/>`;
+    },
+    defs: '',
+    acc: '<circle cx="165" cy="264" r="31" fill="#dfe8ff" fill-opacity=".16" stroke="#3a2e78" stroke-width="4"/><circle cx="235" cy="264" r="31" fill="#dfe8ff" fill-opacity=".16" stroke="#3a2e78" stroke-width="4"/><path d="M196,262 C199,258 201,258 204,262" stroke="#3a2e78" stroke-width="4" fill="none"/>'
+  },
+  // 시험관 하이덴 경: 왕국 기사단 시험관. 회색 단발, 뺨의 오래된 흉터, 강철 갑옷 위 청색 겉옷
+  examiner: {
+    hair: ['#d4d6de', '#a2a6b4', '#5a5e6e'], iris: ['#34506a', '#9cc0e0'], brow: '#5a5e6e', pupil: '#0e1c2c',
+    back: SHORT_BACK,
+    ears() { return `<ellipse cx="134" cy="248" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/><ellipse cx="266" cy="248" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/>`; },
+    front: 'M126,238 C120,160 152,124 204,122 C254,124 282,160 274,238 C270,208 258,190 242,180 C226,196 182,196 164,182 C148,192 132,212 126,238Z',
+    strands: '', hl: 'M158,148 C178,132 226,132 246,148',
+    outfit() {
+      return ROBE('#7a8696', '#434d5c') + `<path d="M160,386 L240,386 L262,600 L138,600Z" fill="#2f4f9a" stroke="#1a2f66" stroke-width="3"/>` +
+        `<ellipse cx="104" cy="440" rx="52" ry="38" fill="#a8b2c2" stroke="#434d5c" stroke-width="3"/><ellipse cx="296" cy="440" rx="52" ry="38" fill="#a8b2c2" stroke="#434d5c" stroke-width="3"/>` +
+        `<path d="M72,434 Q104,406 136,434 M264,434 Q296,406 328,434" stroke="#e8eef8" stroke-width="4" fill="none" opacity=".6"/>` +
+        `<circle cx="200" cy="480" r="21" fill="#e8eef8" stroke="#8a96b0" stroke-width="3"/><path d="M190,490 L200,466 L210,490 M194,482 H206" stroke="#2f4f9a" stroke-width="4" fill="none" stroke-linecap="round"/>` + COLLAR('#cfd8e6');
+    },
+    defs: '',
+    acc: '<path d="M248,258 L266,302" stroke="#b86a6a" stroke-width="4" stroke-linecap="round"/><path d="M250,272 L264,268 M256,286 L270,282" stroke="#b86a6a" stroke-width="2.5" stroke-linecap="round"/>'
   }
 };
 
@@ -400,7 +432,7 @@ function build(id, name) {
 
 let n = 0;
 Object.assign(HEROINES, CUSTOMERS); // build() 는 같은 구조를 읽으므로 손님도 한 테이블에 합친다
-// 인자로 id 를 주면 그 캐릭터만 만든다 (예: node tools/gen-chars.js rosa noble). 히로인은 WebP 일러스트를 쓰므로 보통 손님만 다시 만들면 된다.
+// 인자로 id 를 주면 그 캐릭터만 만든다 (예: node tools/gen-chars.js rosa noble envoy examiner). 히로인은 WebP 일러스트를 쓰므로 보통 손님만 다시 만들면 된다.
 const only = process.argv.slice(2);
 Object.keys(HEROINES).filter((id) => !only.length || only.includes(id)).forEach((id) => {
   fs.mkdirSync(path.join(OUT, id), { recursive: true });

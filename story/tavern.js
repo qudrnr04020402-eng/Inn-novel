@@ -164,12 +164,26 @@ window.TAVERN = {
       fail:    [{ text: '어머… 제가 말을 잘못했나요? 괜찮아요, 괜찮아.', face: 'sad' }, { text: '으음, 이건 약으로도 못 쓰겠는걸요. 호호, 농담이에요.', face: 'normal' }],
       mystery: [{ text: '{dish}…? 처음 맡아 보는 향이에요. 약초 도감에 적어 둬야겠어요.', face: 'surprised' }, { text: '이건 독인지 약인지 구별이 안 되네요! 일단 한 모금만.', face: 'surprised' }, { text: '어머, 이상한데 마시다 보니 은근히 중독이에요!', face: 'smile' }]
     } },
-    // ----- 여관 ★5 에 5일차 저녁에 찾아오는 왕도의 귀족 미식가 (영업 특별 손님: reward 보상이 있음, 손님 메모/수집 도감에는 들어가지 않음) -----
+    // ----- 여관 ★5 에 7일차 저녁에 찾아오는 왕도의 귀족 미식가 (영업 특별 손님: reward 보상이 있음, 손님 메모/수집 도감에는 들어가지 않음) -----
     noble: { special: true, react: {
       perfect: [{ text: '…훌륭하군. 왕도의 어느 주방에서도 이 한 그릇은 못 만난다.', face: 'smile' }, { text: '기억해 두지. 은빛 여우관의 주인, 그대의 솜씨를.', face: 'smile' }],
       good:    [{ text: '음, 나쁘지 않네. 소문만큼은 아니지만 정성은 느껴지는군.', face: 'normal' }],
       fail:    [{ text: '…이게 소문의 그 여관인가. 조금 실망했네.', face: 'sad' }],
       mystery: [{ text: '{dish}? 이런 이름의 요리는 왕도 요리서에도 없는데. …흥미롭군.', face: 'surprised' }, { text: '정체를 알 수 없는 맛이로군. 하지만 입에서 떠나질 않아.', face: 'surprised' }]
+    } },
+
+    // ----- 5일차 왕도 사절단 (영업 특별 손님: 손님 메모/수집 도감에는 들어가지 않음) -----
+    envoy:    { special: true, react: {
+      perfect: [{ text: '…훌륭합니다. 기록해 두겠습니다. 이 맛은 보고서 한 장보다 많은 걸 말해 주는군요.', face: 'smile' }],
+      good:    [{ text: '무난합니다. 불만은 없습니다.', face: 'normal' }],
+      fail:    [{ text: '…조건이 어긋났군요. 기록은 하지 않겠습니다. 이번만은.', face: 'normal' }],
+      mystery: [{ text: '{dish}? 문헌에도 없는 요리군요. 연구 가치는 있겠습니다.', face: 'surprised' }, { text: '…색이 예사롭지 않군요. 학술원에 보고해야 할지 고민됩니다.', face: 'surprised' }]
+    } },
+    examiner: { special: true, react: {
+      perfect: [{ text: '…이 맛이야. 기사단 식당에도 이만한 곳은 없었지.', face: 'smile' }],
+      good:    [{ text: '음, 나쁘지 않소. 기사단 식당보다는 낫군.', face: 'normal' }],
+      fail:    [{ text: '…빵이 눅눅하군. 기사라면 참겠소만.', face: 'normal' }],
+      mystery: [{ text: '{dish}라니, 처음 듣는 이름이오. 군량으로는 쓸 수 없겠군.', face: 'surprised' }, { text: '…기사단 훈련보다 위험한 맛이오. 한 입이면 충분하오.', face: 'surprised' }]
     } },
 
     // ----- 히로인 -----
@@ -290,7 +304,7 @@ window.TAVERN = {
         order: { text: '입안이 개운해지는 걸로요. 술은 빼고, 향이 살아 있게요.', want: ['상쾌함'], avoid: ['독함'] } }
     ] },
 
-    // ---------- 4일차: 마지막 평화로운 저녁 ----------
+    // ---------- 4일차: 술렁이는 마을의 저녁 ----------
     day4: { bg: 'inn_evening', customers: [
       { who: 'greta',
         say: [{ text: '마을 사람들이 짐을 싸고 있더군. 나는 반대로 오늘 칼을 갈았네. 이 마을이 마음에 들어서.', face: 'normal' }],
@@ -299,13 +313,13 @@ window.TAVERN = {
         say: [{ text: '사장님, 청년단은 오늘 밤 동굴 앞 경계를 섭니다! 무섭지만… 마을을 지켜야죠!', face: 'normal' }],
         order: { text: '든든하게 배를 채우고 싶은데, 야간 경계라 술은 안 됩니다!', want: ['든든함'], avoid: ['독함'] } },
       { who: 'erion',
-        say: [{ text: '…이번이 마지막 평범한 저녁일지도 몰라. 평범한 걸 마셔 두고 싶어서 내려왔어.', face: 'sad' }],
+        say: [{ text: '…이런 평범한 저녁이 언제까지 이어질까. 평범한 걸 마셔 두고 싶어서 내려왔어.', face: 'sad' }],
         order: { text: '…마력이 맑아지는 걸로. 달아도, 달지 않아도 상관없어.', want: ['마법', '상쾌함'] } },
       { who: 'miho',
         say: [{ text: '사장님, 오늘은 장사 접고 도망칠 준비 안 해요? …농담이에요. 이번엔 도망 안 가요.', face: 'smile' }],
         order: { text: '배불리! 몸이 확 달아오르는 걸로요!', want: ['든든함', '따뜻함'] } },
       { who: 'lia',
-        say: [{ text: '…오늘은 계속 네 얼굴만 보게 돼. 내일이 무서워서 그런가 봐.', face: 'sad' }],
+        say: [{ text: '…오늘은 계속 네 얼굴만 보게 돼. 마을이 어수선해서 그런가 봐.', face: 'sad' }],
         order: { text: '…마음이 따뜻해지는 걸로. 술은 빼고.', want: ['따뜻함'], avoid: ['독함'] } },
       { who: 'tobi', if: 'tavern.upg.sign',
         say: [{ text: '장사꾼은 위기에 더 눈이 밝습니다. 오늘 여기 들른 게 제 최고의 투자였죠!', face: 'smile' }],
@@ -315,8 +329,65 @@ window.TAVERN = {
         order: { text: '달콤하면서 개운한 걸로 부탁해요. 마음이 가벼워지게요.', want: ['달콤함', '상쾌함'] } }
     ] },
 
-    // ---------- 5일차: 출정 전 마지막 영업 ----------
+    // ---------- 5일차: 왕도 사절단이 묵는 저녁 (사절단장 이졸데의 특별 주문은 specials.day5) ----------
     day5: { bg: 'inn_evening', customers: [
+      { who: 'examiner',
+        say: [{ text: '사절단 호위를 맡은 하이덴이오. 이 여관의 식사 수준이 어떤지 보러 왔소.', face: 'normal' }, { text: '기사단 식당에서는 빵과 독한 술이 기본이었지. 그 맛이 그립군.', face: 'normal' }],
+        order: { text: '든든하고 독한 걸로 주시오. 빵이 곁들여지면 더 좋겠소. 기사 시절의 맛이니.', want: ['든든함', '독함'], ing: ['bread'], note: '사절단 손님: 든든함 + 독함 / 빵이 들어갈 것' },
+        reward: { gold: 12, rep: 1, lines: [{ who: 'examiner', text: '…기사단 식당의 그 맛이야. 좋은 여관이로군. 약소하지만 받아 두시오.', face: 'smile' }] } },
+      { who: 'kaela',
+        say: [{ text: '하, 하이덴 경이 와 있으니 평소처럼 소리를 지를 수가 없군… 이 몸이 이렇게 얌전할 수 있다니!', face: 'surprised' }],
+        order: { text: '든든하고 뜨거운 걸로. …조용히 먹겠다.', want: ['든든함', '따뜻함'] } },
+      { who: 'erion',
+        say: [{ text: '…사절단 사람들이 이쪽을 자꾸 봐. 앉아서 먹는 것도 눈치가 보이네.', face: 'angry' }],
+        order: { text: '…향이 약하고 따뜻한 걸로. 단 건 싫어.', want: ['따뜻함'], avoid: ['달콤함'] } },
+      { who: 'miho',
+        say: [{ text: '사장님, 왕도 손님은 팁이 다르다던데! 오늘은 제가 서빙을 도울게요. 수수료는 그때 가서 의논하고요!', face: 'smile' }],
+        order: { text: '달달하고 든든한 걸로요! 손님 눈에 띄려면 배가 불러야죠!', want: ['달콤함', '든든함'] } },
+      { who: 'lia',
+        say: [{ text: '사절단 손님들 방이 좋다고 칭찬하셨어. 뿌듯해! …오늘은 나도 손님으로 앉아 볼래.', face: 'smile' }],
+        order: { text: '따뜻하고 상쾌한 걸로! 술은 안 돼!', want: ['따뜻함', '상쾌함'], avoid: ['독함'] } },
+      { who: 'tobi', if: 'tavern.upg.sign',
+        say: [{ text: '왕도 사절단이라니, 이건 장사의 기회죠! 정보도 사고팔 수 있고!', face: 'smile' }],
+        order: { text: '개운하고 술기운이 도는 걸로요!', want: ['상쾌함', '독함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '왕도의 학자님들이 약초에 대해 이것저것 물으시더군요. 덕분에 목이 말라요.', face: 'smile' }],
+        order: { text: '향긋하고 따뜻한 걸로 부탁해요.', want: ['따뜻함', '상쾌함'] } }
+    ] },
+
+    // ---------- 6일차: 폭풍 속 피난민 (무료 배식 day6free 와 같은 손님 목록. 아래 TAVERN.days.day6free 가 이 목록을 복사합니다) ----------
+    day6: { bg: 'inn_evening', customers: [
+      { who: 'chief',
+        say: [{ text: '이 폭풍에 마을 사람 절반이 이 여관에 모였네. 자네가 아니었으면 어쩔 뻔했나.', face: 'normal' }],
+        order: { text: '아이들 몫으로 따뜻하고 든든한 걸 부탁하네. 나도 한 그릇 얻어 가겠네.', want: ['따뜻함', '든든함'] } },
+      { who: 'lia',
+        say: [{ text: '…폭풍이 무서운 건 아닌데, 오늘은 계속 네 얼굴만 보게 돼. 곁에 있어 줘서 고마워.', face: 'sad' }],
+        order: { text: '…마음이 따뜻해지는 걸로. 술은 빼고.', want: ['따뜻함'], avoid: ['독함'] } },
+      { who: 'miho',
+        say: [{ text: '사장님, 오늘 장부는 안 볼래요. …아니 한 번만 볼게요. 이 많은 사람들, 다 먹일 수 있겠죠?', face: 'surprised' }],
+        order: { text: '배불리! 몸이 확 달아오르는 걸로요!', want: ['든든함', '따뜻함'] } },
+      { who: 'erion',
+        say: [{ text: '…이번이 마지막 평범한 저녁일지도 몰라. 폭풍 소리가 시끄러워서, 평범한 걸 마셔 두고 싶어.', face: 'sad' }],
+        order: { text: '…마력이 맑아지는 걸로. 달아도, 달지 않아도 상관없어.', want: ['마법', '상쾌함'] } },
+      { who: 'kaela',
+        say: [{ text: '폭풍이다! 영웅의 날씨다! …다만 빨랫줄이 걱정이군. 오늘은 창고 지붕을 지키고 왔다!', face: 'smile' }],
+        order: { text: '정찰 뒤의 한 잔이다! 독하고 든든한 걸로!', want: ['독함', '든든함'] } },
+      { who: 'fin', if: 'tavern.upg.sign',
+        say: [{ text: '사장님, 청년단은 폭풍이 지나면 동굴 앞 경계를 섭니다! 그래도 지금은 따뜻한 데서 한 숟갈이요!', face: 'surprised' }],
+        order: { text: '든든하게 배를 채우고 싶은데, 야간 경계라 술은 안 됩니다!', want: ['든든함'], avoid: ['독함'] } },
+      { who: 'greta', if: 'tavern.upg.sign',
+        say: [{ text: '폭풍 속에서 칼을 가는 건 오랜만이야. 마을이 이 지경이라니, 오늘만은 제대로 먹여 줘.', face: 'normal' }],
+        order: { text: '독하고 속을 데워 주는 걸로.', want: ['독함', '따뜻함'] } },
+      { who: 'marta', if: 'tavern.upg.sign',
+        say: ['이런 날은 따뜻한 한 그릇이 제일이죠. 아이들 몫도 같이 부탁할게요.'],
+        order: { text: '따뜻한 걸로 한 잔 주세요.', want: ['따뜻함'] } },
+      { who: 'rosa', if: 'inn.rank>=2',
+        say: [{ text: '이 폭풍에 약초밭이 걱정이지만… 일단 따뜻한 게 필요하네요.', face: 'sad' }],
+        order: { text: '든든하면서 개운한 걸로 부탁해요.', want: ['든든함', '상쾌함'] } }
+    ] },
+
+    // ---------- 7일차: 출정 전 마지막 영업 ----------
+    day7: { bg: 'inn_evening', customers: [
       { who: 'chief',
         say: [{ text: '자네가 마을 사람들을 이렇게까지 돌봐 줄 줄은 몰랐네. 고맙네.', face: 'smile' }],
         order: { text: '마음이 놓이는 따뜻하고 든든한 걸로. 오늘만은 호사를 부리고 싶구먼.', want: ['따뜻함', '든든함'] } },
@@ -346,7 +417,7 @@ window.TAVERN = {
     ] }
   },
 
-  // ---------- 특별 주문 (2~5일차, 하루 한 번: 그날 일반 손님이 끝난 뒤 이어서 나옵니다) ----------
+  // ---------- 특별 주문 (2~7일차, 하루 한 번: 그날 일반 손님이 끝난 뒤 이어서 나옵니다) ----------
   //  title   : 이름 (장보기 화면 예고, 결산에 표시)      brief : 장보기 화면의 예고 문구
   //  units   : 손님 목록. 1명이면 "조건 두 가지를 한 접시에", 여러 명이면 "연속으로 서로 다른 조건"
   //            각 손님은 일반 손님처럼 who / say / order 를 가지고, order 에 재료 조건이 더 붙을 수 있습니다.
@@ -388,7 +459,28 @@ window.TAVERN = {
           say: [{ text: '저, 저는 청년단 핀인데… 오늘만 임시 파티원이에요! 대장님이 가 보라고 하셔서요!', face: 'surprised' }],
           order: { text: '술은 못 마시고요, 든든하게! 고기가 들어간 걸로 부탁드려요!', want: ['든든함'], avoid: ['독함'], ing: ['meat'], note: '조건: 든든함 / 고기가 들어갈 것 / 술은 안 됨' } }
       ] },
-    day5: { title: '노인들의 마지막 부탁',
+    day5: { title: '사절단장의 시식 주문',
+      brief: '사절단장 이졸데가 까다로운 주문을 직접 해 올 거예요. (조건 세 가지를 동시에)',
+      win: { gold: 24, rep: 2, lines: [{ who: 'envoy', text: '조건이 모두 맞았습니다. 학술원 보고서에 이 여관의 이름을 정식으로 올리겠습니다. 사례를 받아 주세요.', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'envoy', text: '아쉽군요. 하나가 어긋났습니다. 그래도 기록에 오점을 남길 정도는 아닙니다.', face: 'normal' }] },
+      units: [
+        { who: 'envoy',
+          say: [{ text: '사장님, 하나 더 부탁드립니다. 조사 중에 많이 걸었더니 속이 불편해서요. 학술원 규정은 아니지만, 까다로운 요청입니다.', face: 'normal' }],
+          order: { text: '따뜻하고 상쾌한 걸로, 허브가 들어가고 술기운은 없어야 합니다. 세 가지 모두 지켜 주세요.', want: ['따뜻함', '상쾌함'], avoid: ['독함'], ing: ['herb'], note: '조건: 따뜻함 / 상쾌함 / 허브가 들어갈 것 / 술(독함)은 안 됨' } }
+      ] },
+    day6: { title: '폭풍 속 한 솥',
+      brief: '촌장님과 마르타 아주머니가 피난민 몫의 큰 주문을 이어서 해 올 거예요. (연속 2개)',
+      win: { gold: 16, rep: 2, lines: [{ who: 'marta', text: '아이들이 배불리 먹고 잠들었어요. 이런 날 이런 한 끼, 오래 기억할 거예요.', face: 'smile' }] },
+      lose: { rep: -1, lines: [{ who: 'marta', text: '괜찮아요, 괜찮아. 다들 따뜻하게 먹었으니까요.', face: 'sad' }] },
+      units: [
+        { who: 'chief',
+          say: [{ text: '폭풍이 길어질 모양일세. 밤새 버틸 사람들에게 한 솥을 내주고 싶네.', face: 'normal' }],
+          order: { text: '따뜻하고 든든하게, 고기가 들어간 걸로 부탁하네. 술은 안 되네.', want: ['따뜻함', '든든함'], avoid: ['독함'], ing: ['meat'], note: '조건: 따뜻함 / 든든함 / 고기가 들어갈 것 / 술은 안 됨' } },
+        { who: 'marta',
+          say: ['아이들 몫으로, 달콤하고 든든한 걸 부탁하러 왔어요. 빵이 들어가면 좋겠네요.'],
+          order: { text: '달콤하고 든든한 걸로, 빵이 들어가게요. 술기운은 없게 해 주세요.', want: ['달콤함', '든든함'], avoid: ['독함'], ing: ['bread'], note: '조건: 달콤함 / 든든함 / 빵이 들어갈 것 / 독함은 안 됨' } }
+      ] },
+    day7: { title: '노인들의 마지막 부탁',
       brief: '바론 영감과 마르타 아주머니가 이어서 부탁을 해 올 거예요. (연속 2개)',
       win: { gold: 14, rep: 1, lines: [{ who: 'marta', text: '정말 맛있었어요. 이 마을 사람들 모두 오늘 밤은 든든하게 잘 수 있겠네요. 고마워요.', face: 'smile' }] },
       lose: { rep: -1, lines: [{ who: 'marta', text: '괜찮아요, 괜찮아. 마음 써 준 것만으로도 충분해요.', face: 'sad' }] },
@@ -402,6 +494,10 @@ window.TAVERN = {
       ] }
   }
 };
+
+// 6일차 "무료 배식": 정상 영업(day6)과 같은 손님/특별 주문이되, 매출과 팁이 없습니다 (free:true). 대신 평판과 호감도는 그대로 오릅니다.
+TAVERN.days.day6free = Object.assign(JSON.parse(JSON.stringify(TAVERN.days.day6)), { free: true });
+TAVERN.specials.day6free = JSON.parse(JSON.stringify(TAVERN.specials.day6));
 
 // 시작 변수에 영업 상태를 넣는다 (STORY.init 은 story/common.js 에 있고, 이 파일이 그 뒤에 로드됨)
 //  tavern.perfect / good / fail / mystery = 지금까지 낸 요리 결과 횟수 (스토리 조건식에서 쓸 수 있음. 예: 'tavern.perfect>=4')

@@ -95,9 +95,14 @@
     I.ensure(vars);
     var L = vars.lodge, Lg = root.LODGING;
     if (L.roster && L.roster.day === day) return L.roster.ids.map(I.guestDef);
+    if (Lg.special && Lg.special[day]) {   // 그날 고정 손님 (예: 5일차 왕도 사절단)
+      L.roster = { day: day, ids: Lg.special[day].slice() };
+      return L.roster.ids.map(I.guestDef);
+    }
     var n = rnd(vars, day, 41) < Lg.settings.threeChance ? 3 : 2;
-    var pool = Lg.guests.filter(function (g) { return !has(L.seen, g.id); });
-    if (pool.length < n) pool = Lg.guests.slice();
+    var regular = Lg.guests.filter(function (g) { return !g.only; });
+    var pool = regular.filter(function (g) { return !has(L.seen, g.id); });
+    if (pool.length < n) pool = regular.slice();
     pool = pool.map(function (g, i) { return { g: g, k: rnd(vars, day * 31 + i, 42) }; }).sort(function (a, b) { return a.k - b.k; }).map(function (x) { return x.g; });
     var pick = pool.slice(0, n);
     // 처음 열린 방만으로도 만족시킬 수 있는 손님이 한 팀은 있어야 한다 (전부 못 맞추는 밤을 막는다)
@@ -117,6 +122,25 @@
     if (guest.cap) base = Math.min(base, guest.cap);
     var match = I.matches(vars, guest, roomId);
     return { pay: base + (match ? guest.bonus : 0), base: base, match: match, sat: match ? root.LODGING.settings.satPoints : 0 };
+  };
+  // "추천 배정": 열린 방에 손님을 짝지어 숙박 수입(+만족)이 가장 큰 배정을 찾는다 (손님 3팀 이하라 전수 탐색). 반환 { 손님id: 방id } (배정 안 하는 손님은 빠짐)
+  I.recommend = function (vars, guests) {
+    I.ensure(vars);
+    var open = Object.keys(root.LODGING.rooms).filter(function (id) { return I.roomOpen(vars, id); });
+    var best = { v: -1, a: {} };
+    (function go(i, used, cur, val) {
+      if (i === guests.length) { if (val > best.v) best = { v: val, a: Object.assign({}, cur) }; return; }
+      var g = guests[i];
+      go(i + 1, used, cur, val);   // 이 손님은 배정하지 않는다 (수입이 더 크면 선택되지 않음)
+      open.forEach(function (r) {
+        if (used[r]) return;
+        var q = I.quote(vars, g, r);
+        used[r] = true; cur[g.id] = r;
+        go(i + 1, used, cur, val + q.pay + q.sat * 100);   // 만족(여관 등급 점수)을 골드보다 우선한다
+        delete cur[g.id]; delete used[r];
+      });
+    })(0, {}, {}, 0);
+    return best.a;
   };
   // 정산: assigns = { 손님id: 방id | null }. 골드/만족/기록을 상태에 반영하고 결과를 돌려준다.
   I.settle = function (vars, day, assigns) {

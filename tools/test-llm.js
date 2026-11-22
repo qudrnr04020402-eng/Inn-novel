@@ -52,7 +52,7 @@ async function loadAt(page, scene, vars) {
   await page.evaluate(([scene, vars]) => {
     const v = JSON.parse(JSON.stringify(STORY.init)); Object.assign(v, vars || {});
     v.aff = Object.assign(v.aff, (vars || {}).aff || {});
-    localStorage.setItem('inn_vn_v4_auto', JSON.stringify({ v: 4, t: Date.now(), snap: { scene, pc: 0, vars: v, bg: 'inn_day', sprites: { left: null, center: null, right: null }, log: [], label: 'test' } }));
+    localStorage.setItem('inn_vn_v5_auto', JSON.stringify({ v: 5, t: Date.now(), snap: { scene, pc: 0, vars: v, bg: 'inn_day', sprites: { left: null, center: null, right: null }, log: [], label: 'test' } }));
   }, [scene, vars]);
   await page.reload();
   await page.waitForSelector('#btn-continue:not([disabled])');
@@ -293,7 +293,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     ok(logAfter.filter((t) => t === lineBefore).length === 1, '복귀 시 같은 대사가 백로그에 중복되지 않음');
     ok(logAfter.some((t) => t.includes('메뉴에서 시작했어')), '자유 대화 내용이 백로그에 기록');
     // 저장 슬롯에 대화 사용량 포함
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v4_auto')).snap.vars.llm);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v5_auto')).snap.vars.llm);
     ok(saved.used.miho === 1, '자동 저장에 오늘 턴 사용량 포함: ' + JSON.stringify(saved.used));
     // 불러오기로 되돌려도 턴이 늘어나지 않는지 (파밍 방지): 새로고침 -> 이어하기 -> miho 사용량 1
     await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])'); await page.tap('#btn-continue'); await sleep(300);
