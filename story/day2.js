@@ -102,6 +102,7 @@ Object.assign(STORY.scenes, {
   ],
   erion_2_ask: [
     { say: 'erion', face: 'normal', text: '…별꽃 꿀. 엘프의 숲에서만 나는 건데, 달고, 약간 시원한 맛이 나. 옛날에는 스승님이 만들어 주셨어.' },
+    { say: 'erion', text: '별꽃이 없을 땐 달빛열매를 으깨서 꿀술에 풀고, 허브를 한 줄기 띄워 주셨지. 달고, 시원하고, 마시면 마력이 도는 차였어.' },
     { show: 'erion', face: 'sad' },
     { say: 'erion', text: '…이제는 먹을 수 없지만. 아니, 뭐. 딱히 그립다는 건 아니야.' },
     { narr: '말끝이 조금 흔들렸다. 그것이 오래된 이야기라는 것만은 알 수 있었다.' },
@@ -182,6 +183,8 @@ Object.assign(STORY.scenes, {
     { say: 'miho', face: 'surprised', text: '사장님, 여기 계산이 틀렸어요. 지난달 매출이 8골드나 덜 적혀 있어요! 그리고 이 거래처, 매번 돈을 조금씩 덜 내고 있고요.' },
     { narr: '정말이었다. 장부가 단숨에 바로잡혔고 못 받은 8골드도 돌려받게 되었다. 도둑이 아니라 회계사를 했어야 할 아이다.' },
     { say: 'miho', face: 'smile', text: '헤헤, 이런 건 자신 있거든요. 사장님이 칭찬해 주니까 기분 좋네요.' },
+    { say: 'miho', face: 'normal', text: '아, 그리고 창고에 버섯 재고가 남던데요. 우유랑 같이 푹 끓여서 팔면 의외로 잘 나가요. 제가 장터에서 팔아 봤거든요. 수수료는 안 받을게요. …오늘만요.' },
+    { learn: 'mushroom_soup' },
     { goto: 'after_pick' }
   ],
 
@@ -220,6 +223,7 @@ Object.assign(STORY.scenes, {
     { narr: '리아의 손은 작고 따뜻했다. 부엌 화로 앞에 나란히 앉아 젖은 소매를 말리는 동안, 우리는 말없이 불꽃만 바라봤다.' },
     { show: 'lia', face: 'smile' },
     { say: 'lia', text: '있잖아. 이렇게 같이 있으면, 어릴 때로 돌아간 것 같아. 하지만… 어릴 때보다 지금이 더 좋아.' },
+    { say: 'lia', face: 'normal', text: '이럴 땐 아버님이 우유에 꿀술을 넣고 팔팔 끓여서 주셨는데. 술기운은 다 날려서, 달기만 한 걸로. …아직도 그 맛이 생각나.' },
     { goto: 'after_pick' }
   ],
   lia_2_tease: [
@@ -228,10 +232,18 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ================= 저녁: 지하 저장고 =================
+  // ================= 저녁: 영업 -> 지하 저장고 =================
+  // 저녁 영업(story/tavern.js 의 day2) 뒤, 영업을 정리하던 중 저장고에서 소리가 난다
   d2_evening: [
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '저녁 영업이 한창일 때였다. 부엌에서 접시를 닦던 리아가 하얗게 질린 얼굴로 뛰쳐나왔다.' },
+    { narr: '어젯밤 진동의 여파로 저녁 식당은 평소보다 더 시끌벅적하다. 소문을 들으러 온 사람들, 겁먹은 손님들, 그리고 어쩐지 낯익은 얼굴들.' },
+    { narr: '그래도 장사는 해야 한다. 앞치마를 두르고 카운터 앞에 섰다.' },
+    { tavern: 'day2' },
+    { goto: 'd2_ev_cellar' }
+  ],
+  d2_ev_cellar: [
+    { bg: 'inn_evening' }, { hide: 'all' },
+    { narr: '마지막 손님을 보내고 가게를 정리하던 때였다. 부엌에서 접시를 닦던 리아가 하얗게 질린 얼굴로 뛰쳐나왔다.' },
     { show: 'lia', face: 'surprised', pos: 'center' },
     { say: 'lia', text: '저, 저장고에서 이상한 소리가 나! 사람 목소리도 아니고, 쥐도 아니야! 뭔가 질척거리는 소리야!' },
     { hide: 'all' },
@@ -343,7 +355,7 @@ Object.assign(STORY.scenes, {
   d2_night_none: [
     { narr: '…바람 소리였던 모양이다. 문을 열어 봐도 복도에는 아무도 없었다.' },
     { narr: '이불 속에서 내일은 누구와 더 가까워질 수 있을까 생각하다가, 어느새 잠들었다.' },
-    { goto: 'd3_open' }
+    { goto: 'd2_upgrade' }
   ],
   d2_night_erion: [
     { show: 'erion', face: 'shy', pos: 'center' },
@@ -352,7 +364,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', text: '…오늘 일, 고마웠어. 나 혼자였다면 저장고를 지키지 못했을 거야. 내일도 같은 차, 부탁해.' },
     { set: { 'aff.erion': 1 } },
     { narr: '그녀가 돌아간 뒤에도 방에는 은은한 허브 향이 남았다.' },
-    { goto: 'd3_open' }
+    { goto: 'd2_upgrade' }
   ],
   d2_night_kaela: [
     { show: 'kaela', face: 'shy', pos: 'center' },
@@ -361,7 +373,7 @@ Object.assign(STORY.scenes, {
     { narr: '대검을 안고 문 앞에 쭈그려 앉은 모습이 평소의 호탕함과 너무 달라서, 나도 모르게 따뜻한 우유를 한 잔 건넸다.' },
     { set: { 'aff.kaela': 1 } },
     { say: 'kaela', face: 'smile', text: '…고맙다. 이건 비밀이다. 알았지, 주인장?' },
-    { goto: 'd3_open' }
+    { goto: 'd2_upgrade' }
   ],
   d2_night_miho: [
     { show: 'miho', face: 'smile', pos: 'center' },
@@ -370,7 +382,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', face: 'normal', text: '오늘 장부 정리해 준 수고비예요. 제 몫에서 3골드 떼 왔어요. …공짜 아니고 빚이에요, 빚. 나중에 이자 붙여서 받을 거예요.' },
     { set: { 'aff.miho': 1, gold: 3 } },
     { say: 'miho', face: 'shy', text: '…누가 이런 거 해 준 적 없어서요. 그냥 그렇다고요. 잘 자요!' },
-    { goto: 'd3_open' }
+    { goto: 'd2_upgrade' }
   ],
   d2_night_lia: [
     { show: 'lia', face: 'smile', pos: 'center' },
@@ -379,6 +391,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'normal', text: '저장고에서 네가 앞에 서서 모두를 챙기는 거 봤어. …멋있었어. 아, 이상한 뜻 아니고!' },
     { set: { 'aff.lia': 1 } },
     { say: 'lia', face: 'shy', text: '잘 자. 그리고, 무리하지 마. 네가 쓰러지면 내가 곤란하니까.' },
-    { goto: 'd3_open' }
+    { goto: 'd2_upgrade' }
   ]
 });

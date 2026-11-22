@@ -73,7 +73,7 @@ Object.assign(STORY.scenes, {
     { narr: '에리온의 손은 얼음처럼 차갑고 가늘었다. 한참 쥐고 있자 서서히 온기가 번졌다. 책의 푸른 빛이 한결 부드러워졌다.' },
     { show: 'erion', face: 'smile' },
     { say: 'erion', text: '…따뜻하다. 이 느낌, 잊고 싶지 않아. 이름을 잃어도, 이 손의 온기만큼은 기억하고 싶어.' },
-    { goto: 'd5_evening' }
+    { goto: 'd5_tavern' }
   ],
   d5_with_kaela: [
     { bg: 'inn_front' },
@@ -84,7 +84,7 @@ Object.assign(STORY.scenes, {
     { say: 'kaela', text: '…주인장 덕에, 나는 처음으로 내 검이 무겁지 않다고 느낀다. 휘두르는 게 아니라 지키는 데 쓰는 거라서 그런가.' },
     { show: 'kaela', face: 'normal' },
     { say: 'kaela', text: '이 싸움이 끝나면 정식 기사 시험을 다시 보겠다. 그때는 …주인장이 응원 와 주면 좋겠다.' },
-    { goto: 'd5_evening' }
+    { goto: 'd5_tavern' }
   ],
   d5_with_miho: [
     { bg: 'inn_day' },
@@ -95,7 +95,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', text: '…사장님, 저 도적 그만두면요, 이 여관에서 계속 일하면 안 될까요? 월급은 낮아도 돼요. 숙식 제공이면… 아니, 월급은 올려 주세요.' },
     { show: 'miho', face: 'smile' },
     { say: 'miho', text: '…농담 반, 진담 반이에요. 반이 어느 쪽인지는 비밀이고요.' },
-    { goto: 'd5_evening' }
+    { goto: 'd5_tavern' }
   ],
   d5_with_lia: [
     { bg: 'square_day' },
@@ -106,12 +106,22 @@ Object.assign(STORY.scenes, {
     { say: 'lia', text: '있잖아. 어릴 땐 \'여관이 망하지 않게 해 주세요\'라고 빌었어. 근데 지금 소원은 달라.' },
     { show: 'lia', face: 'smile' },
     { say: 'lia', text: '\'오늘 이후에도, 이 사람이 내 곁에 있게 해 주세요.\' …이 말은 소리 내서 말하면 안 되는 건데. 들었으면 모른 척해 줘.' },
+    { goto: 'd5_tavern' }
+  ],
+
+  // ================= 저녁: 출정 전 마지막 영업 =================
+  // 저녁 영업(story/tavern.js 의 day5) -> 동굴 결전
+  d5_tavern: [
+    { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
+    { narr: '출발 시각이 가까워졌다. 하지만 식당에는 대피한 마을 사람들이, 그리고 마지막 한 잔을 청하는 동료들이 모여 있다.' },
+    { narr: '\'은빛 여우관\'의 주인으로서 하는 마지막 영업이다. 주문을 받고, 재료를 고르고, 한 잔씩 내었다.' },
+    { tavern: 'day5' },
     { goto: 'd5_evening' }
   ],
 
-  // ================= 저녁: 동굴 결전 =================
+  // ================= 결전: 동굴 =================
   d5_evening: [
-    { time: '저녁' }, { bg: 'cave_front' }, { hide: 'all' },
+    { time: '황혼' }, { bg: 'cave_front' }, { hide: 'all' },
     { narr: '해 질 녘. 동굴 입구에서 푸른 빛이 하늘로 솟구쳐 노을을 물들였다. 마을 청년단은 멀찍이서 횃불을 들고 우리를 지켜보고 있다.' },
     { show: 'kaela', face: 'normal', pos: 'left' },
     { show: 'erion', face: 'normal', pos: 'center' },

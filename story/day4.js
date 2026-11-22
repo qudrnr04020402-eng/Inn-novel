@@ -234,10 +234,17 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ================= 저녁: 작전 회의 =================
+  // ================= 저녁: 마지막 평화로운 영업 -> 작전 회의 =================
+  // 저녁 영업(story/tavern.js 의 day4) 뒤, 가게 문을 닫고 모두가 모여 작전 회의를 한다
   d4_evening: [
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '저녁 식사 후, 식당에 모두가 모였다. 문은 닫혀 있고, 창문 너머로 푸른 안개가 흘러들고 있다.' },
+    { narr: '짐을 싸던 마을 사람들도 해가 지자 한 잔 마시러 하나둘 들른다. 어쩌면 이 식당에서 보내는 마지막 평범한 저녁일지도 모른다.' },
+    { tavern: 'day4' },
+    { goto: 'd4_ev_meeting' }
+  ],
+  d4_ev_meeting: [
+    { bg: 'inn_evening' }, { hide: 'all' },
+    { narr: '영업이 끝나고, 식당에 모두가 모였다. 문은 닫혀 있고, 창문 너머로 푸른 안개가 흘러들고 있다.' },
     { show: 'kaela', face: 'normal', pos: 'left' },
     { show: 'erion', face: 'normal', pos: 'center' },
     { show: 'miho', face: 'normal', pos: 'right' },
@@ -371,7 +378,7 @@ Object.assign(STORY.scenes, {
   d4_night_none: [
     { narr: '…아무도 오지 않았다. 바람이 문을 흔든 것 같다. 복도 끝에서 에리온이 책 읽는 소리, 카엘라의 코 고는 소리, 미호가 동전을 세는 소리, 리아의 기도 소리가 조금씩 들린다.' },
     { narr: '이 여관에 사람이 가득 찬 게 얼마 만일까. 내일, 반드시 모두 무사히 돌아오게 하겠다고 다짐하며 눈을 감았다.' },
-    { goto: 'd5_open' }
+    { goto: 'd4_upgrade' }
   ],
   d4_night_erion: [
     { bg: 'roof_night' },
@@ -382,7 +389,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', face: 'shy', text: '…이상하지. 이름을 잃는 게 무섭다고 생각한 건 처음이야. 지금까지는 그저 의무라고만 생각했는데.' },
     { set: { 'aff.erion': 1 } },
     { narr: '그녀의 어깨가 내 어깨에 조용히 기댔다. 떨고 있는 게 느껴졌다. 나는 말없이 곁을 지켰다.' },
-    { goto: 'd5_open' }
+    { goto: 'd4_upgrade' }
   ],
   d4_night_kaela: [
     { show: 'kaela', face: 'shy', pos: 'center' },
@@ -392,7 +399,7 @@ Object.assign(STORY.scenes, {
     { say: 'kaela', face: 'smile', text: '그러니까 맹세하겠다. 내 검은, 주인장과 이 여관을 지키는 데 쓰겠다고. 정식 기사가 아니어도 상관없다. 나만의 기사도다!' },
     { set: { 'aff.kaela': 1 } },
     { narr: '카엘라는 대검 대신 손바닥을 내 앞에 내밀었다. 악수하자는 뜻이다. 그 손은 아주 따뜻했다.' },
-    { goto: 'd5_open' }
+    { goto: 'd4_upgrade' }
   ],
   d4_night_miho: [
     { show: 'miho', face: 'normal', pos: 'center' },
@@ -402,7 +409,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', face: 'smile', text: '…돌아오면, 이자 대신 부탁 하나만 들어줘요. 아직 말 안 할래요. 비밀이니까.' },
     { set: { 'aff.miho': 1 } },
     { narr: '미호가 내 귓가에 작게 속삭이고는 도망치듯 방을 나갔다. 방에는 여우 귀 같은 따뜻한 온기만 남았다.' },
-    { goto: 'd5_open' }
+    { goto: 'd4_upgrade' }
   ],
   d4_night_lia: [
     { show: 'lia', face: 'shy', pos: 'center' },
@@ -412,6 +419,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'shy', text: '…아, 이상한 뜻 아니야! 아니, 이상한 뜻이긴 한데! 내일 이후에, 제대로 말해도 될까?' },
     { set: { 'aff.lia': 1 } },
     { narr: '리아가 내 손을 살며시 잡았다가 놓았다. 그 손끝이 조금 떨렸다.' },
-    { goto: 'd5_open' }
+    { goto: 'd4_upgrade' }
   ]
 });

@@ -7,7 +7,7 @@ window.STORY = {
   title: '은빛 여우관',
   subtitle: '변두리 마을 여관, 5일간의 이야기',
   start: 'd1_open',                          // 새 게임 시작 씬
-  loveLine: 12,                              // 고백(개별) 엔딩 기준 호감도. 하트 6칸이 이 값에 해당 (엔진이 하트 칸 계산에 사용)
+  loveLine: 24,                              // 고백(개별) 엔딩 기준 호감도. 하트 6칸이 이 값에 해당 (엔진이 하트 칸 계산에 사용)
   cast: ['erion', 'kaela', 'miho', 'lia'],   // 타이틀 화면에 소개할 히로인 (왼쪽부터)
   init: {                                    // 시작 변수
     gold: 80, rep: 0, day: 1, time: '아침',
@@ -71,6 +71,13 @@ Object.assign(STORY.scenes, {
     { narr: '몸은 고단하지만 금고가 조금 두둑해졌다. 이것도 여관 주인의 보람이다.' },
     { goto: 'after_pick' }
   ],
+
+  // ---------- 밤이 끝난 뒤: 여관 업그레이드 (하루 1번, 1~4일차 밤 다음) ----------
+  // {upgrades:true} 는 업그레이드 구입 화면을 띄우고, "다음 날로" 를 누르면 다음 명령으로 넘어갑니다.
+  d1_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd2_open' }],
+  d2_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd3_open' }],
+  d3_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd4_open' }],
+  d4_upgrade: [{ time: '밤' }, { upgrades: true }, { goto: 'd5_open' }],
 
   // 낮 이벤트가 끝나면 날짜에 맞는 저녁으로 이동
   after_pick: [

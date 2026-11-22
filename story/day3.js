@@ -100,6 +100,7 @@ Object.assign(STORY.scenes, {
     { say: 'kaela', text: '나는… 정식 기사가 아니다. 왕국 기사 시험에 세 번 떨어졌다. 이 갑옷은 할부로 샀고, 오우거는… 멀리서 본 게 전부다.' },
     { narr: '갑옷 옆구리의 가격표가 아직도 달랑거린다. 그녀는 그것을 손으로 감싸 쥐었다.' },
     { say: 'kaela', text: '그래도 영웅이 되고 싶었다. 진짜 누군가를 구하는 사람이. …웃어도 좋다. 이럴 줄 알았다.' },
+    { say: 'kaela', face: 'normal', text: '…세 번째로 떨어진 날, 왕도 주점에서 먹은 게 있다. 고기를 에일에 푹 졸여서 갓 구운 빵에 올린 건데, 그걸 먹으면서 처음으로 \'다음엔 붙자\'고 생각했지. 그 맛이 아직도 혀끝에 남아 있다.' },
     { choice: [
       { text: '"지금 이 마을에서 제일 기사다운 사람은 당신이에요."', set: { 'aff.kaela': 2 }, goto: 'kaela_3_knight' },
       { text: '"시험은 또 보면 되죠. 연습은 제가 같이 할게요."', set: { 'aff.kaela': 2 }, goto: 'kaela_3_train' },
@@ -143,6 +144,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', text: '…아, 사장님. 아무것도 아니에요. 그냥 고향에서 온 편지요. 글자 틀린 게 웃겨서 보고 있었어요.' },
     { narr: '편지에는 삐뚤빼뚤한 글씨가 가득하다. \'미호 언니, 겨울이 와요. 석탄이 모자라요.\'' },
     { say: 'miho', face: 'sad', text: '…보육원 아이들이에요. 일곱 명. 제가 훔친 돈의 행방, 궁금하셨죠? 부자 상인이랑 못된 징세관한테서만 훔쳐서, 전부 거기로 보내요.' },
+    { say: 'miho', face: 'sad', text: '겨울이면 원장님이 산에서 따 온 버섯을 꿀술에 졸여서 빵에 얹어 주셨어요. 달고 따끈해서, 그거 먹을 때만큼은 아무도 안 울었는데…' },
     { say: 'miho', face: 'smile', text: '돈 밝히는 도적이라는 건 거짓말 아니에요. 그래야 아이들을 먹이니까요. 헤헤, 실망했죠?' },
     { choice: [
       { text: '(말없이 곁에 앉아 어깨를 빌려준다)', set: { 'aff.miho': 2 }, goto: 'miho_3_shoulder' },
@@ -254,10 +256,18 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ================= 저녁: 달맞이 장터 =================
+  // ================= 저녁: 장터 노점 영업 -> 달맞이 축제 =================
+  // 저녁 영업(story/tavern.js 의 day3, 광장 노점)을 마친 뒤 축제 산책 / 소원 등불 / 대지진으로 이어진다
   d3_evening: [
     { time: '저녁' }, { bg: 'square_festival' }, { hide: 'all' },
     { narr: '해가 지자 광장에 수백 개의 등불이 켜졌다. 천막마다 사람들의 웃음소리가 흘러넘친다. 불안은 잠시 뒤로 밀어 둔 듯한, 따뜻한 밤이다.' },
+    { narr: '우리 노점 앞에도 줄이 늘어서기 시작했다. 화덕과 술통이 오늘의 주방이다. 메뉴는 정해져 있지 않다. 손님이 원하는 걸 만들어 내면 된다.' },
+    { tavern: 'day3' },
+    { goto: 'd3_ev_walk' }
+  ],
+  d3_ev_walk: [
+    { bg: 'square_festival' }, { hide: 'all' },
+    { narr: '노점을 닫을 시간이 되자 단골들이 "이제 가서 놀다 와" 하며 등을 떠밀었다. 다 같이 광장으로 나섰다.' },
     { show: 'kaela', face: 'smile', pos: 'left' },
     { show: 'lia', face: 'smile', pos: 'center' },
     { show: 'miho', face: 'smile', pos: 'right' },
@@ -280,7 +290,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', text: '…별꽃 사탕이라고 써 있네. 가짜일 거야. 엘프의 별꽃은 인간 땅에서는 자라지 않으니까.' },
     { narr: '사탕 하나를 사서 건네자 그녀는 흘겨보면서도 받아 한 입 물었다. 그리고 눈을 크게 떴다.' },
     { show: 'erion', face: 'smile' },
-    { say: 'erion', text: '…진짜 별꽃은 아니지만, 비슷한 맛은 나. 인간들도 꽤 하네.' },
+    { say: 'erion', text: '…진짜 별꽃은 아니지만, 비슷한 맛은 나. 달빛열매 향이 살짝 섞였네. 스승님의 차에도 그게 들어갔었어. 인간들도 꽤 하네.' },
     { goto: 'd3_lantern' }
   ],
   d3_walk_kaela: [
@@ -408,7 +418,7 @@ Object.assign(STORY.scenes, {
   d3_night_none: [
     { narr: '문을 열어 봐도 복도는 조용했다. 아직 먼 밤하늘에 푸른 빛줄기가 희미하게 남아 있다.' },
     { narr: '내일은 마을 사람들을 안심시켜야 한다. 그리고 에리온에게서 진실을 들어야 한다. 이불 속에서 생각을 정리하다 잠들었다.' },
-    { goto: 'd4_open' }
+    { goto: 'd3_upgrade' }
   ],
   d3_night_erion: [
     { show: 'erion', face: 'shy', pos: 'center' },
@@ -417,7 +427,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', text: '…남은 거야. 버리기 아까워서. 내일 이야기하겠다고 한 거, 기억하고 있지? 그전에… 그냥 얼굴이 보고 싶었어. 아, 아니, 방 상태가 궁금해서!' },
     { set: { 'aff.erion': 1 } },
     { narr: '당황한 에리온의 귀 끝이 불그레했다. 그녀는 사탕을 내 손에 쥐여 주고 도망치듯 돌아갔다.' },
-    { goto: 'd4_open' }
+    { goto: 'd3_upgrade' }
   ],
   d3_night_kaela: [
     { show: 'kaela', face: 'shy', pos: 'center' },
@@ -427,7 +437,7 @@ Object.assign(STORY.scenes, {
     { set: { 'aff.kaela': 1 } },
     { say: 'kaela', face: 'shy', text: '그, 그럼 이만! 영웅은 쿨하게 사라진다!' },
     { narr: '카엘라는 쿵쿵 계단을 내려가다가 한 번 넘어졌다. 쿨하지 않았다. 그래도 좋았다.' },
-    { goto: 'd4_open' }
+    { goto: 'd3_upgrade' }
   ],
   d3_night_miho: [
     { show: 'miho', face: 'smile', pos: 'center' },
@@ -438,7 +448,7 @@ Object.assign(STORY.scenes, {
     { set: { 'aff.miho': 1 } },
     { say: 'miho', face: 'smile', text: '…그래서 일부러 찾아온 거예요. 도둑질하러 온 척했지만. 비밀이에요?' },
     { bg: 'inn_night' },
-    { goto: 'd4_open' }
+    { goto: 'd3_upgrade' }
   ],
   d3_night_lia: [
     { show: 'lia', face: 'shy', pos: 'center' },
@@ -447,6 +457,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'smile', text: '이건 아까 등불에서 떨어진 조각이야. 내 소원 글씨가 남아 있어. …보여 주진 않을 거야. 아직은.' },
     { set: { 'aff.lia': 1 } },
     { say: 'lia', face: 'normal', text: '내일이 어떻게 되든, 난 네 곁에 있을게. 그건 약속이야. 어릴 때 한 약속, 이번에는 내가 먼저 지킬 거야.' },
-    { goto: 'd4_open' }
+    { goto: 'd3_upgrade' }
   ]
 });

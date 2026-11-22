@@ -1,5 +1,5 @@
-// 히로인 일러스트(SVG) 생성기: node tools/gen-chars.js
-// - 히로인 4명 x 표정 6종(normal/smile/angry/shy/surprised/sad)을 assets/char/<id>/<표정>.svg 로 만든다.
+// 캐릭터 일러스트(SVG) 생성기: node tools/gen-chars.js
+// - 히로인 4명 + 단골 손님 6명 x 표정 6종(normal/smile/angry/shy/surprised/sad)을 assets/char/<id>/<표정>.svg 로 만든다.
 // - 400x600 상반신. 머리색/머리 모양/귀/꼬리/의상으로 구분. PNG 일러스트로 교체할 때는 이 파일은 무시해도 된다.
 const fs = require('fs');
 const path = require('path');
@@ -135,6 +135,109 @@ const HEROINES = {
   }
 };
 
+// ---------- 단골 손님(저녁 영업) 설정 ----------
+// 히로인과 같은 얼굴 틀(FACE)에 머리/모자/옷만 바꾼 임시 그림. id 는 story/characters.js 와 story/tavern.js 의 손님 id 와 같아야 합니다.
+const SHORT_BACK = 'M126,226 C116,148 156,108 200,108 C244,108 286,148 274,226Z';
+const ROBE = (c1, c2) => `<path d="${BODY}" fill="${c1}" stroke="${c2}" stroke-width="3"/>`;
+const COLLAR = (c) => `<path d="M170,384 C176,404 190,412 200,412 C210,412 224,404 230,384 L222,382 C216,396 208,402 200,402 C192,402 184,396 178,382Z" fill="${c}"/>`;
+const CUSTOMERS = {
+  // 바론 영감: 양치기 노인. 흰머리, 풍성한 콧수염과 수염, 밀짚모자
+  baron: {
+    hair: ['#ffffff', '#e4e4ea', '#9a9aae'], iris: ['#5a4a2a', '#b89a5a'], brow: '#c9c9d6', pupil: '#2a1e0c',
+    back: 'M132,230 C124,176 150,150 200,150 C250,150 276,176 268,230 C262,206 240,196 200,196 C160,196 138,206 132,230Z',
+    ears() { return `<ellipse cx="134" cy="248" rx="10" ry="16" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/><ellipse cx="266" cy="248" rx="10" ry="16" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/>`; },
+    front: 'M140,196 C150,172 176,164 200,164 C224,164 250,172 260,196 C240,184 222,180 200,180 C178,180 160,184 140,196Z',
+    strands: '', hl: '',
+    outfit() {
+      return ROBE('#8a6a3a', '#4e3a1c') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#efe6cc"/>` +
+        COLLAR('#6e5228') + `<path d="M120,470 H280 M110,540 H290" stroke="#4e3a1c" stroke-width="3" opacity=".5"/>` +
+        // 콧수염 + 수염
+        `<path d="M160,300 C170,288 190,292 200,300 C210,292 230,288 240,300 C232,322 214,316 200,310 C186,316 168,322 160,300Z" fill="#fafafc" stroke="#aaaabe" stroke-width="3" stroke-linejoin="round"/>` +
+        `<path d="M146,320 C150,360 170,392 200,402 C230,392 250,360 254,320 C240,342 220,340 200,336 C180,340 160,342 146,320Z" fill="#fafafc" stroke="#aaaabe" stroke-width="3" stroke-linejoin="round"/>`;
+    },
+    defs: '',
+    acc: // 밀짚모자
+      '<ellipse cx="200" cy="168" rx="104" ry="20" fill="#e8c76a" stroke="#a8842a" stroke-width="3"/><path d="M142,170 C142,112 258,112 258,170Z" fill="#f2d57e" stroke="#a8842a" stroke-width="3"/><path d="M144,158 C176,170 224,170 256,158" stroke="#b5532a" stroke-width="8" fill="none"/>'
+  },
+  // 토비: 행상인. 갈색 단발, 깃털 달린 푸른 모자, 큰 배낭끈
+  tobi: {
+    hair: ['#9a6a42', '#7a4f2e', '#4a2e1a'], iris: ['#2f7a58', '#9be0b8'], brow: '#4a2e1a', pupil: '#0e3a28',
+    back: SHORT_BACK,
+    ears() { return ''; },
+    front: 'M128,238 C122,170 154,134 202,134 C250,134 280,168 272,238 C264,204 246,186 226,176 C214,194 190,200 168,190 C150,200 136,218 128,238Z',
+    strands: '', hl: 'M156,150 C176,134 226,134 246,150',
+    outfit() {
+      return ROBE('#2f7a58', '#1a4a34') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#f4ecd8"/>` + COLLAR('#e1c15e') +
+        `<path d="M110,420 L150,600 M290,420 L250,600" stroke="#7a4a1a" stroke-width="16" stroke-linecap="round"/>` +
+        `<circle cx="200" cy="470" r="9" fill="#ffd24a" stroke="#a37a0a" stroke-width="2.5"/><circle cx="200" cy="520" r="9" fill="#ffd24a" stroke="#a37a0a" stroke-width="2.5"/>`;
+    },
+    defs: '',
+    acc: '<path d="M126,176 C130,120 270,120 274,176 C240,164 160,164 126,176Z" fill="#2b5fb5" stroke="#173a78" stroke-width="3"/><ellipse cx="200" cy="176" rx="82" ry="12" fill="#3a74d0" stroke="#173a78" stroke-width="3"/><path d="M246,150 C290,120 320,80 330,40 C300,70 270,100 240,130Z" fill="#fff" stroke="#9aa" stroke-width="2.5"/>'
+  },
+  // 그레타: 은퇴한 여성 용병. 회색 섞인 짧은 머리, 볼의 흉터, 가죽 갑옷, 붉은 스카프
+  greta: {
+    hair: ['#c9c4c0', '#9c9692', '#5c5652'], iris: ['#4a5a7a', '#a8c0e8'], brow: '#5c5652', pupil: '#101830',
+    back: SHORT_BACK,
+    ears() { return ''; },
+    front: 'M126,236 C120,160 154,124 204,124 C254,124 282,160 274,236 C270,206 258,190 244,180 C228,200 208,206 190,202 C172,198 160,190 154,176 C142,194 130,214 126,236Z',
+    strands: '', hl: 'M156,150 C176,134 226,134 246,150',
+    outfit() {
+      return ROBE('#6a4a30', '#3a2616') + `<path d="M160,386 L240,386 L262,600 L138,600Z" fill="#8a6440" stroke="#3a2616" stroke-width="3"/>` +
+        `<ellipse cx="104" cy="440" rx="50" ry="36" fill="#7a5638" stroke="#3a2616" stroke-width="3"/><ellipse cx="296" cy="440" rx="50" ry="36" fill="#7a5638" stroke="#3a2616" stroke-width="3"/>` +
+        `<path d="M70,434 Q104,408 138,434 M262,434 Q296,408 330,434" stroke="#b08a5a" stroke-width="4" fill="none" opacity=".7"/>` +
+        `<path d="M150,380 C170,404 230,404 250,380 L256,402 C230,426 170,426 144,402Z" fill="#c43d3d" stroke="#7d2020" stroke-width="3"/>` +
+        `<path d="M170,470 H230 M170,520 H230" stroke="#3a2616" stroke-width="4" opacity=".6"/>`;
+    },
+    defs: '',
+    acc: '<path d="M246,262 L262,306" stroke="#b86a6a" stroke-width="4" stroke-linecap="round"/><path d="M240,276 L256,272 M246,290 L262,286" stroke="#b86a6a" stroke-width="2.5" stroke-linecap="round"/>'
+  },
+  // 마르타 아주머니: 꿀빵 가게 단골. 갈색 쪽머리, 흰 두건, 앞치마
+  marta: {
+    hair: ['#b07a4a', '#8a5a32', '#4e301a'], iris: ['#6a4a2a', '#d0a070'], brow: '#6a4222', pupil: '#2a1a0a',
+    back: 'M122,230 C108,150 152,110 200,110 C248,110 292,150 278,230 L284,290 L116,290Z',
+    ears() { return ''; },
+    front: 'M126,240 C120,166 154,128 200,128 C246,128 280,166 274,240 C268,210 250,190 232,182 C218,198 184,198 168,182 C150,190 132,212 126,240Z',
+    strands: '', hl: 'M156,152 C176,138 226,138 246,152',
+    outfit() {
+      return ROBE('#c9744a', '#7a3e20') + `<path d="M150,386 L250,386 L270,600 L130,600Z" fill="#fffaf0" stroke="#d4c8a8" stroke-width="3"/>` +
+        `<path d="M170,420 H230 M165,470 H235 M160,520 H240" stroke="#e8d8b0" stroke-width="3"/>` + COLLAR('#f0e6d0') +
+        `<path d="M150,386 C150,420 140,450 130,470 M250,386 C250,420 260,450 270,470" stroke="#d4c8a8" stroke-width="3" fill="none"/>`;
+    },
+    defs: '',
+    acc: '<path d="M122,190 C118,120 282,120 278,190 C262,160 138,160 122,190Z" fill="#fffaf0" stroke="#d4c8a8" stroke-width="3"/><path d="M130,176 C170,158 230,158 270,176" stroke="#e46a4a" stroke-width="6" fill="none"/>'
+  },
+  // 핀: 청년단원. 삐죽삐죽한 밤색 머리, 머리띠, 가죽 조끼
+  fin: {
+    hair: ['#d09a5a', '#b07a3a', '#6a4418'], iris: ['#3a6aa8', '#a0d0ff'], brow: '#6a4418', pupil: '#102a50',
+    back: SHORT_BACK,
+    ears() { return `<ellipse cx="134" cy="250" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/><ellipse cx="266" cy="250" rx="10" ry="15" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/>`; },
+    front: 'M126,240 C120,160 150,116 200,112 C250,116 282,160 274,240 C270,210 262,196 252,186 L246,206 L234,176 L220,208 L204,168 L190,208 L174,174 L162,206 L152,184 C140,196 132,216 126,240Z',
+    strands: '', hl: 'M156,148 C176,134 226,134 246,148',
+    outfit() {
+      return ROBE('#5a7ab0', '#2c4570') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#efe6cc"/>` +
+        `<path d="M140,396 L130,600 L200,600 L200,420Z M260,396 L270,600 L200,600 L200,420Z" fill="#8a6440" stroke="#4a3018" stroke-width="3"/>` +
+        `<path d="M160,440 H190 M210,440 H240 M160,500 H190 M210,500 H240" stroke="#4a3018" stroke-width="4"/>` + COLLAR('#cfd8e6');
+    },
+    defs: '',
+    acc: '<path d="M128,176 C160,160 240,160 272,176 L272,194 C240,180 160,180 128,194Z" fill="#e0553a" stroke="#9c2f1c" stroke-width="3"/>'
+  },
+  // 촌장님: 마을 촌장. 대머리에 긴 흰 수염, 녹색 로브
+  chief: {
+    hair: ['#ffffff', '#e4e4ea', '#9a9aae'], iris: ['#4a5a3a', '#a8c088'], brow: '#c9c9d6', pupil: '#14200a',
+    back: 'M134,236 C128,190 146,172 160,168 C150,196 150,216 154,236Z M266,236 C272,190 254,172 240,168 C250,196 250,216 246,236Z',
+    ears() { return `<ellipse cx="134" cy="248" rx="10" ry="16" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/><ellipse cx="266" cy="248" rx="10" ry="16" fill="${SKIN}" stroke="${SHADE}" stroke-width="3"/>`; },
+    front: '', strands: '', hl: 'M168,166 C184,156 218,156 234,166',
+    outfit() {
+      return ROBE('#3a6a4a', '#1e3e2a') + `<path d="M150,386 L200,520 L250,386 L232,384 L200,470 L168,384Z" fill="#e8e0c8"/>` + COLLAR('#d8b84a') +
+        `<path d="M70,520 H330" stroke="#d8b84a" stroke-width="5" opacity=".7"/>` +
+        `<path d="M170,296 C176,288 190,290 200,298 C210,290 224,288 230,296 C222,314 210,310 200,306 C190,310 178,314 170,296Z" fill="#fafafc" stroke="#aaaabe" stroke-width="3" stroke-linejoin="round"/>` +
+        `<path d="M150,330 C154,382 174,420 200,440 C226,420 246,382 250,330 C238,352 220,350 200,346 C180,350 162,352 150,330Z" fill="#fafafc" stroke="#aaaabe" stroke-width="3" stroke-linejoin="round"/>`;
+    },
+    defs: '',
+    acc: ''
+  }
+};
+
 // ---------- 표정 ----------
 // lid: 윗눈꺼풀 선 (바깥쪽 y, 안쪽 y; 눈 중심 기준. -40 이면 가려지지 않음)
 const EXPR = {
@@ -256,6 +359,7 @@ function build(id, name) {
 }
 
 let n = 0;
+Object.assign(HEROINES, CUSTOMERS); // build() 는 같은 구조를 읽으므로 손님도 한 테이블에 합친다
 Object.keys(HEROINES).forEach((id) => {
   fs.mkdirSync(path.join(OUT, id), { recursive: true });
   Object.keys(EXPR).forEach((name) => { fs.writeFileSync(path.join(OUT, id, name + '.svg'), build(id, name)); n++; });

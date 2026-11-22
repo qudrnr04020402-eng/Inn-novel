@@ -269,3 +269,126 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   #title-cast { height: 44%; } .title-box h1 { font-size: 34px; } #title-names { margin-top: -8px; }
   #card-title { font-size: 46px; }
 }
+
+/* ================= 저녁 영업 (주문 조합) ================= */
+#tavern { position: absolute; inset: 0; z-index: 2; pointer-events: none; } /* HUD(3)/토스트(4)/하트(5) 아래, 대사창 위 */
+#tavern > * { pointer-events: auto; }
+#tv-prog { position: absolute; z-index: 2; top: calc(52px + var(--safe-t)); right: 12px; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgba(255, 180, 84, .25); border: 1px solid rgba(255, 190, 110, .6); pointer-events: none; }
+/* 재료 고르는 동안 손님은 위쪽에 작게 */
+#game.tv-brew .sprite { bottom: 49%; width: 60%; }
+#game.tv-brew .sprite[data-pos="center"] { left: 20%; }
+
+/* 하단 조합 패널 */
+#tv-brew { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 14px calc(12px + var(--safe-b));
+  background: linear-gradient(rgba(10, 12, 32, .92), rgba(10, 12, 32, .98)); border-top: 2px solid rgba(255, 190, 110, .55); border-radius: 18px 18px 0 0;
+  max-height: 62%; overflow-y: auto; box-shadow: 0 -8px 24px rgba(0, 0, 0, .5); }
+.tv-order { background: rgba(255, 255, 255, .08); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px 9px; }
+.tv-order-head { display: flex; align-items: center; justify-content: space-between; }
+.tv-order-head b { font-size: 15px; }
+.tv-mini { min-height: 30px; padding: 0 10px; border-radius: 999px; font-size: 12px; background: rgba(255, 255, 255, .1); border: 1px solid var(--line); opacity: .85; }
+#tv-order-text { margin: 3px 0 0; font-size: 16px; line-height: 1.5; word-break: keep-all; color: #fff3d8; }
+#tv-slots { display: flex; justify-content: center; gap: 12px; margin: 10px 0 4px; }
+.tv-slot { width: 62px; height: 62px; border-radius: 16px; border: 2px dashed rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .06);
+  display: flex; align-items: center; justify-content: center; font-size: 22px; color: rgba(255, 255, 255, .4); padding: 0; }
+.tv-slot.opt { border-color: rgba(255, 255, 255, .2); }
+.tv-slot.on { border: 2px solid var(--accent); background: rgba(255, 180, 84, .18); }
+.tv-slot .tv-icon { width: 46px; height: 46px; }
+#tv-note { margin: 4px 0 8px; min-height: 22px; font-size: 13px; line-height: 1.5; text-align: center; color: #cfd6ff; word-break: keep-all; }
+.tv-tag { display: inline-block; white-space: nowrap; flex: none; font-style: normal; font-size: 12px; font-weight: 700; padding: 0 7px; margin: 0 2px; border: 1px solid; border-radius: 999px; line-height: 18px; }
+#tv-ings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tv-ing { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 84px; padding: 6px 2px 5px;
+  border-radius: 14px; border: 2px solid rgba(255, 190, 110, .45); background: rgba(40, 44, 96, .9); font-size: 13px; }
+.tv-ing .tv-icon { width: 44px; height: 44px; }
+.tv-ing b { font-weight: 700; }
+.tv-ing .tv-stock { position: absolute; top: 3px; right: 5px; font-style: normal; font-size: 12px; opacity: .8; }
+.tv-ing:active { background: #3b3f86; }
+.tv-ing.sel { border-color: #ffd36a; background: rgba(255, 180, 84, .28); box-shadow: 0 0 0 2px rgba(255, 211, 106, .5); }
+.tv-ing.empty { opacity: .35; }
+.tv-icon { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
+.tv-icon.sm { width: 28px; height: 28px; }
+.tv-actions { display: flex; gap: 8px; margin-top: 10px; }
+.tv-actions .btn { margin-top: 0; flex: 1; min-height: 52px; }
+.tv-actions .btn.primary { flex: 1.4; }
+
+/* 전체 화면형 패널 (장보기 / 결산 / 업그레이드 / 메뉴판) */
+.tv-full { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(56px + var(--safe-t)) 16px calc(16px + var(--safe-b));
+  background: radial-gradient(circle at 50% 20%, rgba(40, 30, 90, .97), rgba(6, 6, 22, .98)); }
+.tv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.tv-head h2 { margin: 0; font-size: 24px; color: #fff3d8; }
+.tv-gold { display: inline-flex; align-items: center; gap: 5px; font-size: 16px; font-weight: 700; color: #ffe08a; }
+.tv-count { font-size: 14px; color: var(--accent); font-weight: 700; }
+.tv-info { margin: 2px 0 8px; font-size: 13px; line-height: 1.55; opacity: .8; word-break: keep-all; }
+#tv-menu { background: radial-gradient(circle at 50% 20%, #28205a, #060616); } /* 메뉴판은 아래 화면이 비치지 않게 불투명 */
+#tv-shop-list, #tv-upg-list, #tv-board-list, #tv-sum-body { flex: 1; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.tv-row { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.tv-row .tv-icon { flex: 0 0 44px; width: 44px; height: 44px; }
+.tv-row-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tv-row-mid b { font-size: 16px; }
+.tv-row-mid small { font-size: 12px; opacity: .75; }
+.tv-stk { color: #ffe08a; font-weight: 700; }
+.tv-buy { flex: 0 0 62px; min-height: 48px; border-radius: 12px; background: rgba(255, 180, 84, .22); border: 1px solid rgba(255, 190, 110, .7); font-weight: 700; font-size: 16px; line-height: 1.15; }
+.tv-buy small { display: block; font-size: 11px; opacity: .8; font-weight: 400; }
+.tv-buy:disabled { opacity: .3; }
+.tv-buy:active { background: rgba(255, 180, 84, .5); }
+
+/* 메뉴판 */
+#tv-board-tags { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; margin: 2px 0 8px; font-size: 11px; }
+.tv-gloss { display: flex; align-items: center; gap: 5px; min-width: 0; } .tv-gloss span { opacity: .75; line-height: 1.3; word-break: keep-all; }
+.tv-recipe { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.tv-recipe.use { cursor: pointer; } .tv-recipe.use:active { background: rgba(255, 255, 255, .12); }
+.tv-recipe-ing { flex: 0 0 90px; display: flex; gap: 2px; align-items: center; }
+.tv-recipe-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tv-recipe-tx b { font-size: 15px; } .tv-recipe-tx .hint { font-size: 12px; opacity: .7; line-height: 1.4; }
+.tv-recipe-price { font-size: 14px; color: #ffe08a; font-weight: 700; }
+.tv-recipe.unk { opacity: .6; } .tv-q { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255, 255, 255, .12); font-weight: 700; }
+
+/* 결산 */
+#tv-sum-icons { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 10px 0 12px; }
+.tv-res { position: relative; width: 62px; text-align: center; font-size: 11px; }
+.tv-res-pic { display: block; width: 52px; height: 52px; margin: 0 auto; border-radius: 50%; overflow: hidden; border: 3px solid #888; position: relative; background: #ffffff22; }
+.tv-res-pic img { position: absolute; width: 140px; left: -44px; top: -62px; max-width: none; }
+.tv-res > i { position: absolute; top: -4px; right: 2px; width: 22px; height: 22px; border-radius: 50%; font-style: normal; font-size: 13px; font-weight: 700; line-height: 22px; background: #333; border: 2px solid #fff; }
+.tv-res small { display: block; margin-top: 2px; opacity: .8; }
+.tv-res.r-perfect .tv-res-pic { border-color: #ffd36a; } .tv-res.r-perfect > i { background: #e8a02a; }
+.tv-res.r-good .tv-res-pic { border-color: #9bf0b0; } .tv-res.r-good > i { background: #3a9a58; }
+.tv-res.r-fail .tv-res-pic { border-color: #ff9b9b; } .tv-res.r-fail > i { background: #c64a4a; }
+.tv-res.r-mystery .tv-res-pic { border-color: #c4a0ff; } .tv-res.r-mystery > i { background: #8a5ad8; }
+.tv-res.r-skip .tv-res-pic { border-color: #888; filter: grayscale(.8); }
+#tv-sum-body .sum-row { padding: 9px 6px; font-size: 16px; }
+#tv-sum-body .sum-row.total { border-top: 2px solid var(--line); font-weight: 700; }
+.plus { color: #9bf0b0; } .minus { color: #ff9b9b; }
+
+/* 업그레이드 */
+.tv-upg-card { display: flex; align-items: center; gap: 10px; padding: 12px 12px; margin-bottom: 10px; border-radius: 16px; background: rgba(255, 255, 255, .08); border: 1px solid var(--line); }
+.tv-upg-card.owned { opacity: .6; border-color: rgba(155, 240, 176, .6); }
+.tv-upg-tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tv-upg-tx b { font-size: 17px; } .tv-upg-tx span { font-size: 13px; line-height: 1.5; opacity: .85; word-break: keep-all; }
+.tv-upg-buy { flex: 0 0 86px; min-height: 52px; border-radius: 14px; font-weight: 700; font-size: 16px; background: linear-gradient(#ffc773, #f0993a); color: #2a1706; border: 1px solid #ffd9a0; }
+.tv-upg-buy:disabled { background: rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .55); border-color: var(--line); }
+
+/* 레시피 발견 / 결과 도장 */
+.tv-pop { align-items: center; justify-content: center; padding: 20px; background: rgba(3, 4, 14, .78); }
+.tv-found-box { width: 100%; text-align: center; padding: 22px 16px 16px; border-radius: 22px; background: var(--panel); border: 2px solid #ffd36a; box-shadow: 0 0 40px rgba(255, 190, 80, .35); animation: cardin .5s ease both; }
+.tv-found-title { font-size: 14px; letter-spacing: 6px; color: var(--accent); font-weight: 700; }
+.tv-found-box h3 { margin: 6px 0 10px; font-size: 28px; color: #fff3d8; }
+#tv-found-ing { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.tv-found-ing { display: flex; flex-direction: column; align-items: center; font-size: 12px; } .tv-found-ing .tv-icon { width: 54px; height: 54px; }
+.tv-plus { font-size: 22px; opacity: .6; }
+#tv-found-tags { margin-bottom: 6px; } .tv-price { font-style: normal; margin-left: 6px; color: #ffe08a; font-weight: 700; }
+#tv-stamp { position: absolute; left: 0; right: 0; top: 24%; text-align: center; pointer-events: none; z-index: 2; }
+#tv-stamp b { display: inline-block; font-size: 44px; letter-spacing: 3px; padding: 4px 22px; border: 4px solid; border-radius: 14px; background: rgba(8, 10, 28, .78); transform: rotate(-6deg); }
+#tv-stamp small { display: block; margin-top: 8px; font-size: 15px; text-shadow: 0 1px 4px #000; }
+#tv-stamp.go b { animation: stamp .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes stamp { from { opacity: 0; transform: scale(2.4) rotate(-14deg); } to { opacity: 1; transform: scale(1) rotate(-6deg); } }
+#tv-stamp.r-perfect b { color: #ffd36a; border-color: #ffd36a; text-shadow: 0 0 18px rgba(255, 200, 80, .8); }
+#tv-stamp.r-good b { color: #9bf0b0; border-color: #9bf0b0; }
+#tv-stamp.r-fail b { color: #ff9b9b; border-color: #ff9b9b; }
+#tv-stamp.r-mystery b { color: #c4a0ff; border-color: #c4a0ff; font-size: 34px; }
+#tv-stamp.r-skip b { color: #bbb; border-color: #bbb; }
+
+@media (max-height: 700px) {
+  .tv-ing { min-height: 74px; } .tv-ing .tv-icon { width: 36px; height: 36px; }
+  .tv-slot { width: 54px; height: 54px; }
+  #tv-board-tags { display: none; }
+}

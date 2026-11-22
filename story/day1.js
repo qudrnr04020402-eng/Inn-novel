@@ -317,6 +317,7 @@ Object.assign(STORY.scenes, {
   lia_1_memory: [
     { say: 'lia', face: 'smile', text: '푸하하! 맞아, 그때 내가 얼마나 울었는지 몰라. 네가 안 나올까 봐. 결국 아버님이 기름을 발라서 빼 주셨잖아.' },
     { say: 'lia', face: 'normal', text: '…그때도 지금도, 이 여관은 따뜻하다. 이상하게 돌아오면 안심이 돼.' },
+    { say: 'lia', face: 'smile', text: '그러고 보니 추워서 떨 때마다 아버님이 몰래 우유에 꿀술을 넣고 끓여 주셨잖아. 달콤하고 따뜻해서, 그거 마시면 금방 울음이 그쳤는데.' },
     { goto: 'after_pick' }
   ],
   lia_1_promise: [
@@ -337,53 +338,42 @@ Object.assign(STORY.scenes, {
     { goto: 'after_pick' }
   ],
 
-  // ================= 저녁: 첫 만찬 =================
+  // ================= 저녁: 첫 영업 (+ 첫 지진) =================
+  // 저녁 영업(story/tavern.js 의 day1) -> 영업이 끝난 뒤 첫 지진
   d1_evening: [
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '해가 기울자 식당에 불이 들어왔다. 오늘은 우리 여관이 이렇게 북적이는 첫날이다.' },
+    { narr: '해가 기울자 식당에 불이 들어왔다. 손님이 몰려온 첫날. 카운터 뒤에 서자 어쩐지 손이 떨렸다.' },
+    { show: 'lia', face: 'smile', pos: 'center' },
+    { say: 'lia', text: '아버님이 쓰시던 레시피 노트, 서랍에서 찾았어. 앞쪽 다섯 장은 아직 읽을 만해.' },
+    { narr: '낡은 노트에는 삐뚤빼뚤한 글씨로 다섯 가지 메뉴가 적혀 있다. 그 아래 한 줄. \'손님이 정확히 말하지 않아도, 눈을 보면 안다.\'' },
+    { say: 'lia', face: 'normal', text: '손님들은 "몸이 녹는 걸로"처럼 애매하게 주문할 거야. 재료를 두세 개 골라서 내면 돼. 메뉴판에 없는 조합도 만들어 볼 수 있고, 딱 맞으면 새 레시피가 되는 거야.' },
+    { say: 'lia', face: 'smile', text: '시간제한은 없으니까 천천히! 재료는 오늘 쓸 만큼만 있어. 모자라면 영업 전에 장을 봐 오면 돼. …자, 가게 열자!' },
+    { hide: 'lia' },
+    { tavern: 'day1' },
+    { goto: 'd1_ev_close' }
+  ],
+  // 영업 직후: 모두가 식당에 남아 있는 상태에서 지진으로 이어진다
+  d1_ev_close: [
+    { bg: 'inn_evening' }, { hide: 'all' },
+    { narr: '마지막 잔이 비워질 즈음, 식당은 웃음소리로 가득했다. 은빛 여우관이 이렇게 북적인 건 아버지 때 이후 처음이다.' },
     { show: 'kaela', face: 'smile', pos: 'left' },
     { show: 'erion', face: 'normal', pos: 'center' },
-    { show: 'miho', face: 'smile', pos: 'right' },
-    { say: 'kaela', text: '주인장! 영웅의 첫 만찬이다! 고기를 산처럼 쌓아 와라!' },
-    { say: 'miho', text: '사장님, 저는 제일 비싼 거요! 어차피 내일 공짜로 먹을 거지만요!' },
-    { say: 'erion', text: '…시끄럽네.' },
-    { narr: '부엌 문이 열리고 리아가 쟁반을 든 채 들어왔다. 앞치마 차림이 꽤 익숙해 보인다.' },
-    { hide: 'miho' },
     { show: 'lia', face: 'smile', pos: 'right' },
-    { say: 'lia', text: '자, 저녁 메뉴를 정해 줘. 오늘은 사장님이 쏘는 거야, 맞지?' },
-    { choice: [
-      { text: '든든한 고기 스튜 (12G)', cost: 12, set: { 'aff.kaela': 1, 'aff.miho': 1, rep: 1 }, goto: 'd1_ev_stew' },
-      { text: '허브 샐러드와 따뜻한 차 (12G)', cost: 12, set: { 'aff.erion': 1, 'aff.lia': 1, rep: 1 }, goto: 'd1_ev_salad' },
-      { text: '빵과 수프 (무료)', goto: 'd1_ev_plain' }
-    ] }
-  ],
-  d1_ev_stew: [
-    { say: 'kaela', face: 'smile', text: '이 맛이다! 영웅의 몸은 고기로 만들어지는 법이지!' },
-    { say: 'miho', text: '우와, 진짜 고기가 들었어! 이런 여관은 처음이야. 사장님 부자예요? 아니군요. 그래도 맛있어요!' },
-    { goto: 'd1_ev_quake' }
-  ],
-  d1_ev_salad: [
-    { say: 'erion', face: 'surprised', text: '…이 허브, 엘프 쪽 품종이잖아. 어떻게…' },
-    { say: 'lia', face: 'smile', text: '신전 텃밭에서 키운 거야. 내가 사장님한테 몰래 알려 줬어. 너 향 진한 거 싫어한다고 했잖아.' },
-    { narr: '리아가 눈을 찡긋했다. 에리온이 슬쩍 시선을 피하며 샐러드를 한 입 먹었다. 포크가 멈추지 않는다.' },
-    { goto: 'd1_ev_quake' }
-  ],
-  d1_ev_plain: [
-    { say: 'kaela', face: 'sad', text: '빵과… 수프… 영웅의 만찬치고는 소박하군.' },
-    { say: 'miho', text: '사장님, 세금 걱정이 그렇게 심해요? 제가 좀 도와 드릴 수도 있는데… 수수료 7할에.' },
-    { narr: '분위기가 조금 가라앉았다. 다음에는 신경 써서 차려야겠다.' },
+    { say: 'kaela', text: '주인장! 영웅의 첫 만찬은 만족스러웠다! 내일은 더 많은 고기를 준비하도록!' },
+    { say: 'lia', text: '정리는 내가 도울게. 오늘 처음치고는 정말 잘했어.' },
+    { narr: '그때였다. 식탁 위의 컵이 달그락달그락 떨리기 시작했다.' },
     { goto: 'd1_ev_quake' }
   ],
   d1_ev_quake: [
-    { narr: '그때였다. 식탁 위의 컵이 달그락달그락 떨리기 시작했다.' },
     { fx: 'shake' },
     { narr: '쿠르르릉— 낮고 깊은 울림이 발밑에서부터 올라왔다. 천장에서 먼지가 떨어지고, 등불이 흔들렸다.' },
     { show: 'erion', face: 'surprised' },
     { say: 'erion', text: '…벌써?' },
     { show: 'kaela', face: 'surprised' },
     { say: 'kaela', text: '지진인가! 걱정 마라, 모두 이 몸에게 맡겨라! …일단 식탁 밑으로!' },
+    { show: 'miho', face: 'surprised', pos: 'right' },
     { say: 'miho', text: '사장님, 벽 갈라지면 수리비 누가 내요? 저 아니에요!' },
-    { show: 'lia', face: 'surprised' },
+    { show: 'lia', face: 'surprised', pos: 'right' },
     { say: 'lia', text: '다, 다들 진정해! 일단 불부터…!' },
     { narr: '울림은 십 초쯤 이어지다가 거짓말처럼 멎었다. 창밖, 먼 뒷산 쪽 하늘에 푸른 빛이 희미하게 번졌다가 사라졌다.' },
     { say: 'erion', face: 'normal', text: '…시간이 없네.' },
@@ -427,6 +417,6 @@ Object.assign(STORY.scenes, {
     { narr: '손님들이 모두 잠든 밤. 금고를 정리하고 불을 끄러 나서는데, 위층에서 희미한 소리가 들렸다.' },
     { narr: '동쪽 창가에서, 에리온이 가만히 뒷산을 바라보고 있었다. 그 손에서 푸른 책이 빛나고 있었다.' },
     { narr: '나는 조용히 발길을 돌렸다. 오늘은 더 묻지 않기로 했다. 내일부터, 이 여관에서 무슨 일이 시작될 것 같다.' },
-    { goto: 'd2_open' }
+    { goto: 'd1_upgrade' }
   ]
 });
