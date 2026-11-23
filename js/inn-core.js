@@ -188,7 +188,8 @@
   I.nightEvent = function (vars, day, evalCond) {
     I.ensure(vars);
     var N = root.LODGING.nightEvents;
-    if (N.days.indexOf(day) < 0) return null;
+    if (root.EventCore && !root.EventCore.inRange(N.range, day)) return null;
+    if (N.gap && vars.nev.last != null && day - vars.nev.last <= N.gap) return null;     // 직전 밤 사건과 간격
     if (rnd(vars, day, 51) >= N.chance) return null;
     var ids = Object.keys(N.events).filter(function (id) {
       var ev = N.events[id];
@@ -257,7 +258,9 @@
   I.rivalryPick = function (vars, day) {
     I.ensure(vars);
     var R = root.RIVALRY;
-    if (R.days.indexOf(day) < 0 || vars.riv.n >= R.max) return null;
+    if (root.EventCore && !root.EventCore.inRange(R.range, day)) return null;
+    if (vars.riv.n >= R.max) return null;
+    if (R.gap && vars.riv.last != null && day - vars.riv.last <= R.gap) return null;     // 직전 신경전과 간격
     var best = null, bs = -1;
     R.pairs.forEach(function (p) {
       if (has(vars.riv.done, p.id)) return;

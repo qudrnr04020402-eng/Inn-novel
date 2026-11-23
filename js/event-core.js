@@ -24,6 +24,7 @@
     if (!Array.isArray(r.used)) r.used = [];
     if (typeof r.today !== 'string') r.today = '';
     if (typeof r.ret !== 'string') r.ret = '';
+    if (typeof r.last !== 'number') r.last = -9;      // 마지막 사건이 일어난 일차
     var t = vars.today = (vars.today && typeof vars.today === 'object') ? vars.today : {};
     ['cust', 'price', 'tip'].forEach(function (k) { if (typeof t[k] !== 'number') t[k] = 0; });
     if (typeof t.note !== 'string') t.note = '';
@@ -39,11 +40,17 @@
   // 오늘 아침에 일어날 사건 id (없으면 null). 같은 시드/일차/사용 기록이면 항상 같은 결과.
   E.pick = function (R, vars, day, evalCond) {
     var rev = E.ensure(vars);
-    if (!R || R.days.indexOf(day) < 0) return null;
+    if (!R || !E.inRange(R.range, day)) return null;
+    if (R.gap && typeof rev.last === 'number' && day - rev.last <= R.gap) return null;   // 직전 사건과 간격 두기 (연속으로 터지지 않게)
     if (E.rand(rev.seed, day, 1) >= R.chance) return null;
+    var wk = root.CalCore ? root.CalCore.weekOf(day) : Math.ceil(day / 7);
     var ids = Object.keys(R.events).filter(function (id) {
       var ev = R.events[id];
-      if (ev.days.indexOf(day) < 0 || rev.used.indexOf(id) >= 0) return false;
+      if (rev.used.indexOf(id) >= 0) return false;
+      if (ev.weeks && ev.weeks.indexOf(wk) < 0) return false;                 // weeks: 나올 수 있는 주차 (생략하면 전 기간)
+      if (ev.days && ev.days.indexOf(day) < 0) return false;                  // days: 나올 수 있는 일차 (생략 가능)
+      if (ev.minDay && day < ev.minDay) return false;
+      if (ev.maxDay && day > ev.maxDay) return false;
       return !ev.if || evalCond(ev.if, vars);
     });
     if (!ids.length) return null;
@@ -53,12 +60,14 @@
     for (var i = 0; i < ids.length; i++) { x -= R.events[ids[i]].weight || 1; if (x < 0) return ids[i]; }
     return ids[ids.length - 1];
   };
+  // range = [처음 일차, 마지막 일차] (생략하면 항상 true)
+  E.inRange = function (range, day) { return !range || (day >= range[0] && day <= range[1]); };
   // 사건 시작 기록 (사용한 사건 / 끝난 뒤 돌아갈 씬)
   E.begin = function (vars, id, thenScene) {
     var rev = E.ensure(vars);
     rev.ret = thenScene;
     rev.today = id || '';
-    if (id) rev.used.push(id);
+    if (id) { rev.used.push(id); rev.last = vars.day || 0; }
   };
 
   root.EventCore = E;

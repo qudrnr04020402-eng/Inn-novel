@@ -16,7 +16,7 @@ async function newPage(browser, problems, label, o) {
   o = Object.assign({ tut: true }, o);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await ctx.addInitScript(() => {
-    try { localStorage.setItem('inn_vn_v5_tut', '1'); } catch (e) { /* 무시 */ }
+    try { localStorage.setItem('inn_vn_v6_tut', '1'); } catch (e) { /* 무시 */ }
     // 아침 랜덤 사건은 끈다 (이 테스트에서는 밤 사건/신경전만 본다)
     Object.defineProperty(window, 'RANDOM_EVENTS', { configurable: true, set(v) { v.chance = 0; Object.defineProperty(window, 'RANDOM_EVENTS', { value: v, writable: true, configurable: true }); } });
   });
@@ -39,11 +39,13 @@ async function run(browser, problems, report, SHOTS) {
 
   // 자동 저장 슬롯에 장면 + 변수를 심고 이어하기
   const seedAt = async (page, sceneId, patchSrc, pc) => {
+    sceneId = sceneId.replace(/^d\d_upgrade$/, 'night_close');   // 30일 구성: 밤 정리는 공용 씬
+    patchSrc = patchSrc.replace(/d\d_upgrade#3/g, 'night_close#3');
     await page.evaluate(([sc, src, p]) => {
       const v = JSON.parse(JSON.stringify(STORY.init));
       (new Function('v', src))(v);
       const snap = { scene: sc, pc: p || 0, vars: v, bg: 'inn_evening', sprites: { left: null, center: null, right: null }, bgm: null, log: [], label: 'test' };
-      localStorage.setItem('inn_vn_v5_auto', JSON.stringify({ v: 5, t: Date.now(), snap }));
+      localStorage.setItem('inn_vn_v6_auto', JSON.stringify({ v: 6, t: Date.now(), snap }));
     }, [sceneId, patchSrc, pc || 0]);
     await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])');
     await page.tap('#btn-continue'); await page.waitForTimeout(300);
@@ -252,7 +254,7 @@ async function run(browser, problems, report, SHOTS) {
     await seedAt(page, 'd1_upgrade', `v.day = 1; v.time = '밤'; v.gold = 60; ${SEEDV(sdCat)}`);
     await page.locator('#lodge-done').tap(); await page.waitForTimeout(350);
     chk((await scene(page)) === 'nev_cat', `밤 사건 장면으로 가지 않음: ${await scene(page)}`);
-    chk((await vars(page)).nev.used.includes('cat') && (await vars(page)).nev.ret === 'd1_upgrade#3', `밤 사건 기록 이상 ${JSON.stringify((await vars(page)).nev)}`);
+    chk((await vars(page)).nev.used.includes('cat') && (await vars(page)).nev.ret === 'night_close#3', `밤 사건 기록 이상 ${JSON.stringify((await vars(page)).nev)}`);
     await until(page, () => VN.mode === 'choice');
     chk((await mode(page)) === 'choice', '밤 사건 선택지가 안 뜸');
     await page.waitForTimeout(300);
@@ -313,10 +315,10 @@ async function run(browser, problems, report, SHOTS) {
     const chk = mk('여관 등급');
     const { ctx, page } = await open();
     const sdNone = await findSeed(page, null, 1);
-    await seedAt(page, 'd1_upgrade', `v.day = 1; v.time = '밤'; v.gold = 50; v.rep = 14; ${SEEDV(sdNone)}`);
+    await seedAt(page, 'd1_upgrade', `v.day = 1; v.time = '밤'; v.gold = 50; v.rep = 26; ${SEEDV(sdNone)}`);
     chk((await page.locator('.hud-item.rank b').innerText()) === '★', 'HUD 등급이 처음에 ★ 가 아님');
     await page.locator('#lodge-done').tap(); await page.waitForTimeout(500);
-    chk(await page.evaluate(() => VN.rankPopup), '평판 14 이면 3성이라 등급 상승 연출이 떠야 함');
+    chk(await page.evaluate(() => VN.rankPopup), '평판 26 이면 3성이라 등급 상승 연출이 떠야 함');
     const rk = await page.evaluate(() => ({ stars: document.querySelectorAll('#rankup-stars i').length, name: document.getElementById('rankup-name').textContent, un: [...document.querySelectorAll('#rankup-unlocks li')].map((x) => x.textContent), who: document.getElementById('rankup-who').textContent, say: document.getElementById('rankup-text').textContent }));
     chk(rk.stars === 3 && rk.name === '입소문 난 여관' && rk.un.length === 2 && rk.un[1].includes('레시피') && rk.say.length > 5, `등급 팝업 내용 이상 ${JSON.stringify(rk)}`);
     chk((await page.locator('.hud-item.rank b').innerText()) === '★★★', 'HUD 등급 배지가 갱신되지 않음');
@@ -336,12 +338,12 @@ async function run(browser, problems, report, SHOTS) {
       return { d, r1: mkv(1), r2: mkv(2), r4: mkv(4), r5: mkv(5) };
     }));
     chk(q.every((x) => !x.r1.includes('rosa') && x.r2.includes('rosa')) && q.every((x) => !x.r1.includes('noble') && !x.r4.includes('noble')), `2성 로사 해금 이상 ${JSON.stringify(q[0])}`);
-    chk(q[5].r5.includes('noble') && q.slice(0, 5).every((x) => !x.r5.includes('noble')), '5성 귀족 손님이 7일차에만 와야 함');
+    chk(q[5].r5.includes('noble') && q.slice(0, 5).every((x) => !x.r5.includes('noble')), '5성 귀족 손님이 마지막 영업(day7)에만 와야 함');
     await ctx.close();
-    // 한 번에 여러 등급: 평판 40 이면 5성, 모든 해금 문구
+    // 한 번에 여러 등급: 평판 80 이면 5성, 모든 해금 문구
     const r2 = await open(); const c2 = mk('여관 등급 5성');
     const sd = await findSeed(r2.page, null, 1);
-    await seedAt(r2.page, 'd1_upgrade', `v.day = 1; v.time = '밤'; v.rep = 40; ${SEEDV(sd)}`);
+    await seedAt(r2.page, 'd1_upgrade', `v.day = 1; v.time = '밤'; v.rep = 80; ${SEEDV(sd)}`);
     await r2.page.locator('#lodge-done').tap(); await r2.page.waitForTimeout(500);
     const rk2 = await r2.page.evaluate(() => ({ stars: document.querySelectorAll('#rankup-stars i').length, un: document.querySelectorAll('#rankup-unlocks li').length }));
     c2(rk2.stars === 5 && rk2.un === 4, `5성 한 번에 도달 이상 ${JSON.stringify(rk2)}`);
@@ -350,9 +352,9 @@ async function run(browser, problems, report, SHOTS) {
     await r2.page.evaluate(() => { const o = document.getElementById('toasts'); o.innerHTML = ''; });
     await r2.ctx.close();
     const r3 = await open(); const c3 = mk('귀족 손님');
-    await seedAt(r3.page, 'd7_tavern', `v.day = 7; v.time = '저녁'; v.rep = 40; v.gold = 300; v.inn.rank = 4; Object.keys(TAVERN.ingredients).forEach((i) => { TavernCore.ensure(TAVERN, v); v.tavern.stock[i] = 9; }); TavernCore.ensure(TAVERN, v); Object.keys(TAVERN.recipes).forEach((r) => { v.tavern.known[r] = true; });`);
+    await seedAt(r3.page, 'd7_tavern', `v.day = 29; v.time = '저녁'; v.rep = 80; v.gold = 300; v.inn.rank = 4; Object.keys(TAVERN.ingredients).forEach((i) => { TavernCore.ensure(TAVERN, v); v.tavern.stock[i] = 9; }); TavernCore.ensure(TAVERN, v); Object.keys(TAVERN.recipes).forEach((r) => { v.tavern.known[r] = true; });`);
     await until(r3.page, () => VN.mode === 'rankup' || VN.mode === 'tavern');
-    c3(await r3.page.evaluate(() => VN.rankPopup) || (await vars(r3.page)).inn.rank === 5, '7일차 영업 직전 등급 검사로 5성이 되어야 함');
+    c3(await r3.page.evaluate(() => VN.rankPopup) || (await vars(r3.page)).inn.rank === 5, '29일차 영업 직전 등급 검사로 5성이 되어야 함');
     if (await r3.page.evaluate(() => VN.rankPopup)) { await r3.page.locator('#rankup-btn').tap(); await r3.page.waitForTimeout(300); }
     c3(await r3.page.evaluate(() => TavernCore.queue(TAVERN, 'day7', VN.state.vars, VN.evalCond).some((c) => c.who === 'noble')), '5성인데 귀족이 영업 손님에 없음');
     // 귀족 차례까지 진행: 모든 손님을 거절하는 대신 정답 요리로 진행
@@ -527,29 +529,26 @@ async function run(browser, problems, report, SHOTS) {
     report.push('선물: 낮 선택 화면에서 구입(골드 차감/부족 시 잠금)·주기·반응(최애 +3/좋아함 +2/싫어함 -1, 대사=데이터)·하루 1명 1개 한도·다음 날 해금·낮 이벤트 뒤 제안·메뉴 "선물"·4일차 전야 선물과 한도 공유·메모에 취향 기록');
   }
 
-  // ================= 깊은 이벤트 =================
+  // ================= 깊은 이벤트 (조건 이벤트: 3주차 이후 + 하트 4칸 이상 + 한 번만) =================
   {
     const chk = mk('깊은 이벤트');
     const { ctx, page } = await open();
-    const H4 = await page.evaluate(() => HEART(4));
     const deepOpts = () => page.evaluate(() => VN.options.filter((o) => o.tag === '깊은 이야기').map((o) => o.who));
-    // 조건: 5~6일차 + 하트 4칸 이상 + 한 번만
-    await seedAt(page, 'pick', `v.day = 5; v.aff.erion = HEART(4) - 1; v.aff.kaela = HEART(4); v.ev.erion = 3; v.ev.kaela = 3;`);
+    await seedAt(page, 'pick', `v.day = 16; v.time = '낮'; v.aff.erion = HEART(4) - 1; v.aff.kaela = HEART(4);`);
     let d = await deepOpts();
     chk(d.length === 1 && d[0] === 'kaela', `하트 4칸 미만 에리온은 안 나오고 카엘라만 나와야 함 ${JSON.stringify(d)}`);
     await page.waitForTimeout(350);
     await shot(page, 'deep_00_pick_option');
-    await seedAt(page, 'pick', `v.day = 3; v.aff.erion = 30; v.aff.kaela = 30; v.ev.erion = 3;`);
-    chk((await deepOpts()).length === 0, '3일차에 깊은 이벤트 선택지가 나옴');
-    await seedAt(page, 'pick', `v.day = 4; v.aff.erion = 30; v.aff.kaela = 30; v.ev.erion = 3;`);
-    chk((await deepOpts()).length === 0, '4일차에 깊은 이벤트 선택지가 나옴 (5~6일차에만)');
-    await seedAt(page, 'pick', `v.day = 5; v.aff.erion = 30; v.flag.deep_erion = true;`);
+    await seedAt(page, 'pick', `v.day = 9; v.aff.erion = HEART(4); v.aff.kaela = HEART(4);`);
+    chk((await deepOpts()).length === 0, '2주차(9일차)에 깊은 이벤트 선택지가 나옴 (3주차 이후)');
+    await seedAt(page, 'pick', `v.day = 16; v.aff.erion = HEART(4); v.evdone.erion_5 = true;`);
     chk((await deepOpts()).length === 0, '이미 본 깊은 이벤트가 또 나옴');
-    // 에리온 깊은 이벤트: CG + 선택지 2개 + 호감도 + 4일차는 저녁으로
-    await seedAt(page, 'pick', `v.day = 5; v.time = '낮'; v.aff.erion = HEART(4); v.ev.erion = 3;`);
+    await seedAt(page, 'pick', `v.day = 25; v.aff.erion = HEART(4); v.aff.lia = HEART(4);`);
+    chk((await deepOpts()).length === 2, '4주차에도 조건이 맞으면 나와야 함');
+    // 에리온 깊은 이벤트: CG + 선택지 2개 + 호감도 + 본 기록
+    await seedAt(page, 'pick', `v.day = 16; v.time = '낮'; v.aff.erion = HEART(4);`);
     await page.locator('.choice-btn', { hasText: '맨 뒷장' }).tap();
-    await until(page, () => VN.mode === 'choice' || !!VN.cgNow);
-    for (let i = 0; i < 12 && (await page.evaluate(() => VN.cgNow)) !== 'erion_deep'; i++) { await tapText(page, 1); }
+    for (let i = 0; i < 14 && (await page.evaluate(() => VN.cgNow)) !== 'erion_deep'; i++) { await tapText(page, 1); }
     chk((await page.evaluate(() => VN.cgNow)) === 'erion_deep' && await vis(page, 'cg'), '깊은 이벤트 CG 가 안 뜸');
     chk((await page.evaluate(() => VN.cgSeen)).erion_deep > 0, 'CG 기록이 남지 않음');
     for (let i = 0; i < 12 && !(await page.evaluate(() => document.getElementById('next-mark').classList.contains('on'))); i++) await page.waitForTimeout(150);
@@ -562,15 +561,14 @@ async function run(browser, problems, report, SHOTS) {
     await shot(page, 'deep_02_choice');
     const a0 = (await vars(page)).aff.erion;
     await page.locator('.choice-btn').first().tap(); await page.waitForTimeout(150);
-    await until(page, () => VN.mode === 'choice' || VN.mode === 'tavern' || VN.mode === 'text' && VN.state.scene.startsWith('d5_'));
+    await until(page, () => VN.mode === 'tavern' || VN.mode === 'choice');
     const vd = await vars(page);
-    chk(vd.aff.erion === a0 + 3 && vd.flag.deep_erion === true, `깊은 이벤트 호감도/플래그 이상 (${a0}->${vd.aff.erion})`);
-    for (let i = 0; i < 40 && !(await scene(page)).startsWith('d5_'); i++) { await tapText(page, 1); if ((await mode(page)) === 'choice') break; }
-    chk((await scene(page)).startsWith('d5_'), `깊은 이벤트 뒤 5일차 저녁으로 이어지지 않음 (${await scene(page)})`);
+    chk(vd.aff.erion === a0 + 3 && vd.flag.deep_erion === true && vd.evdone.erion_5 === true, `깊은 이벤트 호감도/플래그 이상 (${a0}->${vd.aff.erion})`);
+    chk((await mode(page)) === 'tavern', `깊은 이벤트 뒤 저녁 영업으로 이어지지 않음 (${await mode(page)}/${await scene(page)})`);
     // 다른 3명도 (조건/CG/호감도) — 일부러 두 번째 선택지
     for (const h of ['kaela', 'miho', 'lia']) {
-      await seedAt(page, 'pick', `v.day = 6; v.time = '낮'; v.aff.${h} = HEART(4); v.ev.${h} = 3; v.gold = 50;`);
-      await page.locator(`.choice-btn[data-who="${h}"]`, { hasText: /./ }).evaluateAll((els) => { const el = els.find((e) => /깊은 이야기/.test(e.textContent)); el && el.click(); });
+      await seedAt(page, 'pick', `v.day = 17; v.time = '낮'; v.aff.${h} = HEART(4); v.gold = 50;`);
+      await page.locator(`.choice-btn[data-who="${h}"]`).evaluateAll((els) => { const el = els.find((e) => /깊은 이야기/.test(e.textContent)); el && el.click(); });
       let cg = false;
       for (let i = 0; i < 20; i++) { await tapText(page, 1); if ((await page.evaluate(() => VN.cgNow)) === `${h}_deep`) cg = true; if ((await mode(page)) === 'choice') break; }
       chk(cg, `${h} 깊은 이벤트 CG ${h}_deep 가 안 뜸`);
@@ -580,21 +578,9 @@ async function run(browser, problems, report, SHOTS) {
       const af = (await vars(page)).aff[h];
       chk(af >= b + 2 && af <= b + 3 && (await vars(page)).flag['deep_' + h] === true, `${h} 두 번째 선택 호감도 이상 (${b}->${af})`);
     }
-    // 6일차에도 나오고(끝나면 6일차 저녁으로), 7일차 동행 선택에는 안 나온다
-    await seedAt(page, 'pick', `v.day = 6; v.time = '낮'; v.aff.lia = HEART(4);`);
-    chk((await deepOpts()).join() === 'lia', '6일차 선택에 깊은 이야기가 없음');
-    await page.locator('.choice-btn[data-who="lia"]').evaluateAll((els) => { const el = els.find((e) => /깊은 이야기/.test(e.textContent)); el && el.click(); });
-    for (let i = 0; i < 30 && (await mode(page)) !== 'choice'; i++) await tapText(page, 1);
-    await page.locator('.choice-btn').first().evaluate((x) => x.click());
-    for (let i = 0; i < 40 && !(await scene(page)).startsWith('d6_'); i++) { await tapText(page, 1); if ((await mode(page)) === 'choice') break; }
-    chk((await vars(page)).flag.deep_lia === true && (await scene(page)).startsWith('d6_'), `6일차 깊은 이벤트 뒤 6일차 저녁으로 이어지지 않음 (${await scene(page)})`);
-    await seedAt(page, 'd7_pick_day', `v.day = 7; v.time = '낮'; v.aff.lia = HEART(4);`, 5);
-    chk((await deepOpts()).length === 0, '7일차 동행 선택에 깊은 이야기가 나옴');
-    // CG 분모 22
-    await page.evaluate(() => VN.state && 0);
     await ctx.close();
     const r2 = await open(); const c2 = mk('깊은 이벤트 수집');
-    await r2.page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v5_cg', JSON.stringify({ erion_deep: n, kaela_deep: n })); });
+    await r2.page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v6_cg', JSON.stringify({ erion_deep: n, kaela_deep: n })); });
     await r2.page.reload(); await r2.page.waitForSelector('#btn-gallery');
     c2((await r2.page.locator('#btn-gallery').innerText()).includes('2/22'), `갤러리 버튼이 2/22 이 아님 (${await r2.page.locator('#btn-gallery').innerText()})`);
     await r2.page.tap('#btn-gallery'); await r2.page.waitForTimeout(300);
@@ -602,7 +588,7 @@ async function run(browser, problems, report, SHOTS) {
     c2((await shift(r2.page)) === 0, '갤러리 가로 스크롤');
     await shot(r2.page, 'deep_03_gallery');
     await r2.ctx.close();
-    report.push('깊은 이벤트: 5~6일차 + 하트 4칸 + 1번만(미만/3·4일차/7일차/이미 봄은 안 나옴), 4명 모두 CG(22장 중 4장)·선택지 2개·호감도 +2~3, 저녁으로 이어짐, 갤러리 22칸');
+    report.push('깊은 이벤트: 3주차 이후 + 하트 4칸 + 1번만(미만/2주차/이미 봄은 안 나옴, 4주차는 나옴), 4명 모두 CG(22장 중 4장)·선택지 2개·호감도 +2~3, 저녁 영업으로 이어짐, 갤러리 22칸');
   }
 
   // ================= 히로인 신경전 =================
@@ -611,23 +597,22 @@ async function run(browser, problems, report, SHOTS) {
     const { ctx, page } = await open();
     const need = await page.evaluate(() => RIVALRY.need);
     // 일 선택 -> after_pick -> 신경전 (리아+미호 둘 다 높음)
-    await seedAt(page, 'pick', `v.day = 3; v.time = '낮'; v.aff.lia = ${'RIVALRY.need'}; v.aff.miho = RIVALRY.need;`.replace(/\$\{[^}]*\}/g, ''));
+    await seedAt(page, 'pick', `v.day = 16; v.time = '낮'; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need;`);
     await page.locator('.choice-btn', { hasText: '여관 일에 집중' }).tap();
     await until(page, () => VN.mode === 'choice');
     chk((await scene(page)) === 'riv_lia_miho' && (await page.evaluate(() => VN.options.length)) === 3, `신경전 장면이 안 열림 (${await scene(page)})`);
-    chk((await vars(page)).riv.n === 1 && (await vars(page)).riv.done[0] === 'lia_miho', '신경전 기록 이상');
+    chk((await vars(page)).riv.n === 1 && (await vars(page)).riv.done[0] === 'lia_miho' && (await vars(page)).riv.last === 16, '신경전 기록 이상');
     await page.waitForTimeout(350);
     await shot(page, 'riv_01_choice');
     chk((await shift(page)) === 0, '신경전 가로 스크롤');
     const b0 = await vars(page);
     await page.locator('.choice-btn').first().tap(); await page.waitForTimeout(150);
-    await until(page, () => VN.mode === 'choice' || VN.mode === 'tavern' || VN.state.scene.startsWith('d3_'));
+    await until(page, () => VN.mode === 'tavern' || VN.mode === 'choice');
     const a1 = await vars(page);
     chk(a1.aff.lia === b0.aff.lia + 2 && a1.aff.miho === b0.aff.miho - 1 && a1.rep === b0.rep, `편들기(리아 +2 / 미호 -1 / 평판 그대로) 이상 ${b0.aff.lia}->${a1.aff.lia}, ${b0.aff.miho}->${a1.aff.miho}`);
-    for (let i = 0; i < 60 && !(await scene(page)).startsWith('d3_'); i++) { await tapText(page, 1); if ((await mode(page)) === 'choice') break; }
-    chk((await scene(page)).startsWith('d3_evening') || (await scene(page)).startsWith('d3_'), `신경전 뒤 저녁으로 이어지지 않음 (${await scene(page)})`);
+    chk((await mode(page)) === 'tavern', `신경전 뒤 저녁 영업으로 이어지지 않음 (${await mode(page)}/${await scene(page)})`);
     // 달래기: 둘 다 +1, 평판 0
-    await seedAt(page, 'pick', `v.day = 2; v.time = '낮'; v.aff.kaela = RIVALRY.need; v.aff.erion = RIVALRY.need; v.rep = 5;`);
+    await seedAt(page, 'pick', `v.day = 9; v.time = '낮'; v.aff.kaela = RIVALRY.need; v.aff.erion = RIVALRY.need; v.rep = 5;`);
     await page.locator('.choice-btn', { hasText: '여관 일에 집중' }).tap();
     await until(page, () => VN.mode === 'choice');
     chk((await scene(page)) === 'riv_kaela_erion', `카엘라/에리온 신경전 아님 (${await scene(page)})`);
@@ -636,19 +621,21 @@ async function run(browser, problems, report, SHOTS) {
     await tapText(page, 8);
     const c1 = await vars(page);
     chk(c1.aff.kaela === c0.aff.kaela + 1 && c1.aff.erion === c0.aff.erion + 1 && c1.rep === c0.rep, '달래기(둘 다 +1, 평판 +0) 이상');
-    // 조건: 둘 중 하나만 높으면 안 일어남 / 1일차·5일차 안 일어남 / 최대 2번 / 같은 쌍 한 번만
+    // 조건: 둘 중 하나만 높으면 안 일어남 / 4일차 이전·28일차 이후 안 일어남 / 최대 횟수 / 같은 쌍 한 번만 / 간격
+    const both = 'v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need;';
     const cases = [
-      ['한쪽만 높음', 'v.day = 3; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need - 1;', null],
-      ['7일차', 'v.day = 7; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need;', null],
-      ['1일차', 'v.day = 1; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need;', null],
-      ['이미 2번', 'v.day = 3; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need; v.riv.n = 2; v.riv.done = ["kaela_erion", "miho_erion"];', null],
-      ['같은 쌍은 한 번', 'v.day = 3; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need; v.riv.n = 1; v.riv.done = ["lia_miho"];', null],
-      ['여러 쌍이면 합이 높은 쌍', 'v.day = 3; v.aff.lia = RIVALRY.need + 6; v.aff.miho = RIVALRY.need + 6; v.aff.erion = RIVALRY.need; v.aff.kaela = RIVALRY.need;', 'riv_lia_miho']
+      ['한쪽만 높음', 'v.day = 16; v.aff.lia = RIVALRY.need; v.aff.miho = RIVALRY.need - 1;', null],
+      ['4일차(이른 시기)', `v.day = 4; ${both}`, null],
+      ['28일차(너무 늦음)', `v.day = 28; ${both}`, null],
+      ['최대 횟수', `v.day = 16; ${both} v.riv.n = RIVALRY.max; v.riv.done = ["kaela_erion", "miho_erion", "kaela_lia"];`, null],
+      ['같은 쌍은 한 번', `v.day = 16; ${both} v.riv.n = 1; v.riv.done = ["lia_miho"];`, null],
+      ['직전 신경전과 간격', `v.day = 16; ${both} v.riv.n = 1; v.riv.last = 15; v.riv.done = ["kaela_erion"];`, null],
+      ['간격 지나면 다시', `v.day = 20; ${both} v.riv.n = 1; v.riv.last = 15; v.riv.done = ["kaela_erion"];`, 'riv_lia_miho'],
+      ['여러 쌍이면 합이 높은 쌍', 'v.day = 16; v.aff.lia = RIVALRY.need + 6; v.aff.miho = RIVALRY.need + 6; v.aff.erion = RIVALRY.need; v.aff.kaela = RIVALRY.need;', 'riv_lia_miho']
     ];
     for (const [name, patch, want] of cases) {
       await seedAt(page, 'after_pick', patch);
-      await until(page, () => VN.mode === 'choice' || VN.mode === 'tavern' || VN.state.scene.startsWith('d'));
-      for (let i = 0; i < 6 && (await mode(page)) === 'text' && !(await scene(page)).startsWith('riv_'); i++) await tapText(page, 1);
+      await until(page, () => VN.mode === 'choice' || VN.mode === 'tavern');
       const sc = await scene(page);
       chk(want ? sc === want : !sc.startsWith('riv_'), `신경전 조건 [${name}] 이상: ${sc}`);
     }
@@ -656,32 +643,32 @@ async function run(browser, problems, report, SHOTS) {
     const pairs = await page.evaluate(() => RIVALRY.pairs.map((p) => ({ id: p.id, a: p.a, b: p.b, scene: p.scene })));
     for (const p of pairs) {
       for (let k = 0; k < 3; k++) {
-        await seedAt(page, p.scene, `v.day = 3; v.time = '낮'; v.aff.${p.a} = 20; v.aff.${p.b} = 20; v.riv.n = 1; v.riv.ret = 'after_pick2#0';`);
+        await seedAt(page, p.scene, `v.day = 16; v.time = '낮'; v.aff.${p.a} = 20; v.aff.${p.b} = 20; v.riv.n = 1; v.riv.ret = 'after_pick2#0';`);
         await until(page, () => VN.mode === 'choice');
         await page.locator('.choice-btn').nth(k).evaluate((x) => x.click());
-        await until(page, () => VN.mode === 'choice' || VN.mode === 'tavern' || VN.state.scene.startsWith('d3_'));
-        for (let i = 0; i < 40 && !(await scene(page)).startsWith('d3_'); i++) { await tapText(page, 1); if ((await mode(page)) === 'choice') break; }
-        chk((await scene(page)).startsWith('d3_'), `${p.id}[${k}] 끝난 뒤 3일차 저녁으로 이어지지 않음 (${await scene(page)})`);
+        await until(page, () => VN.mode === 'tavern' || VN.mode === 'choice');
+        chk((await mode(page)) === 'tavern', `${p.id}[${k}] 끝난 뒤 저녁 영업으로 이어지지 않음 (${await mode(page)}/${await scene(page)})`);
       }
     }
     await ctx.close();
-    report.push('히로인 신경전: 4쌍(편들기 +2/-1, 달래기 +1/+1, 평판 +0) 전 경로 완주, 조건(둘 다 높을 때 / 2~6일차 / 최대 2회 / 같은 쌍 1번 / 합 높은 쌍 우선) 확인');
+    report.push('히로인 신경전: 4쌍(편들기 +2/-1, 달래기 +1/+1, 평판 +0) 전 경로 완주, 조건(둘 다 높을 때 / 5~27일차 / 최대 횟수 / 같은 쌍 1번 / 간격 / 합 높은 쌍 우선) 확인');
   }
 
-  // ================= 7일 구성: 5일차 사절단 / 6일차 폭풍 / 평범한 하루 =================
+  // ================= 30일 구성: 19일 사절단 / 28일 폭풍 / 평범한 하루 =================
   {
-    const chk = mk('7일 구성');
+    const chk = mk('30일 주요 사건');
     const { ctx, page } = await open();
-    // 5일차 아침: 사절단장 + 시험관이 나오고, 인사 선택(3개) -> 카엘라 선택(3개) -> 에리온 선택(2개) -> 낮 선택
-    await seedAt(page, 'd5_open', `v.day = 4; v.time = '밤'; v.gold = 100; v.rep = 3;`);
-    chk((await mode(page)) === 'card' && (await page.locator('#card-tip').innerText()).includes('사절단'), `5일차 카드 이상: ${await page.locator('#card-tip').innerText()}`);
+    // 19일차 아침: 사절단장 + 시험관이 나오고, 인사 선택(3개) -> 카엘라 선택(3개) -> 에리온 선택(2개) -> 낮 선택
+    await seedAt(page, 'd5_open', `v.day = 18; v.time = '밤'; v.gold = 100; v.rep = 3;`);
+    for (let i = 0; i < 3 && (await mode(page)) === 'card' && !(await page.locator('#card-tip').innerText()).includes('사절단'); i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(250); }
+    chk((await mode(page)) === 'card' && (await page.locator('#card-tip').innerText()).includes('사절단'), `19일차 카드 이상: ${await page.locator('#card-tip').innerText()}`);
     let sawExaminer = false;
     for (let i = 0; i < 40 && (await mode(page)) !== 'choice'; i++) {
       await page.touchscreen.tap(195, 300); await page.waitForTimeout(60);
       const sp = await page.evaluate(() => Object.values(VN.state.sprites).filter(Boolean).map((x) => x.id));
       if (!sawExaminer && sp.includes('examiner') && await page.evaluate(() => document.getElementById('next-mark').classList.contains('on'))) { sawExaminer = true; await page.waitForTimeout(500); await shot(page, 'envoy_01_arrival'); }
     }
-    chk(sawExaminer, '5일차 아침에 시험관 하이덴 경이 등장하지 않음');
+    chk(sawExaminer, '19일차 아침에 시험관 하이덴 경이 등장하지 않음');
     chk((await scene(page)) === 'd5_greet' && (await page.evaluate(() => VN.options.length)) === 3, `사절단 인사 선택지 이상 (${await scene(page)})`);
     await page.waitForTimeout(300); await shot(page, 'envoy_02_greet_choice');
     const g0 = (await vars(page)).gold;
@@ -696,21 +683,21 @@ async function run(browser, problems, report, SHOTS) {
     chk((await vars(page)).flag.kaela_defended === true && (await scene(page)) === 'd5_erion', '카엘라 편들기 플래그/다음 장면 이상');
     await page.locator('.choice-btn').first().tap();
     await until(page, () => VN.mode === 'choice');
-    chk((await scene(page)) === 'pick' && (await vars(page)).day === 5, `사절단 아침 뒤 낮 선택으로 이어지지 않음 (${await scene(page)})`);
-    // 5일차 저녁 손님: 사절단장(특별 주문) + 시험관(사례)
-    const q5 = await page.evaluate(() => { const v = JSON.parse(JSON.stringify(STORY.init)); v.day = 5; return TavernCore.queue(TAVERN, 'day5', v, VN.evalCond).map((c) => c.who + (c.sp ? '*' : '') + (c.reward ? '+' : '')); });
-    chk(q5.includes('envoy*') && q5.includes('examiner+'), `5일차 영업 손님에 사절단이 없음 ${JSON.stringify(q5)}`);
-    // 5일차 숙박: 사절단 일행 3팀 고정
-    await seedAt(page, 'd5_upgrade', `v.day = 5; v.time = '밤'; v.gold = 100; v.rev = { seed: 5, used: [], today: '', ret: '' };`);
+    chk((await scene(page)) === 'pick' && (await vars(page)).day === 19, `사절단 아침 뒤 낮 선택으로 이어지지 않음 (${await scene(page)}, ${(await vars(page)).day}일)`);
+    // 19일차 저녁 손님: 사절단장(특별 주문) + 시험관(사례)
+    const q5 = await page.evaluate(() => { const v = JSON.parse(JSON.stringify(STORY.init)); v.day = 19; return TavernCore.queue(TAVERN, 'day5', v, VN.evalCond).map((c) => c.who + (c.sp ? '*' : '') + (c.reward ? '+' : '')); });
+    chk(q5.includes('envoy*') && q5.includes('examiner+'), `19일차 영업 손님에 사절단이 없음 ${JSON.stringify(q5)}`);
+    // 19일차 숙박: 사절단 일행 3팀 고정
+    await seedAt(page, 'night_close', `v.day = 19; v.time = '밤'; v.gold = 100; v.rev = { seed: 5, used: [], today: '', ret: '' };`);
     const lg5 = await page.evaluate(() => VN.lodging.guests);
-    chk(lg5.join() === 'env_chief,env_scribe,env_guard', `5일차 숙박 손님이 사절단 일행이 아님 ${lg5}`);
+    chk(lg5.join() === 'env_chief,env_scribe,env_guard', `19일차 숙박 손님이 사절단 일행이 아님 ${lg5}`);
     await page.waitForTimeout(300); await shot(page, 'envoy_04_lodging');
     await ctx.close();
 
-    // 6일차 저녁: 무료 배식 vs 정상 영업
+    // 28일차 저녁: 무료 배식 vs 정상 영업
     const r2 = await open(); const c2 = mk('폭풍의 밤');
     const ALL = `Object.keys(TAVERN.ingredients).forEach((i) => { TavernCore.ensure(TAVERN, v); v.tavern.stock[i] = 9; }); Object.keys(TAVERN.recipes).forEach((r) => { v.tavern.known[r] = true; });`;
-    await seedAt(r2.page, 'd6_evening', `v.day = 6; v.time = '저녁'; v.gold = 100; v.rep = 5; ${ALL}`);
+    await seedAt(r2.page, 'd6_evening', `v.day = 28; v.time = '저녁'; v.gold = 100; v.rep = 5; ${ALL}`);
     await until(r2.page, () => VN.mode === 'choice');
     c2((await scene(r2.page)) === 'd6_evening' && (await r2.page.evaluate(() => VN.options.length)) === 2, `폭풍 저녁 선택지 이상 (${await scene(r2.page)})`);
     await r2.page.waitForTimeout(450); await shot(r2.page, 'storm_01_business_choice');
@@ -735,7 +722,7 @@ async function run(browser, problems, report, SHOTS) {
     await r2.ctx.close();
     // 정상 영업: 같은 상황에서 수입이 생긴다
     const r3 = await open(); const c3 = mk('폭풍의 밤(정상)');
-    await seedAt(r3.page, 'd6_evening', `v.day = 6; v.time = '저녁'; v.gold = 100; v.rep = 5; ${ALL}`);
+    await seedAt(r3.page, 'd6_evening', `v.day = 28; v.time = '저녁'; v.gold = 100; v.rep = 5; ${ALL}`);
     await until(r3.page, () => VN.mode === 'choice');
     await r3.page.locator('.choice-btn').nth(1).tap();
     await until(r3.page, () => VN.mode === 'tavern');
@@ -753,7 +740,7 @@ async function run(browser, problems, report, SHOTS) {
     // 정전: 호감도가 가장 높은 히로인과 짧은 장면 (+1), CG 기록
     const r4 = await open(); const c4 = mk('정전 장면');
     for (const [h, sc] of [['erion', 'd6_dark_erion'], ['kaela', 'd6_dark_kaela'], ['miho', 'd6_dark_miho'], ['lia', 'd6_dark_lia']]) {
-      await seedAt(r4.page, 'd6_dark', `v.day = 6; v.time = '밤'; v.aff.${h} = 12;`);
+      await seedAt(r4.page, 'd6_dark', `v.day = 28; v.time = '밤'; v.aff.${h} = 12;`);
       let got = false;
       for (let i = 0; i < 40 && !got; i++) { await tapText(r4.page, 1); if ((await scene(r4.page)) === sc) got = true; if ((await mode(r4.page)) === 'choice') break; }
       c4(got, `정전 장면이 ${h} 로 가지 않음 (${await scene(r4.page)})`);
@@ -761,27 +748,24 @@ async function run(browser, problems, report, SHOTS) {
     c4((await r4.page.evaluate(() => VN.cgSeen)).storm_inn > 0, '폭풍 속 여관 CG 기록이 없음');
     await r4.ctx.close();
 
-    // 평범한 하루: 이벤트 4개를 다 본 뒤 같은 히로인을 고르면 짧은 장면 (ev 4 -> plain1, 5 이상 -> plain2), 호감도 +1
+    // 평범한 하루: 순서 이벤트(주차 조건)가 아직 안 열렸거나 다 본 히로인은 짧은 장면(plain), 호감도 +1
     const r5 = await open(); const c5 = mk('평범한 하루');
     for (const h of ['erion', 'kaela', 'miho', 'lia']) {
-      await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.${h} = 4;`);
+      await seedAt(r5.page, 'pick', `v.day = 25; v.time = '낮'; v.ev.${h} = 4;`);
       const plain = await r5.page.evaluate((hh) => VN.options.filter((o) => o.tag === '평범한 하루' && o.who === hh).length, h);
       c5(plain === 1, `${h} 이벤트 4개 뒤 평범한 하루 선택지가 1개가 아님 (${plain})`);
-      c5((await r5.page.evaluate((hh) => VN.options.filter((o) => o.who === hh).length, h)) === 1, `${h} 선택지가 1개가 아님`);
-      const a0 = (await vars(r5.page)).aff[h];
+      const a0 = (await vars(r5.page)).aff[h], p0 = (await vars(r5.page)).pl[h] || 0;
       await r5.page.locator(`.choice-btn[data-who="${h}"]`).tap();
       await until(r5.page, () => VN.mode === 'choice' || VN.mode === 'tavern');
       const v1 = await vars(r5.page);
-      c5(v1.aff[h] === a0 + 1 && v1.ev[h] === 5, `${h} 평범한 하루 1: 호감도 +1 / ev 5 이어야 함 (${a0}->${v1.aff[h]}, ev ${v1.ev[h]})`);
-      await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.${h} = 5;`);
-      await r5.page.waitForTimeout(250);
-      if (h === 'lia') await shot(r5.page, 'plain_01_pick');
-      await r5.page.locator(`.choice-btn[data-who="${h}"]`).tap();
-      for (let i = 0; i < 30 && (await scene(r5.page)) !== `${h}_plain2`; i++) { await tapText(r5.page, 1); }
-      c5((await scene(r5.page)).startsWith(`${h}_plain2`) || (await vars(r5.page)).ev[h] === 6, `${h} 평범한 하루 2로 가지 않음 (${await scene(r5.page)})`);
+      c5(v1.aff[h] >= a0 + 1 && v1.pl[h] === p0 + 1 && v1.ev[h] === 4, `${h} 평범한 하루: 호감도 +1 이상 / pl +1 / 순서 이벤트 수 그대로 (${a0}->${v1.aff[h]}, pl ${p0}->${v1.pl[h]}, ev ${v1.ev[h]})`);
     }
+    // 1주차에 2번째 이벤트(minWeek 2)는 아직 안 열려 평범한 하루로 대체된다
+    await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.lia = 1;`);
+    c5((await r5.page.evaluate(() => VN.options.filter((o) => o.tag === '평범한 하루' && o.who === 'lia').length)) === 1, '1주차에 리아 2번째 이벤트가 열려 있음 (평범한 하루여야 함)');
+    await shot(r5.page, 'plain_01_pick');
     await r5.ctx.close();
-    report.push('7일 구성: 5일차 사절단(인사 3택/카엘라 3택/에리온 2택, 특실 15G·평판·플래그, 특별 손님 envoy*/examiner+, 숙박 사절단 3팀 고정) / 6일차 폭풍(무료 배식=매출·팁 0·평판 +2·호감도 +1, 정상 영업=수입, 정전 4갈래, CG) / 평범한 하루 8장면(ev 4=1번, 5+=2번, 호감도 +1)');
+    report.push('30일 주요 사건: 19일차 사절단(인사 3택/카엘라 3택/에리온 2택, 특실 15G·평판·플래그, 특별 손님 envoy*/examiner+, 숙박 사절단 3팀 고정) / 28일차 폭풍(무료 배식=매출·팁 0·평판 +2·호감도 +1, 정상 영업=수입, 정전 장면 4명 + CG) / 평범한 하루(주차 미충족/이벤트 소진 시 대체, 호감도 +1)');
   }
 
   // ================= 영업 편의 기능: 추천 배정 / 지난번처럼 사기 / 추천 구매 / 손보기 자동 건너뛰기 / 빠른 모드 =================
@@ -870,7 +854,7 @@ async function run(browser, problems, report, SHOTS) {
     // 3) 설정: 살 게 없으면 손보기 건너뛰기
     for (const on of [false, true]) {
       const r5 = await open(); const c5 = mk('손보기 자동 건너뛰기');
-      await r5.page.evaluate((o) => localStorage.setItem('inn_vn_v5_opt', JSON.stringify({ autoSkipUpg: o })), on);
+      await r5.page.evaluate((o) => localStorage.setItem('inn_vn_v6_opt', JSON.stringify({ autoSkipUpg: o })), on);
       await r5.page.reload(); await r5.page.waitForSelector('#btn-new');
       const sd = await findSeed(r5.page, null, 2);
       await seedAt(r5.page, 'd2_upgrade', `v.day = 2; v.time = '밤'; v.gold = 0; ${SEEDV(sd)}`);
@@ -894,7 +878,7 @@ async function run(browser, problems, report, SHOTS) {
     c6((await r6.page.locator('#opt-fasttv').count()) === 1 && (await r6.page.locator('#opt-autoupg').count()) === 1, '새 설정 토글이 없음');
     await r6.page.locator('#opt-fasttv').scrollIntoViewIfNeeded();
     await r6.page.locator('#opt-fasttv').tap(); await r6.page.locator('#opt-autoupg').tap();
-    const o1 = await r6.page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v5_opt')));
+    const o1 = await r6.page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v6_opt')));
     c6(o1.fastTv === true && o1.autoSkipUpg === true, `새 설정 저장 이상 ${JSON.stringify(o1)}`);
     await shot(r6.page, 'qol_05_options');
     await r6.page.reload(); await r6.page.waitForSelector('#btn-options'); await r6.page.tap('#btn-options'); await r6.page.waitForTimeout(250);
@@ -906,7 +890,7 @@ async function run(browser, problems, report, SHOTS) {
     const lens = {};
     for (const fast of [false, true]) {
       const r7 = await open(); const c7 = mk('빠른 모드');
-      await r7.page.evaluate((f) => localStorage.setItem('inn_vn_v5_opt', JSON.stringify({ fastTv: f })), fast);
+      await r7.page.evaluate((f) => localStorage.setItem('inn_vn_v6_opt', JSON.stringify({ fastTv: f })), fast);
       await r7.page.reload(); await r7.page.waitForSelector('#btn-new');
       await seedAt(r7.page, 'd1_evening', `v.day = 1; v.time = '저녁'; v.gold = 100; Object.keys(TAVERN.ingredients).forEach((i) => { TavernCore.ensure(TAVERN, v); v.tavern.stock[i] = 5; });`);
       await until(r7.page, () => VN.mode === 'tavern');
@@ -954,12 +938,12 @@ async function run(browser, problems, report, SHOTS) {
     })();
     await p2.goto(URL); await p2.waitForSelector('#btn-new');
     chk(await p2.locator('#btn-continue').isDisabled() && await p2.locator('#btn-title-load').isDisabled(), 'v4 세이브가 있는데 이어하기/불러오기가 켜져 있음 (옛 세이브는 무시해야 함)');
-    const mig = await p2.evaluate(() => ({ e: Object.keys(VN.endings), c: Object.keys(VN.cgSeen), tut: VN.tut.done, m: localStorage.getItem('inn_vn_v5_migrated'), read: localStorage.getItem('inn_vn_v5_read') }));
+    const mig = await p2.evaluate(() => ({ e: Object.keys(VN.endings), c: Object.keys(VN.cgSeen), tut: VN.tut.done, m: localStorage.getItem('inn_vn_v6_migrated'), read: localStorage.getItem('inn_vn_v6_read') }));
     chk(mig.e.join() === 'erion' && mig.c.join() === 'erion_cave' && mig.tut && mig.m === '1' && mig.read === null, `v4 -> v5 기록 이전 이상(읽은 대사 기록은 옮기지 않음) ${JSON.stringify(mig)}`);
     chk((await p2.locator('#btn-endings').innerText()).includes('1/8'), '이전된 엔딩이 타이틀에 안 보임');
     // 새 게임에 새 변수들이 들어 있다
     await p2.tap('#btn-new'); await p2.waitForTimeout(300);
-    const nv = await p2.evaluate(() => { const v = VN.state.vars; return { lodge: !!v.lodge, inn: v.inn, nev: !!v.nev, gift: !!v.gift, riv: !!v.riv, key: Object.keys(localStorage).filter((k) => k.startsWith('inn_vn_v5_')).length > 0 }; });
+    const nv = await p2.evaluate(() => { const v = VN.state.vars; return { lodge: !!v.lodge, inn: v.inn, nev: !!v.nev, gift: !!v.gift, riv: !!v.riv, key: Object.keys(localStorage).filter((k) => k.startsWith('inn_vn_v6_')).length > 0 }; });
     chk(nv.lodge && nv.inn.rank === 1 && nv.nev && nv.gift && nv.riv && nv.key, `새 게임 변수 이상 ${JSON.stringify(nv)}`);
     await c2.close();
     report.push('저장 v5: v4 세이브/자동 저장은 무시(이어하기·불러오기 꺼짐), 엔딩/CG/튜토리얼 기록은 v5 로 1회 이전(읽은 대사 기록은 제외), 새 게임 변수(lodge/inn/nev/gift/riv) 초기화');

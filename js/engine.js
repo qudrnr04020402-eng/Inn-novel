@@ -87,8 +87,10 @@
   //     (엔딩/CG/레시피/메모/튜토리얼/설정/읽은 대사 기록은 회차 공통이라 처음 한 번 v3 에서 v4 로 옮겨 온다)
   // v5: 7일 구성(씬 id 변경) + 진/명가 엔딩 + 영업 보조 변수(vars.tavern.lastBuy, free)가 추가되어 v4 세이브는 읽지 않고 무시한다
   //     (엔딩/CG/레시피/메모/튜토리얼/설정은 회차 공통이라 처음 한 번 v4 에서 v5 로 옮겨 온다. 읽은 대사 기록은 씬 id 가 달라져 옮기지 않는다)
-  var SAVE_VER = 5;
-  var KEY = 'inn_vn_v5_';
+  // v6: 30일 구성(달력/주차/피로/일상일 변수 vars.cal, fat, pl, evdone + 새 씬 id)으로 v5 세이브는 읽지 않고 무시한다
+  //     (엔딩/CG/레시피/메모/튜토리얼/설정은 회차 공통이라 처음 한 번 v5 에서 v6 으로 옮겨 온다)
+  var SAVE_VER = 6;
+  var KEY = 'inn_vn_v6_';
   var store = {
     get: function (k) { try { return localStorage.getItem(KEY + k); } catch (e) { return null; } },
     set: function (k, v) { try { localStorage.setItem(KEY + k, v); return true; } catch (e) { return false; } }
@@ -96,9 +98,11 @@
   (function migrateV4() {
     try {
       if (localStorage.getItem(KEY + 'migrated')) return;
-      ['endings', 'cg', 'recipes', 'notes', 'tut', 'opt'].forEach(function (k) {
-        var old = localStorage.getItem('inn_vn_v4_' + k);
-        if (old != null && localStorage.getItem(KEY + k) == null) localStorage.setItem(KEY + k, old);
+      ['inn_vn_v4_', 'inn_vn_v5_'].forEach(function (pre) {   // 옛 버전 -> 새 버전 (v5 가 있으면 v5 가 우선)
+        ['endings', 'cg', 'recipes', 'notes', 'tut', 'opt'].forEach(function (k) {
+          var old = localStorage.getItem(pre + k);
+          if (old != null) localStorage.setItem(KEY + k, old);
+        });
       });
       localStorage.setItem(KEY + 'migrated', '1');
     } catch (e) { /* 저장소를 못 쓰면 무시 */ }
@@ -284,6 +288,7 @@
   var LLM = { server: false, state: 'none', model: '' }; // state: none(PC 서버 아님) | checking | nollm(서버는 있는데 LLM 이 꺼짐) | ready
   var CH = null;        // 자유 대화 진행 상태 (세이브에 들어가지 않음)
   var curPick = false;  // 지금 떠 있는 선택지가 낮 "누구와 시간을 보낼까" 인지 (choice 의 talkpick)
+  var cardQueue = null; // 챕터 카드 다음에 이어서 보여 줄 일차 카드 {title, sub, tip}
   var replay = false;   // 같은 줄을 다시 실행하는 중 (백로그에 중복 기록하지 않음)
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -324,7 +329,7 @@
   function closeOverlay(el) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); modal--; } }
   function closeAllOverlays() {
     tutHide();   // 아래에서 modal 을 0 으로 되돌리므로 튜토리얼은 카운트 없이 닫는다
-    [E.menu, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options, E.gallery, E.cgview, E.collect, E.gift, E.rankup].forEach(closeOverlay);
+    [E.menu, E.calendar, E.slots, E.backlog, E.confirm, E.endingList, E.chatPick, E.options, E.gallery, E.cgview, E.collect, E.gift, E.rankup].forEach(closeOverlay);
     modal = 0;
   }
 
@@ -534,7 +539,14 @@
   function updateHud() {
     E.hudGold.textContent = S.vars.gold || 0;
     E.hudRep.textContent = S.vars.rep || 0;
-    E.hudDay.textContent = (S.vars.day || 1) + '일차 ' + (S.vars.time || '');
+    var inf = CalCore.info(S.vars.day || 1);
+    E.hudDay.textContent = inf.label + (S.vars.time ? ' · ' + S.vars.time : '');
+    E.hudDay.parentNode.classList.toggle('holiday', !!inf.holiday);
+    var fs = CalCore.fatState(S.vars), fv = Math.round(S.vars.fat || 0);
+    E.hudFatBar.style.width = fv + '%';
+    E.hudFat.dataset.level = fs.level;
+    E.hudFatTxt.textContent = fs.level === 'fresh' ? '피로' : fs.label;
+    E.hudFat.title = '피로 ' + fv + ' / ' + CALENDAR.fatigue.max + (fs.level === 'fresh' ? '' : ' — ' + fs.label + ': 영업 팁이 줄어요');
     var rk = (S.vars.inn && S.vars.inn.rank) || 1;
     E.hudRank.textContent = InnCore.starStr(rk);
     E.hudRankWrap.dataset.rank = rk;
@@ -546,7 +558,7 @@
     E.toasts.appendChild(d);
     setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2200);
   }
-  var LABELS = { gold: '골드', rep: '평판' };
+  var LABELS = { gold: '골드', rep: '평판', fat: '피로' };
   function labelOf(path) {
     if (LABELS[path]) return LABELS[path];
     var m = path.match(/^aff\.(\w+)$/);
@@ -584,10 +596,10 @@
     Object.keys(set || {}).forEach(function (k) {
       var v = set[k];
       if (typeof v === 'number') {
-        setPath(S.vars, k, v, true);
+        if (k === 'fat') CalCore.addFat(S.vars, v); else setPath(S.vars, k, v, true);   // 피로는 0~100 으로 잘린다
         var lb = labelOf(k);
         var isAff = /^aff\./.test(k);
-        if (lb && v !== 0) toast((isAff && v > 0 ? '♥ ' : '') + lb + ' ' + (v > 0 ? '+' : '') + v, (v > 0 ? 'up' : 'down') + (isAff && v > 0 ? ' heart' : ''));
+        if (lb && v !== 0) toast((isAff && v > 0 ? '♥ ' : '') + lb + ' ' + (v > 0 ? '+' : '') + v, ((v > 0) !== (k === 'fat') ? 'up' : 'down') + (isAff && v > 0 ? ' heart' : ''));
         if (isAff && v > 0) { heartBurst(k.slice(4)); snd.heart = 1; }
         if (isAff && v < 0) snd.down = 1;
         if (k === 'gold' && v > 0) snd.coin = 1;
@@ -695,7 +707,11 @@
       return true;
     }
     if ('choice' in c) {
-      showChoices(c.choice.filter(function (o) { return !o.if || evalCond(o.if, S.vars); }), !!c.talkpick);
+      var copts = c.choice;
+      if (c.dynamic === 'pick') copts = CalCore.pickOptions(S.vars, evalCond);          // 낮 행동 목록은 데이터로 만들어진다 (story/heroine-events.js, plain-days.js, routine.js)
+      else if (c.dynamic === 'holiday') copts = CalCore.holidayOptions(S.vars, evalCond);   // 휴일 낮 행동 (story/weekly-events.js)
+      if (!copts.length) copts = c.choice;
+      showChoices(copts.filter(function (o) { return !o.if || evalCond(o.if, S.vars); }), !!c.talkpick);
       return true;
     }
     if ('talkoffer' in c) { // 낮 이벤트 뒤 "조금 더 이야기하기" 제안 (자유 대화가 가능할 때만. 아니면 그냥 지나감)
@@ -704,18 +720,38 @@
       lst.last = '';
       next(); return false;
     }
-    if ('day' in c) { // 일차 전환 화면: {day:2, time:'아침', tip:'...'}
-      S.vars.day = c.day; S.vars.time = c.time || '아침';
+    if ('day' in c) { // 일차 전환 화면: {day:'next', tip:'...'} (다음 날) / {day:1} (처음). 챕터가 시작되는 날이면 챕터 타이틀 카드가 먼저 나옴
+      var nd = c.day === 'next' ? (S.vars.day || 1) + 1 : c.day, ninf = CalCore.info(nd);
+      // 불러오면 이 명령을 처음부터 다시 실행하므로, 날짜를 바꾸기 전 상태를 저장한다 (일차가 두 번 넘어가지 않음)
+      takeSnap(nd + '일차 아침');
+      if (nd > 1 && ninf.chapterStart && !snapLocked && snap) { var ws = clone(snap); ws.label = ninf.week + '주차 시작 (' + nd + '일차)'; writeSlot('wk', ws); }
+      S.vars.time = c.time || '아침';
+      CalCore.setDay(S.vars, nd);
+      if (nd > 1) CalCore.sleep(S.vars, ninf.holiday);       // 자고 일어나면 피로 회복 (휴일은 더 많이)
+      CalCore.flavorDay(S.vars, nd);
       EventCore.newDay(S.vars);   // 오늘의 영업 보정(랜덤 사건)을 새로 시작
       updateHud();
       refreshLlm();
-      var dl = c.day + '일차 ' + S.vars.time;
-      takeSnap(dl);
-      pushLog({ name: '', color: '', text: '— ' + dl + ' —' });
+      var dl = nd + '일차 ' + S.vars.time;
+      pushLog({ name: '', color: '', text: '— ' + ninf.label + ' —' });
       InnCore.ensure(S.vars);
-      var rtxt = c.day > 1 ? InnCore.reportText(S.vars) : '';    // 간밤 숙박 정산 / 밤 사건 한 줄
-      showCard(c.day + '일차', S.vars.time, [c.tip, rtxt].filter(Boolean).join('\n\n'));
+      var rtxt = nd > 1 ? InnCore.reportText(S.vars) : '';    // 간밤 숙박 정산 / 밤 사건 한 줄
+      var fsd = CalCore.fatState(S.vars);
+      var dtip = [c.tip ? interp(c.tip) : '', rtxt, fsd.level === 'fresh' ? '' : '※ ' + fsd.label + ' 상태예요. 오늘 영업의 팁이 줄어들어요' + (fsd.level === 'exhausted' ? ' (가끔 손이 미끄러져 요리가 덜 맛있어져요)' : '') + '. 낮에 쉬는 것도 방법이에요.'].filter(Boolean).join('\n\n');
+      var dsub = ninf.week + '주차 · ' + ninf.dowName + '요일' + (ninf.holiday ? ' · 휴일' : '');
+      cardQueue = null;
+      if (ninf.chapterStart) {
+        var ch = ninf.chapter;
+        cardQueue = { title: nd + '일차', sub: dsub, tip: dtip };
+        showCard(ch.label, ch.title, ch.blurb + (nd > 1 ? '\n\n※ 이 시점이 \'주차 시작\' 자동 저장 칸에 저장됐어요.' : ''), { chapter: true });
+      } else showCard(nd + '일차', dsub, dtip);
       return true;
+    }
+    if ('cal' in c) { // 달력으로 다음 장면 정하기: {cal:'next'} 다음 날 아침 / {cal:'evening'} 오늘 저녁 (story/calendar.js)
+      var cd = S.vars.day || 1, cs;
+      if (c.cal === 'next') { cs = CalCore.entry(cd + 1); if (cd + 1 > CALENDAR.total) warn('마지막 날 이후로 넘어감: ' + cd); }
+      else cs = CalCore.evening(cd);
+      return !gotoScene(cs);
     }
     if ('cg' in c) { // 이벤트 CG: {cg:'id'} 전체 화면 일러스트(대사창은 그 위에 계속) / {cg:'hide'} 걷기. 본 CG 는 회차 공통으로 기록
       var cdef = cgDefs()[c.cg];
@@ -770,7 +806,7 @@
       try { nid = InnCore.nightEvent(S.vars, S.vars.day || 1, evalCond); } catch (e) { warn(e.message); }
       if (nid && !STORY.scenes['nev_' + nid]) { warn('없는 밤 사건 씬: nev_' + nid); nid = null; }
       if (!nid) { next(); return false; }
-      S.vars.nev.used.push(nid); S.vars.nev.today = nid; S.vars.nev.ret = S.scene + '#' + (S.pc + 1);
+      S.vars.nev.used.push(nid); S.vars.nev.last = S.vars.day || 0; S.vars.nev.today = nid; S.vars.nev.ret = S.scene + '#' + (S.pc + 1);
       toast('밤 사건: ' + LODGING.nightEvents.events[nid].title, 'up');
       return !gotoScene('nev_' + nid);
     }
@@ -779,7 +815,7 @@
       var rp = null;
       try { rp = InnCore.rivalryPick(S.vars, S.vars.day || 1); } catch (e) { warn(e.message); }
       if (!rp || !STORY.scenes[rp.scene]) { next(); return false; }
-      S.vars.riv.done.push(rp.id); S.vars.riv.n++; S.vars.riv.ret = S.scene + '#' + (S.pc + 1);
+      S.vars.riv.done.push(rp.id); S.vars.riv.n++; S.vars.riv.last = S.vars.day || 0; S.vars.riv.ret = S.scene + '#' + (S.pc + 1);
       toast('히로인 신경전: ' + rp.title, 'up');
       return !gotoScene(rp.scene);
     }
@@ -882,6 +918,7 @@
       if (lp.met.indexOf(o.who) < 0) lp.met.push(o.who);
     }
     curPick = false;
+    if (o.act || o.ev || o.weekly) { CalCore.ensure(S.vars); S.vars.cal.act[S.vars.day || 1] = o.act ? o.act : o.weekly ? 'wk' : o.ev === 'walk' ? 'walk:' + o.who : 'h:' + o.who; }
     if (o.talk) { enterChat(o.talk, 'offer'); return; }
     if (o.giftto) { openGift('give', o.giftto, function () { next(); run(); }); return; }
     if (o.cost) applySet({ gold: -o.cost });
@@ -895,7 +932,11 @@
   //  fast=true: 오토/스킵이 부른 것 (사람이 탭하면 오토/스킵부터 꺼지므로 advance() 로 오지 않음)
   function advance(fast) {
     if (mode === 'chat') { if (typing) finishTyping(); return; }
-    if (mode === 'card' && modal === 0) { sfx('tap'); E.card.classList.add('hidden'); next(); run(); return; }
+    if (mode === 'card' && modal === 0) {
+      sfx('tap');
+      if (cardQueue) { var cq = cardQueue; cardQueue = null; showCard(cq.title, cq.sub, cq.tip); return; }   // 챕터 카드 -> 일차 카드
+      E.card.classList.add('hidden'); next(); run(); return;
+    }
     if (mode !== 'text' || modal > 0) return;
     if (typing) { finishTyping(); return; }
     sfx('tap');
@@ -949,7 +990,9 @@
   }
 
   // ---------- 일차 전환 카드 ----------
-  function showCard(title, sub, tip) {
+  function showCard(title, sub, tip, opt) {
+    var chap = !!(opt && opt.chapter);
+    E.card.classList.toggle('chapter', chap);
     stopFast();
     stopTyping();
     clearCg();
@@ -965,7 +1008,11 @@
       var v = (S.vars.aff && S.vars.aff[id]) || 0;
       h += '<div class="card-aff"><span style="color:' + c.color + '">' + c.name + '</span><em class="hearts">' + heartsHtml(v) + '</em></div>';
     });
-    E.cardBody.innerHTML = h;
+    if (!chap) {
+      var fs2 = CalCore.fatState(S.vars);
+      h += '<div class="card-fat" data-level="' + fs2.level + '"><span>피로</span><i class="fatbar"><u style="width:' + Math.round(S.vars.fat || 0) + '%"></u></i><b>' + (fs2.level === 'fresh' ? '쌩쌩' : fs2.label) + '</b></div>';
+    }
+    E.cardBody.innerHTML = chap ? '' : h;
     E.card.classList.remove('hidden');
     E.card.classList.remove('in'); void E.card.offsetWidth; E.card.classList.add('in');
     mode = 'card';
@@ -1104,7 +1151,7 @@
     closeAllOverlays();
     E.summary.classList.add('hidden');
     E.ending.classList.add('hidden');
-    E.card.classList.add('hidden');
+    E.card.classList.add('hidden'); cardQueue = null;
     showScreen('game');
     updateHud();
     renderBg(S.bg, false);
@@ -1117,7 +1164,7 @@
   function openSlots(kind) {
     E.slotsTitle.textContent = kind === 'save' ? '저장하기' : '불러오기';
     E.slotList.innerHTML = '';
-    var keys = kind === 'save' ? ['s1', 's2', 's3'] : ['auto', 's1', 's2', 's3'];
+    var keys = kind === 'save' ? ['s1', 's2', 's3'] : ['auto', 'wk', 's1', 's2', 's3'];
     if (kind === 'save' && snapLocked) toast('영업 중 저장은 영업 시작 시점으로 저장돼요', 'down');
     keys.forEach(function (k) {
       var d = readSlot(k);
@@ -1125,7 +1172,7 @@
       b.type = 'button';
       b.className = 'slot-btn';
       b.disabled = kind === 'load' && !d;
-      var name = k === 'auto' ? '자동 저장' : '슬롯 ' + k.slice(1);
+      var name = k === 'auto' ? '자동 저장' : k === 'wk' ? '주차 시작 저장' : '슬롯 ' + k.slice(1);
       var info = '비어 있음';
       if (d) {
         var dt = new Date(d.t);
@@ -1150,6 +1197,52 @@
       E.slotList.appendChild(b);
     });
     openOverlay(E.slots);
+  }
+
+
+  // ---------- 달력 ----------
+  var ACT_NAME = { work: '일', rest: '쉼', town: '장', fix: '수리', wk: '주간' };
+  function actText(a) {
+    if (!a) return null;
+    var m = /^(h|walk):(\w+)$/.exec(a);
+    if (m) { var ch = CHARACTERS[m[2]] || {}, nm = ch.name || m[2]; return m[1] === 'walk' ? { t: '산책', full: nm + '와 산책', c: ch.color } : { t: nm.slice(0, 2), full: nm + '와 시간', c: ch.color }; }
+    var FULL = { work: '여관 일에 집중', rest: '푹 쉼', town: '이웃 마을 장보기', fix: '여관 손보기', wk: '주간 이벤트' };
+    return { t: ACT_NAME[a] || '', full: FULL[a] || '', c: '' };
+  }
+  function calDetail(cell) {
+    var inf = CalCore.info(cell.day), parts = [inf.week + '주차 · ' + cell.day + '일 (' + inf.dowName + ') — ' + inf.chapter.label + ' ' + inf.chapter.title];
+    if (cell.title) parts.push('★ ' + cell.title);
+    else if (cell.state === 'future') parts.push(inf.holiday ? '휴일: 영업 없이 푹 쉬는 날' : '평범한 하루');
+    var lg = (S.vars.cal.log || {})[cell.day], ac = actText((S.vars.cal.act || {})[cell.day]);
+    if (cell.state !== 'future') {
+      if (ac && ac.t) parts.push('낮: ' + ac.full);
+      if (lg) parts.push('영업 ' + lg.q + ' · 순이익 ' + (lg.g >= 0 ? '+' : '') + lg.g + 'G');
+      else if (inf.holiday) parts.push('휴일 (영업 없음)');
+    }
+    E.calInfo.textContent = parts.join('\n');
+  }
+  function openCalendar() {
+    CalCore.ensure(S.vars);
+    var cells = CalCore.cells(S.vars), sel = S.vars.day || 1;
+    E.calGrid.innerHTML = '';
+    CALENDAR.dow.forEach(function (d, i) { var h = document.createElement('div'); h.className = 'cal-dow' + (i === CALENDAR.holidayDow ? ' sun' : ''); h.textContent = d; E.calGrid.appendChild(h); });
+    for (var pad = 0; pad < CALENDAR.startDow; pad++) E.calGrid.appendChild(document.createElement('div'));
+    cells.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.dataset.day = c.day;
+      b.className = 'cal-cell ' + c.state + (c.holiday ? ' hol' : '') + (c.mark && c.mark !== '휴' ? ' ev' : '') + ' w' + (c.week % 2);
+      var ac = actText(c.act);
+      b.innerHTML = '<em>' + c.day + '</em><i class="mk">' + (c.mark || '') + '</i><b class="rs">' + (c.res || '') + '</b>' +
+        (ac && ac.t ? '<small class="ac"' + (ac.c ? ' style="color:' + ac.c + '"' : '') + '>' + ac.t + '</small>' : '');
+      b.addEventListener('click', function () { E.calGrid.querySelectorAll('.cal-cell.sel').forEach(function (x) { x.classList.remove('sel'); }); b.classList.add('sel'); calDetail(c); sfx('tap'); });
+      if (c.day === sel) b.classList.add('sel');
+      E.calGrid.appendChild(b);
+    });
+    // 다가오는 일정: 공개된 메인 사건
+    var up = cells.filter(function (c) { return c.state === 'future' && c.title && c.mark !== '휴'; });
+    E.calList.innerHTML = up.length ? '<b>예정된 일</b>' + up.map(function (c) { return '<span>' + c.mark + ' ' + c.day + '일 ' + c.title + '</span>'; }).join('') : '';
+    calDetail(cells[sel - 1]);
+    openOverlay(E.calendar);
   }
 
   function openBacklog() {
@@ -1225,6 +1318,7 @@
   }
 
   function startTavern(dayId) {
+    if (dayId === 'routine') dayId = TavernCore.routine(TAVERN, S.vars, S.vars.day || 1, evalCond);   // 일상일: 그날의 손님을 만들어 등록 (story/tavern-routine.js)
     var def = TAVERN.days[dayId];
     if (!def) { warn('없는 영업 데이터: ' + dayId); next(); return false; }
     TavernCore.ensure(TAVERN, S.vars);
@@ -1755,6 +1849,10 @@
     recordKnown(); recordNotes();
     t.days[TV.id] = { sales: TV.sold, tips: TV.tips, spent: TV.spent, rep: TV.repSum, special: TV.spResult ? (TV.spResult.ok ? 'win' : 'lose') : '', spGold: TV.spGold, perfect: t.t.perfect, good: t.t.good, fail: t.t.fail, mystery: t.t.mystery };
     var ret = TV.ret;
+    var ts = t.t, tot = ts.perfect + ts.good + ts.fail + ts.mystery;   // 달력에 남기는 그날의 영업 결과 기호
+    CalCore.ensure(S.vars);
+    S.vars.cal.log[S.vars.day || 1] = { q: !tot ? '×' : ts.perfect / tot >= 0.6 ? '◎' : ts.perfect / tot >= 0.34 ? '○' : '△', g: TV.sold + TV.tips - TV.spent, r: TV.repSum };
+    CalCore.addFat(S.vars, CALENDAR.fatigue.business);   // 영업을 마치면 피로가 쌓인다
     pushLog({ name: '', color: '', text: '— 영업 결산: 매출 ' + TV.sold + 'G, 팁 ' + TV.tips + 'G' + (TV.spGold ? ', 특별 주문 +' + TV.spGold + 'G' : '') + ', 장보기 ' + TV.spent + 'G —' });
     tvReset();
     S.scene = ret.scene; S.pc = ret.pc + 1;
@@ -1767,7 +1865,7 @@
   function anyBuyable() {
     InnCore.ensure(S.vars);
     var have = S.vars.tavern.upg, g = tvGold();
-    return TAVERN.upgrades.some(function (u) { return !have[u.id] && g >= u.price; }) ||
+    return TAVERN.upgrades.some(function (u) { return !have[u.id] && g >= u.price && (!u.needs || have[u.needs]); }) ||
       LODGING.upgrades.some(function (u) { return InnCore.buyRoomUpg(S.vars, u) === 'ok'; });
   }
   // 이 밤 화면에서 산 것 (화면을 떠나기 전까지 취소 가능): { tav:{id:{learned:[새로 배운 레시피]}}, room:{id:true} }
@@ -1794,14 +1892,14 @@
     TVE.upgGold.textContent = tvGold();
     TVE.upgList.innerHTML = '';
     TAVERN.upgrades.forEach(function (u) {
-      var owned = !!have[u.id];
-      var card = tvEl('div', 'tv-upg-card' + (owned ? ' owned' : ''));
+      var owned = !!have[u.id], lockedBy = u.needs && !have[u.needs] ? u.needs : '';
+      var card = tvEl('div', 'tv-upg-card' + (owned ? ' owned' : '') + (lockedBy ? ' locked' : ''));
       card.dataset.id = u.id;
       card.appendChild(tvEl('div', 'tv-upg-tx', '<b>' + u.name + '</b><span>' + u.desc + '</span>'));
       var undo = owned && !!UPB.tav[u.id];
-      var b = tvEl('button', 'tv-upg-buy' + (undo ? ' cancel' : ''), undo ? '취소<small>+' + u.price + 'G</small>' : owned ? '구입 완료' : u.price + 'G');
+      var b = tvEl('button', 'tv-upg-buy' + (undo ? ' cancel' : ''), undo ? '취소<small>+' + u.price + 'G</small>' : owned ? '구입 완료' : lockedBy ? '먼저<small>' + upgName(lockedBy) + '</small>' : u.price + 'G');
       b.type = 'button';
-      if ((owned && !undo) || (!owned && tvGold() < u.price)) b.disabled = true;
+      if ((owned && !undo) || (!owned && (lockedBy || tvGold() < u.price))) b.disabled = true;
       b.addEventListener('click', function () { if (undo) cancelUpgrade(u); else buyUpgrade(u); });
       card.appendChild(b);
       TVE.upgList.appendChild(card);
@@ -1849,6 +1947,7 @@
   function cancelUpgrade(u) {
     var rec = UPB.tav[u.id];
     if (!S.vars.tavern.upg[u.id] || !rec) return;
+    if (TAVERN.upgrades.some(function (x) { return x.needs === u.id && S.vars.tavern.upg[x.id]; })) { toast('이 개조를 딛고 산 2단계부터 취소해 주세요', 'down'); return; }
     S.vars.gold += u.price;
     delete S.vars.tavern.upg[u.id];
     var book = readRec('recipes'), ch = false;
@@ -1864,8 +1963,9 @@
     takeSnap('여관 업그레이드 취소');
     renderUpgrades();
   }
+  function upgName(id) { var r = TAVERN.upgrades.filter(function (x) { return x.id === id; })[0]; return r ? r.name : id; }
   function buyUpgrade(u) {
-    if (S.vars.tavern.upg[u.id] || tvGold() < u.price) return;
+    if (S.vars.tavern.upg[u.id] || tvGold() < u.price || (u.needs && !S.vars.tavern.upg[u.needs])) return;
     S.vars.gold -= u.price;
     S.vars.tavern.upg[u.id] = true;
     var before = Object.assign({}, S.vars.tavern.known), recBefore = readRec('recipes');
@@ -1995,6 +2095,8 @@
     pushLog({ name: '', color: '', text: '— 숙박 정산: 수입 +' + out.gold + 'G' + (out.sat ? ', 만족 ' + out.sat : '') + ' —' });
     updateHud(); sfx(out.gold > 0 ? 'coin' : 'tap');
     LG = null; TVE.lodge.classList.add('hidden'); TVE.root.classList.add('hidden');
+    CalCore.addFat(S.vars, CALENDAR.fatigue.lodging);   // 숙박 접수도 피곤하다
+    updateHud();
     next();                      // 정산 직후 스냅샷은 다음 명령을 가리킨다 (불러와도 정산을 다시 하지 않음)
     takeSnap('숙박 정산');
     toast('숙박 수입 +' + out.gold + 'G' + (out.sat ? ' · 만족 ' + out.sat : ''), out.gold > 0 ? 'up' : 'down');
@@ -2551,6 +2653,8 @@
     E.btnEndings = $('btn-endings'); E.endingList = $('endings'); E.endingListBody = $('endings-body'); E.endingListCount = $('endings-count');
     E.nextMark = $('next-mark'); E.options = $('options'); E.btnAuto = $('btn-auto'); E.btnSkip = $('btn-skip');
     E.hudGold = $('hud-gold'); E.hudRep = $('hud-rep'); E.hudDay = $('hud-day'); E.hudRank = $('hud-rank'); E.hudRankWrap = $('hud-rank-wrap');
+    E.hudFat = $('hud-fat'); E.hudFatBar = $('hud-fat-bar'); E.hudFatTxt = $('hud-fat-txt');
+    E.calendar = $('calendar'); E.calGrid = $('cal-grid'); E.calInfo = $('cal-info'); E.calList = $('cal-list');
     E.endRank = $('ending-rank');
     E.rankup = $('rankup'); E.rankupStars = $('rankup-stars'); E.rankupName = $('rankup-name'); E.rankupUnlocks = $('rankup-unlocks');
     E.rankupPic = $('rankup-pic'); E.rankupWho = $('rankup-who'); E.rankupText = $('rankup-text');
@@ -2700,6 +2804,8 @@
     $('menu-close').addEventListener('click', function () { closeOverlay(E.menu); });
     $('menu-save').addEventListener('click', function () { closeOverlay(E.menu); openSlots('save'); });
     $('menu-load').addEventListener('click', function () { closeOverlay(E.menu); openSlots('load'); });
+    $('menu-cal').addEventListener('click', function () { closeOverlay(E.menu); openCalendar(); });
+    $('cal-close').addEventListener('click', function () { closeOverlay(E.calendar); });
     $('menu-log').addEventListener('click', function () { closeOverlay(E.menu); openBacklog(); });
     $('menu-restart').addEventListener('click', function () {
       closeOverlay(E.menu);

@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), assert = require('assert');
 const root = path.join(__dirname, '..');
 const ctx = { console, setTimeout, clearTimeout, AbortController }; ctx.window = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
-['story/characters.js', 'story/backgrounds.js', 'story/common.js', 'story/tavern.js', 'story/llm-persona.js', 'js/llm-core.js'].forEach((f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f }));
+['story/characters.js', 'story/backgrounds.js', 'story/common.js', 'story/calendar.js', 'js/event-core.js', 'js/cal-core.js', 'story/tavern.js', 'story/llm-persona.js', 'js/llm-core.js'].forEach((f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f }));
 const L = ctx.LLMCore, P = ctx.LLM_PERSONA;
 let n = 0;
 const eq = (a, b) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b));
@@ -54,21 +54,21 @@ t('날이 바뀌면 last 도 초기화', () => { const v = { day: 1 }; L.ensureS
 
 // ---------- 프롬프트 ----------
 t('프롬프트 구성', () => {
-  const m = L.buildMessages(P, { id: 'miho', day: 2, time: '낮', aff: 5, ev: 2, flags: { miho_peeked: true, seal_patch: true }, hist: [{ user: 'a', assistant: 'b' }], text: '안녕', where: 'offer' });
+  const m = L.buildMessages(P, { id: 'miho', day: 10, time: '낮', aff: 5, ev: 2, flags: { miho_peeked: true, seal_patch: true }, hist: [{ user: 'a', assistant: 'b' }], text: '안녕', where: 'offer' });
   assert.strictEqual(m[0].role, 'system');
   const s = m[0].content;
   assert.ok(s.includes('꿀버섯 토스트'), '최애 메뉴(tavern.js 연동)');
   assert.ok(s.includes('불꽃') === false && s.includes('허브 에일'), '싫어하는 메뉴');
   assert.ok(s.includes('호감도 단계: 호의'));
-  assert.ok(s.includes(P.heroines.miho.reveal[2]) && !s.includes(P.heroines.miho.reveal[3]), '2일차 공개 범위만');
+  assert.ok(s.includes(P.heroines.miho.reveal[2]) && !s.includes(P.heroines.miho.reveal[3]), '2단계(10일차) 공개 범위만');
   assert.ok(s.includes('장부를 몰래 훔쳐봤다') && !s.includes('에리온이 책과 스승님'), '켜진 flag 만');
-  assert.ok(s.includes('1일차: ') && !s.includes('2일차: '), '낮에는 오늘 사건 제외');
+  assert.ok(s.includes('1일차: ') && !s.includes('10일차: '), '낮에는 오늘 사건 제외');
   assert.ok(!s.includes('에리온의 푸른 책') || true);
   assert.ok(s.includes('함께한 일(낮 이벤트)') && s.includes(P.heroines.miho.events[1]) && !s.includes(P.heroines.miho.events[2]));
   assert.ok(s.includes('방금 낮에'));
   assert.strictEqual(m.length, 4); assert.strictEqual(m[3].role, 'user'); assert.ok(m[3].content.startsWith('안녕'));
-  const e = L.buildMessages(P, { id: 'miho', day: 2, time: '저녁', aff: 0, ev: 0, flags: {}, hist: [], text: 'x', where: 'menu' })[0].content;
-  assert.ok(e.includes('2일차: ') && e.includes('호감도 단계: 경계') && e.includes('아직 낮에 둘이서 따로'));
+  const e = L.buildMessages(P, { id: 'miho', day: 10, time: '저녁', aff: 0, ev: 0, flags: {}, hist: [], text: 'x', where: 'menu' })[0].content;
+  assert.ok(e.includes('10일차: ') && e.includes('호감도 단계: 경계') && e.includes('아직 낮에 둘이서 따로'));
 });
 t('히스토리는 최근 N턴만', () => { const hist = []; for (let i = 0; i < 20; i++) hist.push({ user: 'u' + i, assistant: 'a' + i }); const m = L.buildMessages(P, { id: 'lia', day: 1, time: '낮', aff: 0, ev: 0, flags: {}, hist, text: 'x', where: 'menu' }); assert.strictEqual(m.length, 1 + P.settings.historyTurns * 2 + 1); assert.strictEqual(m[1].content, 'u12'); });
 t('호감도 구간', () => { eq([0, 3, 4, 11, 12, 30].map((a) => L.tierIndex(a, st)), [0, 0, 1, 1, 2, 2]); });

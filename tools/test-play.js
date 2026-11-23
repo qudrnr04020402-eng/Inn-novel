@@ -28,8 +28,8 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const HEROINES = ['erion', 'kaela', 'miho', 'lia'];
 const STORYGOLD = 80;   // story/common.js init.gold (수집 보상 테스트용)
 // 진/명가 엔딩 재현: 시작할 때 호감도/여관 등급을 미리 올려 둔다 (조건 자체는 check-story.js 시뮬레이션이 확률로 검증)
-const TRUE_PATCH = 'HEROINES.forEach((h) => { v.aff[h] = 10; }); v.inn.sat = 40;';
-const MASTER_PATCH = 'v.inn.sat = 40; v.rep = 12;';
+const TRUE_PATCH = 'HEROINES.forEach((h) => { v.aff[h] = 45; }); v.inn.sat = 80;';
+const MASTER_PATCH = 'v.inn.sat = 80; v.rep = 55;';
 const NAMES = { erion: '에리온', kaela: '카엘라', miho: '미호', lia: '리아' };
 
 function makeRng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296; }
@@ -37,19 +37,23 @@ function makeRng(seed) { let s = seed; return () => (s = (s * 1664525 + 10139042
 // ---------- 전략: (options, vars) -> options 안의 index ----------
 // options: [{idx, text, set, who, cost}] (골드가 모자란 유료 선택지는 이미 제외됨)
 const sc = (o, who) => ((o.set && o.set['aff.' + who]) || 0) * 10 + (o.who === who ? 5 : 0) + ((o.set && o.set.rep) || 0) * 2 - (o.cost || 0) * 0.05;
+// 낮 행동(동적 선택지) 보정: 피로가 높으면 쉬고, 경영 올인 모델은 일/손보기/장보기만
+const restBias = (o, v) => (o.act === 'rest' ? (v.fat >= 62 ? 12 : v.fat >= 40 ? 1 : -4) : 0) + (o.act && o.act !== 'rest' && v.fat >= 80 ? -6 : 0);
+const mgmtScore = (o) => ({ work: 5, fix: 3, town: 2, rest: 0 }[o.act] || 0);
 const argmax = (opts, f) => { let b = 0, bs = -1e9; opts.forEach((o, i) => { const s = f(o); if (s > bs) { bs = s; b = i; } }); return b; };
 const S = {
-  focus: (h) => (opts) => argmax(opts, (o) => sc(o, h)),
+  focus: (h) => (opts, v) => argmax(opts, (o) => sc(o, h) + restBias(o, v)),
+  master: () => (opts, v) => argmax(opts, (o) => (o.act ? mgmtScore(o) : 0) + restBias(o, v) + ((o.set && o.set.rep) || 0) * 3),
   bad: () => (opts) => argmax(opts, (o) => -((o.set && o.set.rep) || 0) * 10 - (o.cost || 0) * 0.01),
   even: () => (opts, v) => {
     const min = Math.min(...Object.values(v.aff));
-    return argmax(opts, (o) => { let s = ((o.set && o.set.rep) || 0) * 3 - (o.cost || 0) * 0.02; HEROINES.forEach((h) => { if (v.aff[h] === min && o.who === h) s += 6; if (v.aff[h] > 4 && o.set && o.set['aff.' + h] > 0) s -= 8; }); return s; });
+    return argmax(opts, (o) => { let s = ((o.set && o.set.rep) || 0) * 3 - (o.cost || 0) * 0.02 + restBias(o, v); HEROINES.forEach((h) => { if (v.aff[h] === min && o.who === h) s += 6; if (v.aff[h] > 4 && o.set && o.set['aff.' + h] > 0) s -= 8; }); return s; });
   },
   // 진 엔딩: 가장 호감도가 낮은 히로인부터 고르게 + 동굴에서 "모두와 함께"
   all: () => (opts, v) => {
     const t = opts.findIndex((o) => o.tag === '모두와 함께'); if (t >= 0) return t;
     const min = Math.min(...Object.values(v.aff));
-    return argmax(opts, (o) => { let s = ((o.set && o.set.rep) || 0) * 3 - (o.cost || 0) * 0.02; HEROINES.forEach((h) => { if (v.aff[h] === min && o.who === h) s += 6; }); return s; });
+    return argmax(opts, (o) => { let s = ((o.set && o.set.rep) || 0) * 3 - (o.cost || 0) * 0.02 + restBias(o, v); HEROINES.forEach((h) => { if (v.aff[h] === min && o.who === h) s += 6; }); return s; });
   },
   // 명가 엔딩: 호감도가 오르는 선택은 피하고 평판/골드만 챙긴다
   loner: () => (opts) => argmax(opts, (o) => { let s = ((o.set && o.set.rep) || 0) * 3 - (o.cost || 0) * 0.02; Object.keys(o.set || {}).forEach((k) => { if (/^aff\./.test(k)) s -= Math.abs(o.set[k]) * 8; }); if (o.who) s -= 20; return s; }),
@@ -62,8 +66,8 @@ const S = {
 // ---------- 영업 드라이버: 페이지 안에서 "다음에 누를 버튼 선택자"를 계산 ----------
 //  pol: { stock(재료별 목표 재고), reserve(남겨 둘 골드), keep(업그레이드 후 남길 골드), buy(살 업그레이드 순서), right(주문을 맞히려 할 확률), fav(최애 레시피를 알고 있을 확률), seed }
 const POL = {
-  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'stove', 'shelf'], right: 1, fav: 1, lodgeP: 1, roomBuy: ['soundproof', 'bedding', 'windowbox', 'attic'] },
-  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove'], right: 0.7, fav: 0.5, lodgeP: 0.7, roomBuy: ['bedding'] },
+  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'shelf', 'cellar', 'stove', 'sign2', 'barrel2', 'stove2'], right: 1, fav: 1, lodgeP: 1, roomBuy: ['soundproof', 'bedding', 'windowbox', 'attic'] },
+  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove', 'cellar', 'sign2'], right: 0.7, fav: 0.5, lodgeP: 0.7, roomBuy: ['bedding'] },
   novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign'], right: 0.35, fav: 0, lodgeP: 0.3, roomBuy: [] },
   lazy: { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, lodgeP: 0, roomBuy: [] }
 };
@@ -109,7 +113,7 @@ const DRIVER = () => {
       }
       for (const id of P.buy) {
         const u = TAVERN.upgrades.find((x) => x.id === id);
-        if (u && !t.upg[id] && v.gold - u.price >= P.keep) return `.tv-upg-card[data-id="${id}"] .tv-upg-buy`;
+        if (u && !t.upg[id] && (!u.needs || t.upg[u.needs]) && v.gold - u.price >= P.keep) return `.tv-upg-card[data-id="${id}"] .tv-upg-buy`;
       }
       return '#tv-upg-next';
     }
@@ -151,7 +155,7 @@ async function newPage(browser, problems, label, o) {
   o = Object.assign({ events: false, tut: false }, o);   // events: 아침 랜덤 사건을 켤지, tut: 튜토리얼을 아직 안 본 상태로 둘지
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await ctx.addInitScript(({ events, tut }) => {
-    if (!tut) { try { localStorage.setItem('inn_vn_v5_tut', '1'); } catch (e) { /* 무시 */ } }
+    if (!tut) { try { localStorage.setItem('inn_vn_v6_tut', '1'); } catch (e) { /* 무시 */ } }
     if (!events) {   // story/random-events.js 가 RANDOM_EVENTS 를 대입하는 순간 발생 확률을 0 으로
       Object.defineProperty(window, 'RANDOM_EVENTS', { configurable: true, set(v) { v.chance = 0; Object.defineProperty(window, 'RANDOM_EVENTS', { value: v, writable: true, configurable: true }); } });
     }
@@ -169,7 +173,7 @@ const stateOf = (page) => page.evaluate(() => {
     shift: document.getElementById('app').scrollLeft + document.getElementById('game').scrollLeft + window.scrollX, // 화면이 가로로 밀리면 안 됨
     mode: VN.mode, scene: s && s.scene, day: s && s.vars.day, vars: s && JSON.parse(JSON.stringify(s.vars)),
     tv: VN.tavern, sprites: s && JSON.parse(JSON.stringify(s.sprites)), done: document.getElementById('next-mark').classList.contains('on'),
-    opts: VN.options.map((o, i) => ({ idx: i, text: o.text, set: o.set, who: o.who, cost: o.cost, tag: o.tag }))
+    opts: VN.options.map((o, i) => ({ idx: i, text: o.text, set: o.set, who: o.who, cost: o.cost, tag: o.tag, act: o.act, ev: o.ev, weekly: o.weekly }))
   };
 });
 // 페이지 안에서 선택지/엔딩/타이틀이 나올 때까지 탭(클릭) 반복 — 빠른 모드
@@ -334,17 +338,28 @@ async function main() {
 
   // ---------- (a)(b)(c) 병렬 플레이 ----------
   let jobs = [];
-  HEROINES.forEach((h) => jobs.push({ label: `집중-${h}`, choose: S.focus(h), real: true, pol: Object.assign({ seed: 11 }, POL.expert), shots: { prefix: `run_${h}`, heroine: h, tavern: h === 'lia' }, expect: h }));
-  jobs.push({ label: '진 엔딩(모두 챙기기)', choose: S.all(), real: true, pol: Object.assign({ seed: 31 }, POL.expert), patch: TRUE_PATCH, shots: { prefix: 'run_true', tavern: false }, expect: 'true' });
-  jobs.push({ label: '명가 엔딩(고백 없이 5성)', choose: S.loner(), real: false, pol: Object.assign({ seed: 32 }, POL.lazy), patch: MASTER_PATCH, expect: 'master' });
-  jobs.push({ label: '노멀(균등)', choose: S.even(), real: false, pol: Object.assign({ seed: 3 }, POL.decent), expect: 'normal' });
-  jobs.push({ label: '배드(평판 최저)', choose: S.bad(), real: false, pol: Object.assign({ seed: 4 }, POL.novice), expect: 'bad' });
+  // (a) 처음부터 끝까지(30일) 완주: 실제 터치 1회 + 빠른 클릭 여러 회
+  jobs.push({ label: '집중-lia (실제 터치 완주)', choose: S.focus('lia'), real: true, pol: Object.assign({ seed: 11 }, POL.expert), shots: { prefix: 'run_lia', heroine: 'lia', tavern: true }, expect: 'lia' });
+  HEROINES.filter((h) => h !== 'lia').forEach((h) => jobs.push({ label: `집중-${h}`, choose: S.focus(h), real: false, pol: Object.assign({ seed: 11 }, POL.expert), expect: h }));
+  jobs.push({ label: '경영 올인 + 숙련 (명가)', choose: S.master(), real: false, pol: Object.assign({ seed: 33 }, POL.expert), expect: 'master' });
+  jobs.push({ label: '평판 최저 + 서툰 (배드)', choose: S.bad(), real: false, pol: Object.assign({ seed: 4 }, POL.novice), expect: 'bad' });
+  // (b) 상태를 만들어 끼워 넣은 세이브에서 시작: 29일차 직전(종장) 8개 엔딩 / 주 시작 시점(8, 15, 22일차)에서 끝까지
+  const JUMP = (day, extra) => `VN.state.scene = 'cal_next'; VN.state.pc = -1; v.day = ${day}; v.time = '밤'; v.gold = 150; ${extra || ''}`;
+  const AFF = (o) => Object.keys(o).map((k) => `v.aff.${k} = ${o[k]};`).join(' ');
+  const FIN = JUMP(28, 'v.rep = 12; v.inn.sat = 10; v.inn.rank = 2; HEROINES.forEach((h) => { v.aff[h] = 20; v.ev[h] = 4; });');
+  HEROINES.forEach((h) => jobs.push({ label: `주입 29일차 직전 ${h}`, choose: S.focus(h), pol: Object.assign({ seed: 41 }, POL.decent), patch: FIN + ` v.aff.${h} = 66; `, expect: h }));
+  jobs.push({ label: '주입 29일차 직전 진', choose: S.all(), pol: Object.assign({ seed: 42 }, POL.expert), patch: JUMP(28, 'HEROINES.forEach((h) => { v.aff[h] = 45; v.ev[h] = 4; }); v.rep = 20; v.inn.sat = 80; v.inn.rank = 5;'), expect: 'true' });
+  jobs.push({ label: '주입 29일차 직전 명가', choose: S.loner(), pol: Object.assign({ seed: 43 }, POL.lazy), patch: JUMP(28, 'HEROINES.forEach((h) => { v.aff[h] = 5; v.ev[h] = 4; }); v.rep = 60; v.inn.sat = 60; v.inn.rank = 5;'), expect: 'master' });
+  jobs.push({ label: '주입 29일차 직전 노멀', choose: S.even(), pol: Object.assign({ seed: 44 }, POL.decent), patch: FIN, expect: 'normal' });
+  jobs.push({ label: '주입 29일차 직전 배드', choose: S.bad(), pol: Object.assign({ seed: 45 }, POL.novice), patch: JUMP(28, 'v.rep = -14; HEROINES.forEach((h) => { v.aff[h] = 10; v.ev[h] = 4; });'), expect: 'bad' });
+  [7, 14, 21].forEach((d) => jobs.push({ label: `주입 주 시작 ${d + 1}일차 (균등)`, choose: S.even(), pol: Object.assign({ seed: 50 + d }, POL.decent), patch: JUMP(d, `v.rep = ${d}; v.inn.sat = ${d}; v.aff.erion = ${d}; v.aff.kaela = ${d}; v.aff.miho = ${d}; v.aff.lia = ${d};`), expect: null }));
+  // (c) 무작위 / 팬
   const PN = Object.keys(POL);
-  for (let i = 0; i < 16; i++) jobs.push({ label: `무작위#${100 + i}`, choose: S.random(100 + i), real: false, pol: Object.assign({ seed: 100 + i }, POL[PN[i % 4]]), expect: null });
-  HEROINES.forEach((h, i) => { for (let k = 0; k < 3; k++) jobs.push({ label: `팬-${h}#${k}`, choose: S.fan(h, 500 + i * 10 + k), real: false, pol: Object.assign({ seed: 600 + k }, POL[PN[(i + k) % 4]]), expect: null }); });
+  for (let i = 0; i < 8; i++) jobs.push({ label: `무작위#${100 + i}`, choose: S.random(100 + i), real: false, pol: Object.assign({ seed: 100 + i }, POL[PN[i % 4]]), expect: null });
+  HEROINES.forEach((h, i) => { for (let k = 0; k < 2; k++) jobs.push({ label: `팬-${h}#${k}`, choose: S.fan(h, 500 + i * 10 + k), real: false, pol: Object.assign({ seed: 600 + k }, POL[PN[(i + k) % 4]]), expect: null }); });
   if (process.env.QUICK) jobs = jobs.slice(0, 2);   // QUICK=1: 앞쪽 대량 플레이를 줄여 뒤쪽 시나리오만 빠르게 확인
   const results = [];
-  const BATCH = 6;
+  const BATCH = 8;
   for (let i = 0; i < jobs.length; i += BATCH) {
     await Promise.all(jobs.slice(i, i + BATCH).map(async (j) => {
       const { ctx, page } = await newPage(browser, problems, j.label, { events: true });
@@ -415,9 +430,9 @@ async function main() {
     await page.evaluate(() => {
       localStorage.setItem('inn_vn_v1_auto', JSON.stringify({ t: 1, snap: { scene: 'd1_kael_enter', pc: 0, vars: {} } }));
       localStorage.setItem('inn_vn_v2_auto', JSON.stringify({ v: 2, t: 1, snap: { scene: 'd1_open', pc: 0, vars: {} } })); // v2 세이브는 키가 달라 무시됨
-      localStorage.setItem('inn_vn_v5_s1', '{깨진 json');
-      localStorage.setItem('inn_vn_v5_s2', JSON.stringify({ t: 1, snap: { scene: 'd1_open', pc: 0, vars: {} } })); // v 필드 없음
-      localStorage.setItem('inn_vn_v5_s3', JSON.stringify({ v: 5, t: 1, snap: { scene: '없는씬', pc: 0, vars: {} } }));
+      localStorage.setItem('inn_vn_v6_s1', '{깨진 json');
+      localStorage.setItem('inn_vn_v6_s2', JSON.stringify({ t: 1, snap: { scene: 'd1_open', pc: 0, vars: {} } })); // v 필드 없음
+      localStorage.setItem('inn_vn_v6_s3', JSON.stringify({ v: 6, t: 1, snap: { scene: '없는씬', pc: 0, vars: {} } }));
     });
     await page.reload(); await page.waitForSelector('#btn-new');
     if (!(await page.locator('#btn-continue').isDisabled())) problems.push('[세이브] 옛/깨진 세이브인데 이어하기가 켜져 있음');
@@ -425,7 +440,7 @@ async function main() {
     report.push('옛 세이브(v1/v2 키)/깨진 세이브/없는 씬 세이브: 모두 무시되고 타이틀 정상');
     await page.tap('#btn-new');
     const hud = await page.locator('#hud-day').innerText();
-    if (!hud.includes('1일차')) problems.push('[세이브] HUD 일차 표시 이상: ' + hud);
+    if (!(hud.includes('1주차') && hud.includes('1일'))) problems.push('[세이브] HUD 일차 표시 이상: ' + hud);
     // 카드 -> 몇 줄 진행
     for (let i = 0; i < 9; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(30); }
     const before = await page.evaluate(() => ({ scene: VN.state.scene, pc: VN.state.pc, vars: VN.state.vars }));
@@ -435,15 +450,15 @@ async function main() {
     await page.locator('.slot-btn').nth(0).tap(); await page.waitForTimeout(100);
     await page.screenshot({ path: `${SHOTS}/save_slots.png` });
     await page.tap('#slots-close');
-    const raw = await page.evaluate(() => localStorage.getItem('inn_vn_v5_s1'));
-    if (!raw || JSON.parse(raw).v !== 5) problems.push('[세이브] 슬롯1 저장 형식 이상');
+    const raw = await page.evaluate(() => localStorage.getItem('inn_vn_v6_s1'));
+    if (!raw || JSON.parse(raw).v !== 6) problems.push('[세이브] 슬롯1 저장 형식 이상');
     for (let i = 0; i < 14; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(30); }
     const mid = await page.evaluate(() => ({ scene: VN.state.scene, pc: VN.state.pc }));
     await page.tap('#menu-btn'); await page.tap('#menu-log'); await page.waitForTimeout(100);
     const logN = await page.locator('.log-item').count();
     await page.tap('#backlog-close');
     await page.tap('#menu-btn'); await page.tap('#menu-load'); await page.waitForTimeout(100);
-    await page.locator('.slot-btn').nth(1).tap(); await page.waitForTimeout(200);
+    await page.locator('.slot-btn').nth(2).tap(); await page.waitForTimeout(200);
     const after = await page.evaluate(() => ({ scene: VN.state.scene, pc: VN.state.pc, vars: VN.state.vars }));
     if (before.scene !== after.scene || before.pc !== after.pc || JSON.stringify(before.vars) !== JSON.stringify(after.vars)) problems.push('[세이브] 로드 후 상태 불일치 ' + JSON.stringify({ before, after }));
     await page.reload(); await page.waitForSelector('#btn-continue');
@@ -566,12 +581,12 @@ async function main() {
       await page.evaluate(() => document.getElementById('game').click());
     }
     chk(await vis('tv-upg'), '밤에 업그레이드 화면이 뜨지 않음');
-    chk((await page.locator('.tv-upg-card:not(.room)').count()) === 4 && (await page.locator('.tv-upg-card.room').count()) === 4, '업그레이드 카드가 영업 4 + 객실 4 가 아님');
+    chk((await page.locator('.tv-upg-card:not(.room)').count()) === 8 && (await page.locator('.tv-upg-card.room').count()) === 4, '업그레이드 카드가 영업 8 + 객실 4 가 아님');
     await page.screenshot({ path: `${SHOTS}/tv_08_upgrade_ui.png` });
     const g0 = (await vars()).gold;
     for (const id of ['stove', 'shelf', 'barrel', 'sign']) await page.locator(`.tv-upg-card[data-id="${id}"] .tv-upg-buy`).tap();
     const v2 = await vars();
-    chk(Object.keys(v2.tavern.upg).length === 4 && v2.gold === g0 - 140, `업그레이드 구매 이상: 골드 ${g0}->${v2.gold}, ${JSON.stringify(v2.tavern.upg)}`);
+    chk(Object.keys(v2.tavern.upg).length === 4 && v2.gold === g0 - 190, `업그레이드 구매 이상: 골드 ${g0}->${v2.gold}, ${JSON.stringify(v2.tavern.upg)}`);
     chk(v2.tavern.known.magic_stew && v2.tavern.known.moon_ale && v2.tavern.known.berry_milk, '향신료 선반으로 레시피 3개가 해금되지 않음');
     chk((await page.locator('.tv-upg-card[data-id="sign"] .tv-upg-buy').innerText()).includes('취소'), '이 밤에 구입한 업그레이드 버튼이 취소로 바뀌지 않음');
     await page.locator('#tv-upg-next').tap(); await page.waitForTimeout(250);
@@ -579,7 +594,8 @@ async function main() {
     // 간판을 샀으니 2일차 영업 손님이 1명 늘어난다
     await toTavern(page);
     const rk2 = await page.evaluate(() => VN.state.vars.inn.rank);   // 숙박 결과에 따라 2성이 되면 로사가 추가됨
-    chk((await tv()).total === 7 + (rk2 >= 2 ? 1 : 0), `간판 업그레이드 후 2일차 손님 수 ${(await tv()).total} (일반 5+간판 1+특별 주문 1+여관 2성이면 로사 1 = ${7 + (rk2 >= 2 ? 1 : 0)}이어야 함)`);
+    const baseN = await page.evaluate(() => { const v = JSON.parse(JSON.stringify(VN.state.vars)); delete v.tavern.upg.sign; return TavernCore.queue(TAVERN, VN.tavern.id, v, VN.evalCond).length; });
+    chk((await tv()).total === baseN + 1 && baseN >= 3, `간판 업그레이드 후 2일차 손님 수 ${(await tv()).total} (간판 없이 ${baseN}명 + 간판 1명이어야 함, 여관 ${rk2}성)`);
     report.push(`영업UI: 장보기/메뉴판(15칸 중 미발견 10)/재료 선택·해제·최대3개/비우기/메뉴판으로 채우기/판정/발견 연출/정체불명/거절/결산(${resN}명)/업그레이드 4종 구매/해금/간판 손님+1(+특별 주문 1)`);
     await ctx.close();
   }
@@ -605,12 +621,12 @@ async function main() {
     chk(toast.includes('영업 시작'), `영업 중 저장 안내 토스트가 없음: "${toast}"`);
     await page.locator('.slot-btn').nth(0).tap(); await page.waitForTimeout(100);
     await page.tap('#slots-close');
-    const raw = JSON.parse(await page.evaluate(() => localStorage.getItem('inn_vn_v5_s1')));
-    chk(raw.v === 5 && raw.snap.vars.gold === v0.gold && raw.snap.vars.tavern.stock.meat === v0.tavern.stock.meat, `저장된 스냅샷이 영업 시작 시점이 아님 (골드 ${raw.snap.vars.gold}, 기대 ${v0.gold})`);
+    const raw = JSON.parse(await page.evaluate(() => localStorage.getItem('inn_vn_v6_s1')));
+    chk(raw.v === 6 && raw.snap.vars.gold === v0.gold && raw.snap.vars.tavern.stock.meat === v0.tavern.stock.meat, `저장된 스냅샷이 영업 시작 시점이 아님 (골드 ${raw.snap.vars.gold}, 기대 ${v0.gold})`);
     chk(!Object.keys(await page.evaluate(() => Object.assign({}, localStorage))).some((k) => /^inn_vn_v[12]_/.test(k)), '옛 버전 키가 생김');
     // 불러오기 -> 영업 시작(장보기)으로 되돌아감
     await page.tap('#menu-btn'); await page.tap('#menu-load'); await page.waitForTimeout(100);
-    await page.locator('.slot-btn').nth(1).tap(); await page.waitForTimeout(250);
+    await page.locator('.slot-btn').nth(2).tap(); await page.waitForTimeout(250);
     const v1 = await vars();
     const phase = await page.evaluate(() => VN.tavern && VN.tavern.phase);
     chk(v1.gold === v0.gold && v1.tavern.stock.meat === v0.tavern.stock.meat, `불러온 뒤 골드/재고가 영업 시작 시점과 다름 (${v1.gold} vs ${v0.gold})`);
@@ -631,13 +647,13 @@ async function main() {
   const stNow = (page) => page.evaluate(() => ({ mode: VN.mode, scene: VN.state && VN.state.scene, pc: VN.state && VN.state.pc, fast: VN.fast, shift: document.getElementById('app').scrollLeft + document.getElementById('game').scrollLeft + window.scrollX }));
   const tapText = async (page, n) => { for (let i = 0; i < n; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(60); } };
   const setRange = (page, id, v) => page.$eval(id, (el, val) => { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }, v);
-  const seed = async (page, scene, patchSrc) => {
-    await page.evaluate(([sc, src]) => {
+  const seed = async (page, scene, patchSrc, pc) => {
+    await page.evaluate(([sc, src, pcc]) => {
       const v = JSON.parse(JSON.stringify(STORY.init));
       (new Function('v', src))(v);
-      const snap = { scene: sc, pc: 0, vars: v, bg: 'inn_evening', sprites: { left: null, center: null, right: null }, bgm: null, log: [], label: 'test' };
-      localStorage.setItem('inn_vn_v5_auto', JSON.stringify({ v: 5, t: Date.now(), snap }));
-    }, [scene, patchSrc]);
+      const snap = { scene: sc, pc: pcc || 0, vars: v, bg: 'inn_evening', sprites: { left: null, center: null, right: null }, bgm: null, log: [], label: 'test' };
+      localStorage.setItem('inn_vn_v6_auto', JSON.stringify({ v: 6, t: Date.now(), snap }));
+    }, [scene, patchSrc, pc || 0]);
     await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])');
     await page.tap('#btn-continue'); await page.waitForTimeout(250);
     await page.evaluate(`(${DRIVE2.toString()})()`);
@@ -696,7 +712,7 @@ async function main() {
     await page.tap('#options-close');
     // 1회차: 카드 + 첫 선택지(d1_lia)까지 직접 탭으로 읽는다
     await page.tap('#btn-new'); await page.waitForTimeout(400);
-    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);          // 일차 카드
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150); await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);          // 챕터 카드
     for (let i = 0; i < 60 && (await stNow(page)).mode !== 'choice'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(50); }
     let st = await stNow(page);
     chk(st.mode === 'choice' && st.scene === 'd1_lia', `1회차 첫 선택지에 도달하지 못함 ${JSON.stringify(st)}`);
@@ -708,7 +724,7 @@ async function main() {
     chk((await page.evaluate(() => VN.readCount)) === read1, '새로고침 뒤 읽은 줄 기록이 유지되지 않음');
     // 2회차: 처음부터 -> 읽은 줄은 스킵으로 넘기고 선택지에서 멈춘다
     await page.tap('#btn-new'); await page.waitForTimeout(400);
-    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);
+    await page.touchscreen.tap(195, 300); await page.waitForTimeout(150); await page.touchscreen.tap(195, 300); await page.waitForTimeout(150);
     await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
     chk(await page.locator('#btn-skip').isVisible() && await page.locator('#btn-auto').isVisible(), '스킵/오토 버튼이 대사창에 보이지 않음');
     await page.screenshot({ path: `${SHOTS}/s6_01_dialog_fast_btns.png` });
@@ -768,7 +784,7 @@ async function main() {
     chk(o1.textSpeed === 5 && o1.autoSpeed === 2 && o1.bgm === 35 && o1.sfx === 10 && o1.mute && o1.skipUnread && o1.easy, `설정 변경이 반영되지 않음 ${JSON.stringify(o1)}`);
     chk(await page.evaluate(() => SFX.mute === true && BGM.info().mute === true && Math.abs(SFX.vol - 0.1) < 1e-6 && Math.abs(BGM.info().vol - 0.35) < 1e-6), '음소거/볼륨이 사운드 모듈에 반영되지 않음');
     await page.tap('#options-close');
-    const raw = await page.evaluate(() => localStorage.getItem('inn_vn_v5_opt'));
+    const raw = await page.evaluate(() => localStorage.getItem('inn_vn_v6_opt'));
     chk(raw && JSON.parse(raw).bgm === 35, `설정이 localStorage 에 저장되지 않음 ${raw}`);
     await page.reload(); await page.waitForSelector('#btn-new');
     const o2 = await opt(page);
@@ -779,18 +795,18 @@ async function main() {
     chk(await page.evaluate(() => SFX.mute === true && BGM.info().mute === true), '새로고침 뒤 음소거가 사운드 모듈에 적용되지 않음');
     await page.tap('#options-close');
     // 깨진 설정 값은 기본값으로
-    await page.evaluate(() => localStorage.setItem('inn_vn_v5_opt', '{깨진 json'));
+    await page.evaluate(() => localStorage.setItem('inn_vn_v6_opt', '{깨진 json'));
     await page.reload(); await page.waitForSelector('#btn-new');
     const o3 = await opt(page);
     chk(JSON.stringify(o3) === JSON.stringify(d0), `깨진 설정은 기본값이어야 함 ${JSON.stringify(o3)}`);
-    await page.evaluate(() => localStorage.setItem('inn_vn_v5_opt', JSON.stringify({ textSpeed: 99, autoSpeed: -4, bgm: 'x', sfx: 500, mute: 1 })));
+    await page.evaluate(() => localStorage.setItem('inn_vn_v6_opt', JSON.stringify({ textSpeed: 99, autoSpeed: -4, bgm: 'x', sfx: 500, mute: 1 })));
     await page.reload(); await page.waitForSelector('#btn-new');
     const o4 = await opt(page);
     chk(o4.textSpeed === 5 && o4.autoSpeed === 1 && o4.bgm === 60 && o4.sfx === 100 && o4.mute === true, `범위를 벗어난 설정 보정 이상 ${JSON.stringify(o4)}`);
-    await page.evaluate(() => localStorage.removeItem('inn_vn_v5_opt'));
+    await page.evaluate(() => localStorage.removeItem('inn_vn_v6_opt'));
     // 안 읽은 대사도 스킵 + 업그레이드 화면에서 정지: 1일차 저녁 마무리(d1_ev_end)에서 스킵
-    await page.evaluate(() => localStorage.setItem('inn_vn_v5_opt', JSON.stringify({ skipUnread: true })));
-    await page.evaluate(() => localStorage.removeItem('inn_vn_v5_read'));
+    await page.evaluate(() => localStorage.setItem('inn_vn_v6_opt', JSON.stringify({ skipUnread: true })));
+    await page.evaluate(() => localStorage.removeItem('inn_vn_v6_read'));
     await seed(page, 'd1_ev_end', 'v.day = 1; v.time = "저녁";');
     await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
     await page.tap('#btn-skip');
@@ -1061,7 +1077,7 @@ async function main() {
     chk(ph.top && ph.dlg, `CG 위에 대사창이 있어야 함 ${JSON.stringify(ph)}`);
     chk(cgReq.length === 0, `file:null CG 가 파일을 요청함 ${cgReq.join(',')}`);
     chk(await page.locator('#toasts').innerText().then((t) => t.includes('CG 획득')).catch(() => false) || true, '');
-    const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v5_cg') || '{}'));
+    const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v6_cg') || '{}'));
     chk(!!seen.erion_cave, `본 CG 기록이 localStorage 에 없음 ${JSON.stringify(seen)}`);
     chk(JSON.stringify(await page.evaluate(() => VN.cgSeen)).includes('erion_cave'), 'VN.cgSeen 이상');
     await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
@@ -1069,10 +1085,10 @@ async function main() {
     chk((await stNow(page)).shift === 0, 'CG 화면 가로 스크롤');
     // 저장 -> 계속 진행(선택지에서 CG 걷힘) -> 불러오기: CG 가 다시 떠야 함
     await page.tap('#menu-btn'); await page.tap('#menu-save'); await page.locator('.slot-btn').nth(0).tap(); await page.waitForTimeout(100); await page.tap('#slots-close');
-    chk(JSON.parse(await page.evaluate(() => localStorage.getItem('inn_vn_v5_s1'))).snap.cg === 'erion_cave', '세이브 스냅샷에 cg 가 저장되지 않음');
+    chk(JSON.parse(await page.evaluate(() => localStorage.getItem('inn_vn_v6_s1'))).snap.cg === 'erion_cave', '세이브 스냅샷에 cg 가 저장되지 않음');
     for (let i = 0; i < 12 && (await stNow(page)).mode !== 'choice'; i++) { await page.touchscreen.tap(195, 300); await page.waitForTimeout(70); }
     chk((await stNow(page)).mode === 'choice' && (await page.evaluate(() => VN.cgNow)) === null && !(await vis('cg')), '선택지 전에 CG 가 걷히지 않음');
-    await page.tap('#menu-btn'); await page.tap('#menu-load'); await page.locator('.slot-btn').nth(1).tap(); await page.waitForTimeout(300);
+    await page.tap('#menu-btn'); await page.tap('#menu-load'); await page.locator('.slot-btn').nth(2).tap(); await page.waitForTimeout(300);
     chk((await page.evaluate(() => VN.cgNow)) === 'erion_cave' && await vis('cg') && await page.locator('#cg .cg-fig').count() === 1, '불러오기 후 CG 가 복원되지 않음');
     chk(cgReq.length === 0, 'CG 복원 중 파일 요청 발생');
     // 갤러리: 1장 획득
@@ -1090,7 +1106,7 @@ async function main() {
     chk(cgReq.length === 0, '갤러리가 CG 파일을 요청함');
     await page.tap('#cgview-close'); await page.tap('#gallery-close');
     // 여러 장: 좌우 넘김(버튼/스와이프/끝에서 순환)
-    await page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v5_cg', JSON.stringify({ erion_cave: n, kaela_tag: n, cave_seal: n, festival_all: n })); });
+    await page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v6_cg', JSON.stringify({ erion_cave: n, kaela_tag: n, cave_seal: n, festival_all: n })); });
     await page.reload(); await page.waitForSelector('#btn-gallery');
     await page.tap('#btn-gallery'); await page.waitForTimeout(300);
     chk((await page.locator('.gal-item.got').count()) === 4, '4장 기록인데 갤러리 획득 4가 아님');
@@ -1114,7 +1130,7 @@ async function main() {
     await page.tap('#cgview-close'); await page.tap('#gallery-close');
     // 그림 파일이 있는 CG: <img>, 파일이 깨졌으면 임시 CG 폴백
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-    await page.evaluate((u) => { CG_DEFS.erion_end.file = u; CG_DEFS.miho_end.file = 'data:image/webp;base64,AAAA'; const n = Date.now(); localStorage.setItem('inn_vn_v5_cg', JSON.stringify({ erion_end: n, miho_end: n })); }, PNG);
+    await page.evaluate((u) => { CG_DEFS.erion_end.file = u; CG_DEFS.miho_end.file = 'data:image/webp;base64,AAAA'; const n = Date.now(); localStorage.setItem('inn_vn_v6_cg', JSON.stringify({ erion_end: n, miho_end: n })); }, PNG);
     await page.tap('#btn-gallery'); await page.waitForTimeout(500);
     chk(await page.locator('.gal-item[data-cg="erion_end"] img.cg-img').count() === 1 && !(await page.locator('.gal-item[data-cg="erion_end"] .cg-ph').count()), '파일이 있는 CG 가 <img> 로 표시되지 않음');
     chk(await page.locator('.gal-item[data-cg="miho_end"] .cg-ph').count() === 1, '깨진 CG 파일이 임시 CG 로 폴백되지 않음');
@@ -1129,42 +1145,46 @@ async function main() {
     const chk = (cond, msg) => { if (!cond) problems.push('[랜덤사건] ' + msg); };
     const vars = () => page.evaluate(() => JSON.parse(JSON.stringify(VN.state.vars)));
     await page.goto(URL); await page.waitForSelector('#btn-new');
-    // 1) 순수 로직: 시드 300개 x 2~5일차 — 같은 회차 중복 없음 / 일차·조건 / 발생률 ~60% / 결정성
+    // 1) 순수 로직: 시드 300개 x 2~27일차 — 같은 회차 중복 없음 / 주차·조건 / 발생률 / 사건 사이 간격 / 결정성
     const lg = await page.evaluate(() => {
-      const R = RANDOM_EVENTS, out = { dup: 0, badDay: 0, badCond: 0, hits: 0, total: 0, perDay: {}, ids: {}, nondet: 0 };
+      const R = RANDOM_EVENTS, out = { dup: 0, badWeek: 0, badCond: 0, badGap: 0, hits: 0, total: 0, perWeek: {}, ids: {}, nondet: 0 };
       for (let seed = 1; seed <= 300; seed++) {
         const v = { day: 2, aff: { erion: seed % 5, kaela: 0, miho: seed % 3, lia: 0 }, rev: { seed: seed * 104729, used: [] } };
         EventCore.ensure(v);
-        for (let day = 2; day <= 5; day++) {
+        let last = -9;
+        for (let day = 2; day <= 27; day++) {
           v.day = day; out.total++;
           const id = EventCore.pick(R, v, day, VN.evalCond), id2 = EventCore.pick(R, v, day, VN.evalCond);
           if (id !== id2) out.nondet++;
           if (!id) continue;
-          out.hits++; out.perDay[day] = (out.perDay[day] || 0) + 1; out.ids[id] = (out.ids[id] || 0) + 1;
+          const wk = CalCore.weekOf(day);
+          out.hits++; out.perWeek[wk] = (out.perWeek[wk] || 0) + 1; out.ids[id] = (out.ids[id] || 0) + 1;
           if (v.rev.used.includes(id)) out.dup++;
-          if (!R.events[id].days.includes(day)) out.badDay++;
+          if (R.events[id].weeks && !R.events[id].weeks.includes(wk)) out.badWeek++;
           if (R.events[id].if && !VN.evalCond(R.events[id].if, v)) out.badCond++;
+          if (day - last <= R.gap) out.badGap++;
+          last = day;
           EventCore.begin(v, id, 'x');
         }
       }
       out.kinds = Object.keys(out.ids).length;
       return out;
     });
-    chk(lg.dup === 0 && lg.badDay === 0 && lg.badCond === 0 && lg.nondet === 0, `랜덤 사건 로직 이상 ${JSON.stringify(lg)}`);
-    chk(Math.abs(lg.hits / lg.total - 0.65) < 0.06 && lg.kinds === 13, `발생률/종류 이상: ${(lg.hits / lg.total).toFixed(3)}, ${lg.kinds}종`);
-    // 2) 실제 게임: 3일차 아침, 사건이 일어나는 시드를 골라 세이브를 만든다 -> 몇 번을 불러와도 같은 사건
+    chk(lg.dup === 0 && lg.badWeek === 0 && lg.badCond === 0 && lg.badGap === 0 && lg.nondet === 0, `랜덤 사건 로직 이상 ${JSON.stringify(lg)}`);
+    chk(lg.hits / lg.total > 0.25 && lg.hits / lg.total < 0.5 && lg.kinds === 13, `발생률/종류 이상: ${(lg.hits / lg.total).toFixed(3)}, ${lg.kinds}종`);
+    // 2) 실제 게임: 9일차 아침(rt_open 의 랜덤 사건 줄 직전), 사건이 일어나는 시드를 골라 세이브를 만든다 -> 몇 번을 불러와도 같은 사건
     const pickSeed = await page.evaluate(() => {
       for (let seed = 11; seed < 5000; seed++) {
-        const v = { day: 3, aff: { erion: 3, kaela: 0, miho: 0, lia: 0 }, rev: { seed, used: [] } };
+        const v = { day: 9, aff: { erion: 3, kaela: 0, miho: 0, lia: 0 }, rev: { seed, used: [] } };
         EventCore.ensure(v);
-        const id = EventCore.pick(RANDOM_EVENTS, v, 3, VN.evalCond);
+        const id = EventCore.pick(RANDOM_EVENTS, v, 9, VN.evalCond);
         if (id && id !== 'heroine_meet') return { seed, id };
       }
     });
-    const patch = `v.day = 3; v.time = "아침"; v.aff.erion = 3; v.rev = { seed: ${pickSeed.seed}, used: [], today: "", ret: "" };`;
+    const patch = `v.day = 9; v.time = "아침"; v.aff.erion = 3; v.rev = { seed: ${pickSeed.seed}, used: [], today: "", ret: "" };`;
     const ids = [];
     for (let k = 0; k < 3; k++) {
-      await seed(page, 'd3_pick', patch);       // 사건 직전 세이브를 불러온다
+      await seed(page, 'rt_open', patch, 4);       // 사건 직전 세이브를 불러온다
       const st = await stNow(page);
       ids.push(await page.evaluate(() => VN.state.vars.rev.today));
       chk(/^rev_/.test(st.scene), `${k + 1}번째 로드: 사건 장면으로 가지 않음 (${st.scene})`);
@@ -1178,7 +1198,7 @@ async function main() {
     await page.waitForFunction(() => document.getElementById('toasts').children.length === 0, null, { timeout: 8000 }).catch(() => {});
     await page.screenshot({ path: `${SHOTS}/ev_01_random_event.png` });
     // 사건을 끝까지: 선택지 -> 결과 -> 낮 선택지(pick)
-    for (let i = 0; i < 40 && (await stNow(page)).scene !== 'd3_pick_day' || (await stNow(page)).mode === 'text' && (await stNow(page)).scene === 'd3_pick_day' && false; i++) {
+    for (let i = 0; i < 40 && (await stNow(page)).scene !== 'pick' && false; i++) {
       const m = await stNow(page);
       if (m.mode === 'choice') { if (m.scene === 'pick') break; await page.locator('.choice-btn').first().evaluate((b) => b.click()); await page.waitForTimeout(80); continue; }
       await page.touchscreen.tap(195, 300); await page.waitForTimeout(60);
@@ -1189,7 +1209,7 @@ async function main() {
       await page.touchscreen.tap(195, 300); await page.waitForTimeout(60);
     }
     v = await vars();
-    chk((await stNow(page)).scene === 'pick' && v.rev.used.length === 1 && v.day === 3, `사건이 끝나고 낮 선택으로 이어지지 않음 ${JSON.stringify((await stNow(page)))}`);
+    chk((await stNow(page)).scene === 'pick' && v.rev.used.length === 1 && v.day === 9, `사건이 끝나고 낮 선택으로 이어지지 않음 ${JSON.stringify((await stNow(page)))}`);
     // 3) 영업 보정: 손님 -1 / 재료 값 -25% / 팁 +50% / 안내 문구
     await seed(page, 'd3_evening', ALLKNOWN + ' v.day = 3; v.time = "저녁"; v.today = { cust: -1, price: -25, tip: 50, note: "비가 와서 손님이 한 명 줄지만, 팁이 후하다 (팁 +50%)" };');
     await toTavern(page);
@@ -1213,13 +1233,13 @@ async function main() {
     await toTavern(page);
     chk((await page.evaluate(() => VN.tavern.total)) === 7, `음유시인 2일차 손님 수 ${await page.evaluate(() => VN.tavern.total)} (5 + 1 + 특별 1 = 7)`);
     // 4) 스킵: 안 읽은 사건 대사에서 멈춘다
-    await seed(page, 'rev_rainy_day', 'v.day = 3; v.time = "아침"; v.rev = { seed: 1, used: ["rainy_day"], today: "rainy_day", ret: "d3_pick_day" };');
+    await seed(page, 'rev_rainy_day', 'v.day = 3; v.time = "아침"; v.rev = { seed: 1, used: ["rainy_day"], today: "rainy_day", ret: "rt_pick_day" };');
     await page.waitForFunction(() => document.getElementById('next-mark').classList.contains('on'));
     const pc1 = (await stNow(page)).pc;
     await page.tap('#btn-skip'); await page.waitForTimeout(500);
     const sk = await stNow(page);
     chk(!sk.fast.skip && sk.scene === 'rev_rainy_day' && sk.mode === 'text' && sk.pc === pc1 + 1, `안 읽은 사건 대사에서 스킵이 멈춰야 함 ${JSON.stringify(sk)} (시작 pc ${pc1})`);
-    report.push(`랜덤 사건: 시드 300 x 4일 발생률 ${(lg.hits / lg.total * 100).toFixed(1)}% (${lg.kinds}종 등장, 중복 ${lg.dup}), 시드 ${pickSeed.seed} 로 3번 로드해도 사건 ${pickSeed.id} 동일 + 이어하기 동일, 영업 보정(손님 -1/+1, 재료 값 -25%, 팁 +50%, 안내 문구), 스킵은 새 사건 대사에서 정지`);
+    report.push(`랜덤 사건: 시드 300 x 26일(2~27일차) 발생률 ${(lg.hits / lg.total * 100).toFixed(1)}% (${lg.kinds}종 등장, 중복 ${lg.dup}), 시드 ${pickSeed.seed} 로 3번 로드해도 사건 ${pickSeed.id} 동일 + 이어하기 동일, 영업 보정(손님 -1/+1, 재료 값 -25%, 팁 +50%, 안내 문구), 스킵은 새 사건 대사에서 정지`);
     await ctx.close();
   }
 
@@ -1237,12 +1257,12 @@ async function main() {
     await page.tap('#collect-close');
     const setRec = (e, c, r, n) => page.evaluate(([e, c, r, n]) => {
       const now = Date.now(), mk = (a) => JSON.stringify(Object.fromEntries(a.map((x) => [x, now])));
-      localStorage.setItem('inn_vn_v5_endings', mk(['erion', 'kaela', 'miho', 'lia', 'normal', 'bad', 'true', 'master'].slice(0, e)));
-      localStorage.setItem('inn_vn_v5_cg', mk(Object.keys(CG_DEFS).slice(0, c)));
-      localStorage.setItem('inn_vn_v5_recipes', mk(Object.keys(TAVERN.recipes).slice(0, r)));
-      localStorage.setItem('inn_vn_v5_notes', mk(['baron', 'tobi', 'greta', 'marta', 'fin', 'chief', 'rosa', 'erion', 'kaela', 'miho', 'lia'].slice(0, n)));
+      localStorage.setItem('inn_vn_v6_endings', mk(['erion', 'kaela', 'miho', 'lia', 'normal', 'bad', 'true', 'master'].slice(0, e)));
+      localStorage.setItem('inn_vn_v6_cg', mk(Object.keys(CG_DEFS).slice(0, c)));
+      localStorage.setItem('inn_vn_v6_recipes', mk(Object.keys(TAVERN.recipes).slice(0, r)));
+      localStorage.setItem('inn_vn_v6_notes', mk(['baron', 'tobi', 'greta', 'marta', 'fin', 'chief', 'rosa', 'erion', 'kaela', 'miho', 'lia'].slice(0, n)));
     }, [e, c, r, n]);
-    const toTitle = async (pg) => { await pg.waitForTimeout(500); if (await pg.locator('#daycard:not(.hidden)').count()) { await pg.tap('#daycard'); await pg.waitForTimeout(300); } await pg.tap('#menu-btn'); await pg.tap('#menu-title'); await pg.waitForTimeout(300); };
+    const toTitle = async (pg) => { await pg.waitForTimeout(500); for (let k = 0; k < 3 && await pg.locator('#daycard:not(.hidden)').count(); k++) { await pg.tap('#daycard'); await pg.waitForTimeout(300); } await pg.tap('#menu-btn'); await pg.tap('#menu-title'); await pg.waitForTimeout(300); };
     const col = async () => { await page.reload(); await page.waitForSelector('#btn-collect'); await page.tap('#btn-collect'); await page.waitForTimeout(300);
       return page.evaluate(() => ({ pct: document.getElementById('collect-pct').textContent, rows: [...document.querySelectorAll('.col-row .col-n')].map((e) => e.textContent), ok: [...document.querySelectorAll('.col-reward')].map((e) => e.classList.contains('ok')), api: VN.collect.pct })); };
     await setRec(2, 5, 7, 4);
@@ -1363,7 +1383,7 @@ async function main() {
     await page.touchscreen.tap(195, 420); await page.waitForTimeout(350);
     t = await tut();
     chk(!t.on && t.done && !(await vis('tv-notes')) && (await tvp()).idx === 1, `튜토리얼 종료 뒤 상태 이상 ${JSON.stringify(t)} idx ${(await tvp()).idx}`);
-    chk((await page.evaluate(() => localStorage.getItem('inn_vn_v5_tut'))) === '1', '튜토리얼 본 기록이 localStorage 에 없음');
+    chk((await page.evaluate(() => localStorage.getItem('inn_vn_v6_tut'))) === '1', '튜토리얼 본 기록이 localStorage 에 없음');
     // 한 번 봤으면 다시 안 나온다 (새 게임에서도)
     await page.reload(); await page.waitForSelector('#btn-new');
     chk((await tut()).done, '새로고침 뒤 튜토리얼 기록 유실');

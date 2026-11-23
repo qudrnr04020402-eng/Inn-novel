@@ -12,6 +12,9 @@ window.TAVERN = {
     tipRate: 0.2,                                              // 대성공 팁 = 요리 값 x 이 비율 (최소 1G)
     favTip: 1,                                                 // 히로인 최애 메뉴를 냈을 때 팁 추가
     barrelTip: 2,                                              // '좋은 술통' 업그레이드: 팁 배수
+    barrelTip2: 3,                                             // '명품 술통' (2단계): 팁 배수
+    stoveBonus2: 6,                                            // '큰 화덕' (2단계): 따뜻함 주문 팁 +G
+    cellarPct: 12,                                             // '지하 저장고': 재료 값 -N%
     stoveBonus: 3,                                             // '난로' 업그레이드: 따뜻함 주문을 대성공/보통으로 맞히면 팁 +G
     rep:   { perfect: 1, good: 0, fail: -1, mystery: 0, skip: -1 },   // 손님 한 명당 평판 변화 (skip = 정중히 거절)
     repDay: [-3, 2],                                           // 하루 영업 전체의 평판 변화 한계 [최소, 최대]
@@ -78,11 +81,17 @@ window.TAVERN = {
 
   // ---------- 여관 업그레이드 (밤에 구매. 효과는 id 로 엔진/규칙이 처리) ----------
   upgrades: [
-    { id: 'barrel', name: '좋은 술통',   price: 30, desc: '숙성이 잘 된 술통을 들인다. 대성공 팁이 2배가 된다.' },
-    { id: 'shelf',  name: '향신료 선반', price: 45, desc: '희귀한 향신료와 열매 요리법이 적힌 선반. 레시피 3개가 메뉴판에 추가된다.', learn: ['moon_ale', 'berry_milk', 'magic_stew'] },
-    { id: 'stove',  name: '난로',        price: 25, desc: '화덕을 새로 단다. 따뜻함을 주문한 손님에게 맞는 요리를 내면 팁 +3G.' },
-    { id: 'sign',   name: '새 간판',     price: 40, desc: '번쩍이는 은빛 여우 간판. 매일 저녁 손님이 한 명 더 찾아온다.' }
+    // needs: 먼저 사야 하는 업그레이드 id (1단계 -> 2단계). tier 는 목록의 구분선용
+    { id: 'barrel', name: '좋은 술통',   price: 40, desc: '숙성이 잘 된 술통을 들인다. 대성공 팁이 2배가 된다.' },
+    { id: 'shelf',  name: '향신료 선반', price: 60, desc: '희귀한 향신료와 열매 요리법이 적힌 선반. 레시피 3개가 메뉴판에 추가된다.', learn: ['moon_ale', 'berry_milk', 'magic_stew'] },
+    { id: 'stove',  name: '난로',        price: 35, desc: '화덕을 새로 단다. 따뜻함을 주문한 손님에게 맞는 요리를 내면 팁 +3G.' },
+    { id: 'sign',   name: '새 간판',     price: 55, desc: '번쩍이는 은빛 여우 간판. 매일 저녁 손님이 한 명 더 찾아온다.' },
+    { id: 'cellar', name: '지하 저장고', price: 100, desc: '서늘한 저장고를 판다. 재료를 도매로 사 둘 수 있어 장보기 값이 12% 싸진다.' },
+    { id: 'barrel2', name: '명품 술통',  price: 160, needs: 'barrel', desc: '왕도 장인이 만든 술통. 대성공 팁이 3배가 된다 (좋은 술통 필요).' },
+    { id: 'stove2', name: '큰 화덕',     price: 130, needs: 'stove', desc: '화덕을 크게 넓힌다. 따뜻함 주문 팁이 +6G가 된다 (난로 필요).' },
+    { id: 'sign2',  name: '큰 간판',     price: 180, needs: 'sign', desc: '밤에도 빛나는 큰 간판. 저녁 손님이 한 명 더 늘어난다 (새 간판 필요).' }
   ],
+
 
   // ---------- 손님 정의 ----------
   //  react: 결과별 반응 대사 (문자열 또는 {text, face}). 여러 개면 그중 하나가 무작위로 나옵니다. {dish} = 낸 요리 이름

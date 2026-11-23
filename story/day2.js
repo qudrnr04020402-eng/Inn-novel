@@ -1,5 +1,5 @@
 // ============================================================
-//  2일차 — 저장고에서 스며 나온 그림자
+//  10일차(2주 수) — 저장고에서 스며 나온 그림자
 //  아침(마을 소문 + 경영 선택) -> 낮(히로인 이벤트 2) -> 저녁(지하 저장고 습격) -> 밤(호감도 높은 히로인 방문)
 // ============================================================
 Object.assign(STORY.scenes, {
@@ -7,12 +7,12 @@ Object.assign(STORY.scenes, {
   // ================= 아침 =================
   d2_open: [
     { bgm: 'inn_day' },
-    { day: 2, time: '아침', tip: '호감도가 높아지면\n밤에 몰래 찾아오는 사람이 생길지도 몰라요.' },
+    { day: 'next', time: '아침', tip: '호감도가 높아지면\n밤에 몰래 찾아오는 사람이 생길지도 몰라요.' },
     { bg: 'inn_day' }, { hide: 'all' },
-    { narr: '어젯밤의 진동은 마을 전체를 술렁이게 했다. 식당은 아침부터 사람들로 북적인다. 손님 셋은 이미 자리에 앉아 있다.' },
+    { narr: '며칠 전의 진동은 아직도 마을 전체를 술렁이게 하고 있다. 식당은 아침부터 사람들로 북적인다. 손님 셋은 이미 자리에 앉아 있다.' },
     { show: 'kaela', face: 'smile', pos: 'left' },
     { show: 'miho', face: 'smile', pos: 'right' },
-    { say: 'miho', text: '사장님 사장님, 들었어요? 어젯밤 진동 때문에 마을 우물이 말랐다는 집도 있고, 닭이 알을 안 낳는대요. 뭐, 후자는 제 알 바 아니지만요.' },
+    { say: 'miho', text: '사장님 사장님, 들었어요? 며칠 전 진동 때문에 마을 우물이 말랐다는 집도 있고, 닭이 알을 안 낳는대요. 뭐, 후자는 제 알 바 아니지만요.' },
     { say: 'kaela', text: '흠! 수상한 기운이다! 이 몸이 직접 조사에 나서겠다. 마을의 평화는 붉은 사자가 지킨다!' },
     { show: 'lia', face: 'normal', pos: 'center' },
     { say: 'lia', text: '그, 그러기 전에 촌장님께 먼저 허락을 받아야지. 동굴 쪽은 신전에서도 함부로 가지 말라고 하는 곳이야.' },
@@ -240,7 +240,7 @@ Object.assign(STORY.scenes, {
   d2_evening: [
     { bgm: 'tavern' },
     { time: '저녁' }, { bg: 'inn_evening' }, { hide: 'all' },
-    { narr: '어젯밤 진동의 여파로 저녁 식당은 평소보다 더 시끌벅적하다. 소문을 들으러 온 사람들, 겁먹은 손님들, 그리고 어쩐지 낯익은 얼굴들.' },
+    { narr: '며칠 전 진동의 여파로 저녁 식당은 평소보다 더 시끌벅적하다. 소문을 들으러 온 사람들, 겁먹은 손님들, 그리고 어쩐지 낯익은 얼굴들.' },
     { narr: '그래도 장사는 해야 한다. 앞치마를 두르고 카운터 앞에 섰다.' },
     { tavern: 'day2' },
     { goto: 'd2_ev_cellar' }
@@ -305,8 +305,8 @@ Object.assign(STORY.scenes, {
   d2_ev_after: [
     { show: 'erion', face: 'normal', pos: 'center' },
     { say: 'erion', text: '…이제 말해 줘야겠네. 이 벽 너머는 오래전에 봉인된 곳이야. 그 봉인이 약해지고 있어.' },
-    { say: 'erion', text: '이 상태로 가면 길어야 닷새. 닷새 뒤에는 틈이 완전히 열릴 거야.' },
-    { narr: '닷새. 다시 말해, 7일차다. 모두가 숨을 죽였다.' },
+    { say: 'erion', text: '이 상태로 가면 길어야 열아흐레. 열아흐레 뒤에는 틈이 완전히 열릴 거야.' },
+    { narr: '열아흐레. 달력으로 따지면 29일차 해질녘이다. 모두가 숨을 죽였다.' },
     { narr: '당장 눈앞의 균열을 어떻게든 해야 한다. 이 여관은 내 집이고, 저장고는 여관의 심장이다.' },
     { choice: [
       { text: '석공을 불러 응급 보수를 한다 (20G)', cost: 20, set: { rep: 1 }, goto: 'd2_ev_mason' },
@@ -361,7 +361,7 @@ Object.assign(STORY.scenes, {
   d2_night_none: [
     { narr: '…바람 소리였던 모양이다. 문을 열어 봐도 복도에는 아무도 없었다.' },
     { narr: '이불 속에서 내일은 누구와 더 가까워질 수 있을까 생각하다가, 어느새 잠들었다.' },
-    { goto: 'd2_upgrade' }
+    { goto: 'night_close' }
   ],
   d2_night_erion: [
     { bgm: 'romance' },
@@ -371,7 +371,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', text: '…오늘 일, 고마웠어. 나 혼자였다면 저장고를 지키지 못했을 거야. 내일도 같은 차, 부탁해.' },
     { set: { 'aff.erion': 1 } },
     { narr: '그녀가 돌아간 뒤에도 방에는 은은한 허브 향이 남았다.' },
-    { goto: 'd2_upgrade' }
+    { goto: 'night_close' }
   ],
   d2_night_kaela: [
     { bgm: 'romance' },
@@ -381,7 +381,7 @@ Object.assign(STORY.scenes, {
     { narr: '대검을 안고 문 앞에 쭈그려 앉은 모습이 평소의 호탕함과 너무 달라서, 나도 모르게 따뜻한 우유를 한 잔 건넸다.' },
     { set: { 'aff.kaela': 1 } },
     { say: 'kaela', face: 'smile', text: '…고맙다. 이건 비밀이다. 알았지, 주인장?' },
-    { goto: 'd2_upgrade' }
+    { goto: 'night_close' }
   ],
   d2_night_miho: [
     { bgm: 'romance' },
@@ -391,7 +391,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', face: 'normal', text: '오늘 장부 정리해 준 수고비예요. 제 몫에서 3골드 떼 왔어요. …공짜 아니고 빚이에요, 빚. 나중에 이자 붙여서 받을 거예요.' },
     { set: { 'aff.miho': 1, gold: 3 } },
     { say: 'miho', face: 'shy', text: '…누가 이런 거 해 준 적 없어서요. 그냥 그렇다고요. 잘 자요!' },
-    { goto: 'd2_upgrade' }
+    { goto: 'night_close' }
   ],
   d2_night_lia: [
     { bgm: 'romance' },
@@ -401,6 +401,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'normal', text: '저장고에서 네가 앞에 서서 모두를 챙기는 거 봤어. …멋있었어. 아, 이상한 뜻 아니고!' },
     { set: { 'aff.lia': 1 } },
     { say: 'lia', face: 'shy', text: '잘 자. 그리고, 무리하지 마. 네가 쓰러지면 내가 곤란하니까.' },
-    { goto: 'd2_upgrade' }
+    { goto: 'night_close' }
   ]
 });

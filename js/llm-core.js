@@ -91,7 +91,9 @@
     L.push('좋아하는 것: ' + h.likesExtra + (favId ? ' 여관 저녁 영업에서 가장 좋아하는 메뉴는 ' + recipeInfo(T, favId) + '.' : ''));
     L.push('싫어하는 것: ' + h.dislikesExtra + (disIds.length ? ' 싫어하는 메뉴는 ' + disIds.map(function (d) { return recipeInfo(T, d); }).join(', ') + '.' : ''));
     L.push('');
-    L.push('[현재 상황] ' + c.day + '일차 ' + (c.time || '') + '. ' + (c.where === 'offer' ? '방금 낮에 둘이서 시간을 보낸 뒤 조금 더 이야기하는 중이다.' : '여관에서 잠깐 이야기를 나누는 중이다.'));
+    var CC = root.CalCore, stage = CC ? CC.stageOf(c.day) : c.day;   // 이야기 단계: 30일 중 어디까지 진행됐는지 (옛 7일 구성의 n일차 정보를 그대로 쓴다)
+    var cinf = CC ? CC.info(c.day) : null;
+    L.push('[현재 상황] ' + (cinf ? c.day + '일차(' + cinf.week + '주차 ' + cinf.dowName + '요일)' : c.day + '일차') + ' ' + (c.time || '') + '. ' + (c.where === 'offer' ? '방금 낮에 둘이서 시간을 보낸 뒤 조금 더 이야기하는 중이다.' : '여관에서 잠깐 이야기를 나누는 중이다.'));
     var ti = tierIndex(c.aff || 0, st);
     L.push('호감도 단계: ' + (P.tierNames || ['경계', '호의', '설렘'])[ti] + ' — ' + h.tiers[ti]);
     var seen = Math.max(0, Math.min(c.ev || 0, (h.events || []).length));
@@ -103,11 +105,15 @@
     }
     var dayNotes = [];
     var evening = /^(저녁|밤|황혼|새벽)$/.test(c.time || '');
-    for (var d = 1; d <= c.day; d++) if (P.days[d] && (d < c.day || evening)) dayNotes.push(d + '일차: ' + P.days[d]);
+    var stDays = (root.CALENDAR && root.CALENDAR.stages) || [];
+    for (var d = 1; d <= stage; d++) {
+      var realDay = stDays[d - 1] || d;
+      if (P.days[d] && (realDay < c.day || (realDay === c.day && evening))) dayNotes.push(realDay + '일차: ' + P.days[d]);
+    }
     if (dayNotes.length) { L.push('알고 있는 마을 사건:'); dayNotes.forEach(function (n) { L.push('- ' + n); }); }
     var fl = Object.keys(c.flags || {}).filter(function (k) { return c.flags[k] && P.flagNotes[k]; });
     if (fl.length) { L.push('플레이어의 선택:'); fl.forEach(function (k) { L.push('- ' + P.flagNotes[k]); }); }
-    L.push('비밀 공개 범위(' + c.day + '일차): ' + revealFor(h, c.day));
+    L.push('비밀 공개 범위(' + c.day + '일차): ' + revealFor(h, stage));
     L.push('');
     L.push('[규칙]');
     cm.rules.forEach(function (r, i) { L.push((i + 1) + '. ' + r); });

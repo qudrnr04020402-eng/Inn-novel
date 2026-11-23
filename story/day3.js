@@ -1,5 +1,5 @@
 // ============================================================
-//  3일차 — 달맞이 장터와 소원 등불
+//  13일차(2주 토) — 달맞이 장터와 소원 등불
 //  아침(장터 준비 + 노점 경영 선택) -> 낮(히로인 이벤트 3) -> 저녁(축제: 함께 걷기 / 소원 등불) -> 밤
 // ============================================================
 Object.assign(STORY.scenes, {
@@ -7,7 +7,7 @@ Object.assign(STORY.scenes, {
   // ================= 아침 =================
   d3_open: [
     { bgm: 'inn_day' },
-    { day: 3, time: '아침', tip: '오늘은 1년에 한 번 열리는 달맞이 장터!\n저녁 축제에서는 소원 등불을 함께 띄울 사람을 고르게 돼요.' },
+    { day: 'next', time: '아침', tip: '오늘은 1년에 한 번 열리는 달맞이 장터!\n저녁 축제에서는 소원 등불을 함께 띄울 사람을 고르게 돼요.' },
     { bg: 'square_day' }, { hide: 'all' },
     { narr: '마을 광장에 장터 천막이 하나둘 올라간다. 해마다 열리는 \'달맞이 장터\'. 올해는 불안한 분위기 속에서도 \'불안할수록 평소처럼 하자\'는 촌장님의 한마디로 열기로 했다.' },
     { show: 'lia', face: 'smile', pos: 'left' },
@@ -391,11 +391,11 @@ Object.assign(STORY.scenes, {
     { hide: 'all' },
     { narr: '수백 개의 등불이 밤하늘로 떠오르던 그때였다.' },
     { fx: 'shake' },
-    { narr: '쿠르르릉— 땅이 크게 흔들렸다. 어제보다 훨씬 강하다. 천막이 흔들리고 사람들이 비명을 질렀다. 하늘로 오르던 등불들이 일제히 같은 방향으로 휘어졌다. 뒷산의 동굴 쪽으로.' },
+    { narr: '쿠르르릉— 땅이 크게 흔들렸다. 지난번보다 훨씬 강하다. 천막이 흔들리고 사람들이 비명을 질렀다. 하늘로 오르던 등불들이 일제히 같은 방향으로 휘어졌다. 뒷산의 동굴 쪽으로.' },
     { sfx: 'mystery' }, { fx: 'flash' },
     { narr: '동굴 쪽에서 푸른 빛줄기가 하늘로 치솟았다. 등불들이 그 빛에 빨려들 듯 모여든다.' },
     { show: 'erion', face: 'surprised', pos: 'center' },
-    { say: 'erion', text: '…이렇게 빨리. 닷새가 아니라 나흘도 안 남았어.' },
+    { say: 'erion', text: '…이렇게 빨리. 열아흐레가 아니라 보름 남짓밖에 안 남았어.' },
     { show: 'kaela', face: 'surprised', pos: 'left' },
     { show: 'lia', face: 'surprised', pos: 'right' },
     { say: 'kaela', text: '주, 주민들을 대피시켜야 한다! 주인장, 지시를!' },
@@ -440,18 +440,18 @@ Object.assign(STORY.scenes, {
   ],
   d3_night_none: [
     { narr: '문을 열어 봐도 복도는 조용했다. 아직 먼 밤하늘에 푸른 빛줄기가 희미하게 남아 있다.' },
-    { narr: '내일은 마을 사람들을 안심시켜야 한다. 그리고 에리온에게서 진실을 들어야 한다. 이불 속에서 생각을 정리하다 잠들었다.' },
-    { goto: 'd3_upgrade' }
+    { narr: '며칠 안에 마을 사람들을 안심시켜야 한다. 그리고 에리온에게서 진실을 들어야 한다. 이불 속에서 생각을 정리하다 잠들었다.' },
+    { goto: 'night_close' }
   ],
   d3_night_erion: [
     { bgm: 'romance' },
     { show: 'erion', face: 'shy', pos: 'center' },
     { say: 'erion', text: '…아직 안 잤어? 불이 켜져 있길래.' },
     { narr: '에리온은 문 앞에서 한동안 머뭇거리다가, 품에서 작은 사탕 하나를 꺼냈다. 아까 광장에서 산 별꽃 사탕이다.' },
-    { say: 'erion', text: '…남은 거야. 버리기 아까워서. 내일 이야기하겠다고 한 거, 기억하고 있지? 그전에… 그냥 얼굴이 보고 싶었어. 아, 아니, 방 상태가 궁금해서!' },
+    { say: 'erion', text: '…남은 거야. 버리기 아까워서. 곧 이야기하겠다고 한 거, 기억하고 있지? 그전에… 그냥 얼굴이 보고 싶었어. 아, 아니, 방 상태가 궁금해서!' },
     { set: { 'aff.erion': 1 } },
     { narr: '당황한 에리온의 귀 끝이 불그레했다. 그녀는 사탕을 내 손에 쥐여 주고 도망치듯 돌아갔다.' },
-    { goto: 'd3_upgrade' }
+    { goto: 'night_close' }
   ],
   d3_night_kaela: [
     { bgm: 'romance' },
@@ -462,7 +462,7 @@ Object.assign(STORY.scenes, {
     { set: { 'aff.kaela': 1 } },
     { say: 'kaela', face: 'shy', text: '그, 그럼 이만! 영웅은 쿨하게 사라진다!' },
     { narr: '카엘라는 쿵쿵 계단을 내려가다가 한 번 넘어졌다. 쿨하지 않았다. 그래도 좋았다.' },
-    { goto: 'd3_upgrade' }
+    { goto: 'night_close' }
   ],
   d3_night_miho: [
     { bgm: 'romance' },
@@ -474,7 +474,7 @@ Object.assign(STORY.scenes, {
     { set: { 'aff.miho': 1 } },
     { say: 'miho', face: 'smile', text: '…그래서 일부러 찾아온 거예요. 도둑질하러 온 척했지만. 비밀이에요?' },
     { bg: 'inn_night' },
-    { goto: 'd3_upgrade' }
+    { goto: 'night_close' }
   ],
   d3_night_lia: [
     { bgm: 'romance' },
@@ -484,6 +484,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'smile', text: '이건 아까 등불에서 떨어진 조각이야. 내 소원 글씨가 남아 있어. …보여 주진 않을 거야. 아직은.' },
     { set: { 'aff.lia': 1 } },
     { say: 'lia', face: 'normal', text: '내일이 어떻게 되든, 난 네 곁에 있을게. 그건 약속이야. 어릴 때 한 약속, 이번에는 내가 먼저 지킬 거야.' },
-    { goto: 'd3_upgrade' }
+    { goto: 'night_close' }
   ]
 });

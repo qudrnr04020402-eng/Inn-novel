@@ -1,5 +1,5 @@
 // ============================================================
-//  아침 랜덤 사건 — 2~6일차 아침 장면이 끝난 뒤, 낮 시간으로 넘어가기 전에 끼어드는 짧은 돌발 사건
+//  아침 랜덤 사건 — 아침 장면이 끝난 뒤(2~27일차), 낮 시간으로 넘어가기 전에 끼어드는 짧은 돌발 사건
 //  - 확률(chance)로 하루 최대 1개. 같은 회차에서 같은 사건은 두 번 나오지 않습니다.
 //  - 난수는 세이브에 저장된 시드로 정해지므로 저장/불러오기로 다시 뽑을 수 없습니다. (js/event-core.js)
 //  - 사건 장면은 STORY.scenes 의 'rev_<id>' 씬입니다. 마지막은 {randret:true} (아침 장면으로 복귀).
@@ -11,23 +11,24 @@
 //  - 검사: node tools/check-story.js (데이터 무결성 + 시뮬레이션에 포함)
 // ============================================================
 window.RANDOM_EVENTS = {
-  chance: 0.65,         // 사건이 일어날 확률 (하루 한 번 굴림)
-  days: [2, 3, 4, 5, 6], // 사건이 일어날 수 있는 일차 (7일차는 결전의 날이라 없음)
+  chance: 0.5,          // 사건이 일어날 확률 (하루 한 번 굴림)
+  range: [2, 27],       // 사건이 일어날 수 있는 일차 범위 (28일 폭풍의 밤, 29~30일 종장에는 없음)
+  gap: 1,               // 직전 사건과 최소 이 일수 이상 떨어져야 함 (1 = 이틀 연속으로는 안 터짐)
   events: {
-    //  title: 이름(알림에 표시) / days: 나올 수 있는 일차 / weight: 상대 확률 / if: 조건식(생략 가능)
-    lost_purse:      { title: '분실물 주인 찾기',   days: [2, 3, 4, 5, 6], weight: 1 },
-    rowdy_guest:     { title: '진상 손님',          days: [2, 3, 4, 5],    weight: 1 },
-    rainy_day:       { title: '비 오는 날',         days: [3, 4],          weight: 1 },
-    bard:            { title: '떠돌이 음유시인',    days: [2, 3, 4, 5],    weight: 1 },
-    rats:            { title: '쥐 소동',            days: [2, 3, 4],       weight: 1 },
-    merchant_sale:   { title: '재료 상인 떨이',     days: [2, 3, 4, 5],    weight: 1 },
-    errand_child:    { title: '아이의 심부름',      days: [2, 3, 4, 5, 6], weight: 1 },
-    strange_letter:  { title: '수상한 편지',        days: [2, 3, 4],       weight: 1 },
-    heroine_meet:    { title: '뜻밖의 마주침',      days: [2, 3, 4, 5, 6], weight: 1.4, if: 'aff.erion>=2 || aff.kaela>=2 || aff.miho>=2 || aff.lia>=2' },
-    hungry_traveler: { title: '배고픈 나그네',      days: [2, 3, 4, 5, 6], weight: 1 },
-    leaky_roof:      { title: '새는 지붕',          days: [3, 4, 6],       weight: 1 },
-    kind_neighbor:   { title: '인심 좋은 이웃',     days: [2, 3, 4, 5, 6], weight: 1 },
-    tax_collector:   { title: '세금 징수관',        days: [2, 3, 4, 5],    weight: 0.8 }
+    //  title: 이름(알림에 표시) / weeks: 나올 수 있는 주차 [1~4] (생략하면 언제나) / days: 나올 수 있는 일차(선택) / minDay, maxDay(선택) / weight: 상대 확률 / if: 조건식(생략 가능)
+    lost_purse:      { title: '분실물 주인 찾기',   weeks: [1, 2, 3, 4], weight: 1 },
+    rowdy_guest:     { title: '진상 손님',          weeks: [1, 2, 3],    weight: 1 },
+    rainy_day:       { title: '비 오는 날',         weeks: [2, 3],          weight: 1 },
+    bard:            { title: '떠돌이 음유시인',    weeks: [1, 2, 3],    weight: 1 },
+    rats:            { title: '쥐 소동',            weeks: [1, 2],       weight: 1 },
+    merchant_sale:   { title: '재료 상인 떨이',     weeks: [1, 2, 3],    weight: 1 },
+    errand_child:    { title: '아이의 심부름',      weeks: [1, 2, 3, 4], weight: 1 },
+    strange_letter:  { title: '수상한 편지',        weeks: [1, 2],       weight: 1 },
+    heroine_meet:    { title: '뜻밖의 마주침',      weeks: [1, 2, 3, 4], weight: 1.4, if: 'aff.erion>=2 || aff.kaela>=2 || aff.miho>=2 || aff.lia>=2' },
+    hungry_traveler: { title: '배고픈 나그네',      weeks: [1, 2, 3, 4], weight: 1 },
+    leaky_roof:      { title: '새는 지붕',          weeks: [2, 3, 4],       weight: 1 },
+    kind_neighbor:   { title: '인심 좋은 이웃',     weeks: [1, 2, 3, 4], weight: 1 },
+    tax_collector:   { title: '세금 징수관',        weeks: [2, 3],    weight: 0.8 }
   }
 };
 

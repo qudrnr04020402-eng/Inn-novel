@@ -52,7 +52,7 @@ async function loadAt(page, scene, vars) {
   await page.evaluate(([scene, vars]) => {
     const v = JSON.parse(JSON.stringify(STORY.init)); Object.assign(v, vars || {});
     v.aff = Object.assign(v.aff, (vars || {}).aff || {});
-    localStorage.setItem('inn_vn_v5_auto', JSON.stringify({ v: 5, t: Date.now(), snap: { scene, pc: 0, vars: v, bg: 'inn_day', sprites: { left: null, center: null, right: null }, log: [], label: 'test' } }));
+    localStorage.setItem('inn_vn_v6_auto', JSON.stringify({ v: 6, t: Date.now(), snap: { scene, pc: 0, vars: v, bg: 'inn_day', sprites: { left: null, center: null, right: null }, log: [], label: 'test' } }));
   }, [scene, vars]);
   await page.reload();
   await page.waitForSelector('#btn-continue:not([disabled])');
@@ -110,7 +110,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     ok(await page.evaluate(() => !document.getElementById('menu-chat').classList.contains('off')), '메뉴 자유 대화 버튼 활성');
 
     // --- 낮 이벤트 뒤 제안 -> 자유 대화
-    await loadAt(page, 'pick', { day: 2, time: '낮', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 }, aff: { erion: 5 } });
+    await loadAt(page, 'pick', { day: 10, time: '낮', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 }, aff: { erion: 5 } });
     ok(await toOffer(page, 'erion'), '낮 이벤트 후 "조금 더 이야기하기" 제안이 뜸');
     ok(await page.evaluate(() => document.querySelector('.choice-btn.who[data-who="erion"] .ch-tag').textContent.includes('남은 6번')), '제안 버튼에 남은 횟수 표시');
     await page.tap('.choice-btn.who[data-who="erion"]');
@@ -167,8 +167,8 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     await shot(page, '04-turns-exhausted.png');
     ok((await count()) === 6, '가짜 LLM 호출 6회 (소진 후 추가 호출 없음)');
     const sys = (await last()).messages[0].content;
-    ok(sys.includes('에리온') && sys.includes('달빛 꿀차') && sys.includes('호감도 단계') && sys.includes('2일차'), '시스템 프롬프트에 캐릭터/최애 메뉴/호감도 단계/일차 포함');
-    ok(!sys.includes('이름과 기억을 대가로'), '2일차에는 에리온의 4일차 비밀이 프롬프트에 없음');
+    ok(sys.includes('에리온') && sys.includes('달빛 꿀차') && sys.includes('호감도 단계') && sys.includes('10일차'), '시스템 프롬프트에 캐릭터/최애 메뉴/호감도 단계/일차 포함');
+    ok(!sys.includes('이름과 기억을 대가로'), '10일차에는 에리온의 18일차 비밀이 프롬프트에 없음');
     const lastBody = await last();
     ok(lastBody.max_tokens === 200 && lastBody.temperature === 0.8, 'temperature 0.8 / max_tokens 200');
     ok(lastBody.messages.length === 1 + 5 * 2 + 1, '이번 대화 기록(최근 턴)이 messages 에 포함: ' + lastBody.messages.length);
@@ -194,7 +194,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     // ================= 2. 형식이 깨진 응답 / 오류 / 재시도 =================
     ({ ctx, page } = await newPage(browser, GAME, 'formats'));
     await page.waitForFunction(() => VN.llm.state === 'ready');
-    await loadAt(page, 'pick', { day: 3, time: '낮', ev: { erion: 2, kaela: 2, miho: 2, lia: 2 } });
+    await loadAt(page, 'pick', { day: 13, time: '낮', ev: { erion: 2, kaela: 2, miho: 2, lia: 2 } });
     ok(await toOffer(page, 'kaela'), '카엘라 제안');
     await page.tap('.choice-btn.who[data-who="kaela"]'); await page.waitForSelector('#chat:not(.hidden)');
     const used = async () => (await vars(page)).llm.used.kaela || 0;
@@ -214,7 +214,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
 
     ({ ctx, page } = await newPage(browser, GAME, 'errors'));
     await page.waitForFunction(() => VN.llm.state === 'ready');
-    await loadAt(page, 'pick', { day: 3, time: '낮', ev: { erion: 2, kaela: 2, miho: 2, lia: 2 } });
+    await loadAt(page, 'pick', { day: 13, time: '낮', ev: { erion: 2, kaela: 2, miho: 2, lia: 2 } });
     ok(await toOffer(page, 'miho'), '미호 제안');
     await page.tap('.choice-btn.who[data-who="miho"]'); await page.waitForSelector('#chat:not(.hidden)');
     expectErrors = true;
@@ -250,7 +250,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     // ================= 3. LLM 다운 =================
     ({ ctx, page } = await newPage(browser, GAME, 'down'));
     await page.waitForFunction(() => VN.llm.state === 'ready');
-    await loadAt(page, 'pick', { day: 4, time: '낮', ev: { erion: 3, kaela: 3, miho: 3, lia: 3 } });
+    await loadAt(page, 'pick', { day: 18, time: '낮', ev: { erion: 3, kaela: 3, miho: 3, lia: 3 } });
     ok(await toOffer(page, 'lia'), '리아 제안');
     await page.tap('.choice-btn.who[data-who="lia"]'); await page.waitForSelector('#chat:not(.hidden)');
     await say(page, '먼저 정상 대화');
@@ -274,7 +274,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     // ================= 4. 메뉴 진입 + 저장 유지 =================
     ({ ctx, page } = await newPage(browser, GAME, 'menu'));
     await page.waitForFunction(() => VN.llm.state === 'ready');
-    await loadAt(page, 'd2_evening', { day: 2, time: '저녁', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 }, llm: { day: 2, used: { lia: 6 }, gain: {}, loss: {}, last: '', met: [] } });
+    await loadAt(page, 'd2_evening', { day: 10, time: '저녁', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 }, llm: { day: 10, used: { lia: 6 }, gain: {}, loss: {}, last: '', met: [] } });
     ok(['text', 'choice'].includes(await mode(page)), '저녁 장면 대사 중');
     await waitTyped(page);
     const lineBefore = await dialogText(page); const logBefore = await page.evaluate(() => VN.state.log.length);
@@ -293,7 +293,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     ok(logAfter.filter((t) => t === lineBefore).length === 1, '복귀 시 같은 대사가 백로그에 중복되지 않음');
     ok(logAfter.some((t) => t.includes('메뉴에서 시작했어')), '자유 대화 내용이 백로그에 기록');
     // 저장 슬롯에 대화 사용량 포함
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v5_auto')).snap.vars.llm);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('inn_vn_v6_auto')).snap.vars.llm);
     ok(saved.used.miho === 1, '자동 저장에 오늘 턴 사용량 포함: ' + JSON.stringify(saved.used));
     // 불러오기로 되돌려도 턴이 늘어나지 않는지 (파밍 방지): 새로고침 -> 이어하기 -> miho 사용량 1
     await page.reload(); await page.waitForSelector('#btn-continue:not([disabled])'); await page.tap('#btn-continue'); await sleep(300);
@@ -316,7 +316,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     await page.reload(); await sleep(800);
     ok((await chatState(page)).state === 'none' && (await chatState(page)).server === false, '정적 서버: 자유 대화 비활성(none)');
     ok(reqs.length === 0, '정적 서버: /llm/ 요청 0건');
-    await loadAt(page, 'd2_evening', { day: 2, time: '저녁' });
+    await loadAt(page, 'd2_evening', { day: 10, time: '저녁' });
     await page.tap('#menu-btn'); await sleep(200);
     const note = await page.evaluate(() => document.getElementById('menu-chat').textContent);
     ok(note.includes('PC 서버에서 실행할 때만 사용 가능') && await page.evaluate(() => document.getElementById('menu-chat').classList.contains('off')), '메뉴에 비활성 안내 문구: ' + note);
@@ -325,7 +325,7 @@ const hscroll = (page) => page.evaluate(() => document.documentElement.scrollWid
     ok((await mode(page)) !== 'chat' && !(await page.evaluate(() => !document.getElementById('chat-pick').classList.contains('hidden'))), '비활성 버튼은 아무 일도 하지 않음');
     await page.tap('#menu-close');
     // 낮 이벤트 뒤 제안이 뜨지 않음 (정적 서버)
-    await loadAt(page, 'pick', { day: 2, time: '낮', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 } });
+    await loadAt(page, 'pick', { day: 10, time: '낮', ev: { erion: 1, kaela: 1, miho: 1, lia: 1 } });
     ok(!(await toOffer(page, 'erion')), '정적 서버: 낮 이벤트 뒤 자유 대화 제안 없음 (기존 흐름 그대로)');
     ok(reqs.length === 0, '정적 서버: 끝까지 /llm/ 요청 0건');
     await ctx.close();

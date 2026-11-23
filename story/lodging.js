@@ -74,7 +74,7 @@ window.LODGING = {
       say: '허리가 옛날 같지 않아서 말이오. 푹신한 침대로 부탁하오.',   ok: '허허, 오랜만에 기사 시절 막사보다 편했소.',          meh: '…바닥에서 자는 것과 별 차이 없더군. 허허.' },
     { id: 'doctor',    name: '순회 의사 엘름', kind: '순회 의사',   glyph: '의', color: '#a8c0e8', req: 'quiet',  bonus: 6,
       say: '밤에 환자 생각을 정리해야 해서요. 조용한 방이 필요합니다.', ok: '덕분에 푹 쉬었습니다. 건강하세요!',                meh: '옆방 소리가 좀… 그래도 감사합니다.' },
-    // 5일차 사절단 일행 (only:true = 평소 무작위 손님에는 안 나옴, special.5 로 그날 고정 배정). 특실 수요가 높다.
+    // 19일차 사절단 일행 (only:true = 평소 무작위 손님에는 안 나옴, special.19 로 그날 고정 배정). 특실 수요가 높다.
     { id: 'env_chief',  only: true, name: '사절단장 이졸데', kind: '왕립 학술원',  glyph: '단', color: '#b3a8e8', req: 'wide',   bonus: 12,
       say: '문서를 펼칠 넓은 방이 필요합니다. 특실이 있다면 그쪽으로.',    ok: '충분했습니다. 보고서에 이 여관을 좋게 적겠습니다.', meh: '좁았지만 불평은 하지 않겠습니다. 기록은 하겠지만요.' },
     { id: 'env_scribe', only: true, name: '사절단 서기관',   kind: '왕립 학술원',  glyph: '서', color: '#a9b8e8', req: 'quiet',  bonus: 9,
@@ -83,14 +83,15 @@ window.LODGING = {
       say: '경계를 서기 좋도록 마당이 보이는 창가 방을 부탁하오.',          ok: '창밖이 잘 보여 마음이 놓였소.',                     meh: '창이 작아 경계가 불편했소.' }
   ],
   // 일차별 고정 숙박 손님 (guests 의 id 목록). 해당 일차에는 무작위 대신 이 손님들이 온다.
-  special: { 5: ['env_chief', 'env_scribe', 'env_guard'] },
+  special: { 19: ['env_chief', 'env_scribe', 'env_guard'] },
 
   // ---------- 밤 사건 설정 (장면은 story/night-events.js 의 nev_<id> 씬) ----------
-  //  chance: 사건이 일어날 확률 (숙박 접수가 끝난 뒤 하루 한 번 굴림)   days: 일어날 수 있는 일차
+  //  chance: 사건이 일어날 확률 (숙박 접수가 끝난 뒤 하루 한 번 굴림)   range: 일어날 수 있는 일차 범위 [처음, 끝]   gap: 직전 밤 사건과 최소 이 일수 이상 떨어져야 함
   //  events.<id>: { title, weight(상대 확률), if(조건식, 선택) }
   nightEvents: {
-    chance: 0.25,
-    days: [1, 2, 3, 4, 6],
+    chance: 0.2,
+    range: [1, 27],
+    gap: 2,
     events: {
       thief:     { title: '한밤의 도둑',      weight: 1 },
       nightmare: { title: '악몽 꾸는 아이',   weight: 1 },

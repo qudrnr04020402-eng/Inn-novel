@@ -1,5 +1,5 @@
 // ============================================================
-//  4일차 — 술렁이는 마을
+//  18일차(3주 목) — 술렁이는 마을
 //  아침(평판에 따라 달라지는 마을 분위기) -> 낮(히로인 이벤트) -> 저녁 영업 -> 왕도 사절단이 온다는 소식 -> 밤(짧은 방문)
 //  (옛 4일차의 작전 회의/전야의 선물/전야 방문은 6일차(story/day6.js)로 옮겼습니다)
 // ============================================================
@@ -8,7 +8,7 @@ Object.assign(STORY.scenes, {
   // ================= 아침 =================
   d4_open: [
     { bgm: 'inn_day' },
-    { day: 4, time: '아침', tip: '마을이 술렁이기 시작했어요.\n평판에 따라 이웃의 반응이 달라져요.' },
+    { day: 'next', time: '아침', tip: '마을이 술렁이기 시작했어요.\n평판에 따라 이웃의 반응이 달라져요.' },
     { bg: 'inn_front' }, { hide: 'all' },
     { narr: '동이 트기 전부터 뒷산에서 푸른 안개가 흘러내리고 있다. 동굴 입구에서 올라오는 빛은 어젯밤보다 한층 짙어졌다.' },
     { narr: '마을 길에서는 불안한 얼굴로 수군거리는 사람들이 눈에 띄게 늘었다. 몇몇은 벌써 친척 집으로 짐을 옮기기 시작했다.' },
@@ -294,7 +294,7 @@ Object.assign(STORY.scenes, {
   d4_night_none: [
     { narr: '문을 열어 봐도 복도에는 아무도 없었다. 창밖에는 푸른 안개가 낮게 깔려 있다.' },
     { narr: '내일은 왕도에서 손님이 온다. 마음을 다잡고 눈을 감았다.' },
-    { goto: 'd4_upgrade' }
+    { goto: 'night_close' }
   ],
   d4_night_erion: [
     { bgm: 'romance' },
@@ -303,7 +303,7 @@ Object.assign(STORY.scenes, {
     { say: 'erion', face: 'normal', text: '…내가 책을 빼앗기면 그건 네 탓이 아니야. 그냥, 알고 있으라고.' },
     { set: { 'aff.erion': 1 } },
     { narr: '에리온은 그 말만 남기고 복도 어둠 속으로 사라졌다. 문 앞에 작은 별꽃 사탕 하나가 놓여 있었다.' },
-    { goto: 'd4_upgrade' }
+    { goto: 'night_close' }
   ],
   d4_night_kaela: [
     { bgm: 'romance' },
@@ -312,7 +312,7 @@ Object.assign(STORY.scenes, {
     { say: 'kaela', face: 'sad', text: '이 몸은 그 사람들 앞에서 영웅이어야 한다. …하지만 사실은 조금 무섭다. 한 번도 합격하지 못했으니까.' },
     { set: { 'aff.kaela': 1 } },
     { narr: '카엘라는 억지로 웃어 보이고는 문을 닫았다. 문틀에 부딪히는 소리가 나지 않은 건 오늘이 처음이었다.' },
-    { goto: 'd4_upgrade' }
+    { goto: 'night_close' }
   ],
   d4_night_miho: [
     { bgm: 'romance' },
@@ -321,7 +321,7 @@ Object.assign(STORY.scenes, {
     { say: 'miho', face: 'shy', text: '…물론 그건 핑계고요. 사실은 오늘 하루 종일 사장님 얼굴을 못 봐서 와 본 거예요. 비밀이에요, 아시죠?' },
     { set: { 'aff.miho': 1 } },
     { narr: '미호는 꼬리를 한 번 흔들고 도망치듯 사라졌다. 어쩐지 방 안이 한층 따뜻해졌다.' },
-    { goto: 'd4_upgrade' }
+    { goto: 'night_close' }
   ],
   d4_night_lia: [
     { bgm: 'romance' },
@@ -330,6 +330,6 @@ Object.assign(STORY.scenes, {
     { say: 'lia', face: 'smile', text: '그래도 네가 옆에 있으니까 괜찮아. 어릴 때부터 그랬어. 네가 괜찮다고 하면 정말 괜찮았거든.' },
     { set: { 'aff.lia': 1 } },
     { narr: '리아가 문 앞에 서서 한참 인사를 하고 갔다. 복도에 따뜻한 빵 냄새가 남았다.' },
-    { goto: 'd4_upgrade' }
+    { goto: 'night_close' }
   ]
 });
