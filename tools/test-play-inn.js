@@ -582,13 +582,13 @@ async function run(browser, problems, report, SHOTS) {
     const r2 = await open(); const c2 = mk('깊은 이벤트 수집');
     await r2.page.evaluate(() => { const n = Date.now(); localStorage.setItem('inn_vn_v6_cg', JSON.stringify({ erion_deep: n, kaela_deep: n })); });
     await r2.page.reload(); await r2.page.waitForSelector('#btn-gallery');
-    c2((await r2.page.locator('#btn-gallery').innerText()).includes('2/22'), `갤러리 버튼이 2/22 이 아님 (${await r2.page.locator('#btn-gallery').innerText()})`);
+    c2((await r2.page.locator('#btn-gallery').innerText()).includes('2/30'), `갤러리 버튼이 2/30 이 아님 (${await r2.page.locator('#btn-gallery').innerText()})`);
     await r2.page.tap('#btn-gallery'); await r2.page.waitForTimeout(300);
-    c2((await r2.page.locator('.gal-item').count()) === 22 && (await r2.page.locator('.gal-item.got').count()) === 2, '갤러리 22칸(2장 획득) 이상');
+    c2((await r2.page.locator('.gal-item').count()) === 30 && (await r2.page.locator('.gal-item.got').count()) === 2, '갤러리 30칸(2장 획득) 이상');
     c2((await shift(r2.page)) === 0, '갤러리 가로 스크롤');
     await shot(r2.page, 'deep_03_gallery');
     await r2.ctx.close();
-    report.push('깊은 이벤트: 3주차 이후 + 하트 4칸 + 1번만(미만/2주차/이미 봄은 안 나옴, 4주차는 나옴), 4명 모두 CG(22장 중 4장)·선택지 2개·호감도 +2~3, 저녁 영업으로 이어짐, 갤러리 22칸');
+    report.push('깊은 이벤트: 3주차 이후 + 하트 4칸 + 1번만(미만/2주차/이미 봄은 안 나옴, 4주차는 나옴), 4명 모두 CG(30장 중 4장)·선택지 2개·호감도 +2~3, 저녁 영업으로 이어짐, 갤러리 30칸');
   }
 
   // ================= 히로인 신경전 =================
@@ -751,14 +751,14 @@ async function run(browser, problems, report, SHOTS) {
     // 평범한 하루: 순서 이벤트(주차 조건)가 아직 안 열렸거나 다 본 히로인은 짧은 장면(plain), 호감도 +1
     const r5 = await open(); const c5 = mk('평범한 하루');
     for (const h of ['erion', 'kaela', 'miho', 'lia']) {
-      await seedAt(r5.page, 'pick', `v.day = 25; v.time = '낮'; v.ev.${h} = 4;`);
+      await seedAt(r5.page, 'pick', `v.day = 25; v.time = '낮'; v.ev.${h} = 9;`);
       const plain = await r5.page.evaluate((hh) => VN.options.filter((o) => o.tag === '평범한 하루' && o.who === hh).length, h);
-      c5(plain === 1, `${h} 이벤트 4개 뒤 평범한 하루 선택지가 1개가 아님 (${plain})`);
+      c5(plain === 1, `${h} 순서 이벤트 9개 뒤 평범한 하루 선택지가 1개가 아님 (${plain})`);
       const a0 = (await vars(r5.page)).aff[h], p0 = (await vars(r5.page)).pl[h] || 0;
       await r5.page.locator(`.choice-btn[data-who="${h}"]`).tap();
       await until(r5.page, () => VN.mode === 'choice' || VN.mode === 'tavern');
       const v1 = await vars(r5.page);
-      c5(v1.aff[h] >= a0 + 1 && v1.pl[h] === p0 + 1 && v1.ev[h] === 4, `${h} 평범한 하루: 호감도 +1 이상 / pl +1 / 순서 이벤트 수 그대로 (${a0}->${v1.aff[h]}, pl ${p0}->${v1.pl[h]}, ev ${v1.ev[h]})`);
+      c5(v1.aff[h] >= a0 + 1 && v1.pl[h] === p0 + 1 && v1.ev[h] === 9, `${h} 평범한 하루: 호감도 +1 이상 / pl +1 / 순서 이벤트 수 그대로 (${a0}->${v1.aff[h]}, pl ${p0}->${v1.pl[h]}, ev ${v1.ev[h]})`);
     }
     // 1주차에 2번째 이벤트(minWeek 2)는 아직 안 열려 평범한 하루로 대체된다
     await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.lia = 1;`);

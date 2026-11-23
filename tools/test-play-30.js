@@ -208,20 +208,22 @@ const ff = (page, until) => page.evaluate((src) => {
   await page.screenshot({ path: `${SHOTS}/08_holiday_menu.png` });
   const hv = await vars(page);
   await page.locator('.choice-btn').filter({ hasText: '리아와 신전 정원' }).click();
-  let sawTavern = false, sawLodge = false;
+  let sawTavern = false, sawLodge = false, sawWeekCard = false;
   for (let i = 0; i < 200; i++) {
     const m = await page.evaluate(() => VN.mode);
     if (m === 'tavern') {
       const st = await page.evaluate(() => ({ tv: !!VN.tavern, lodge: !document.getElementById('tv-lodge').classList.contains('hidden') }));
       if (st.lodge) sawLodge = true; else if (st.tv) sawTavern = true;
       await page.evaluate(() => { const vis = (id) => !document.getElementById(id).classList.contains('hidden'); if (vis('tv-upg')) document.getElementById('tv-upg-next').click(); else document.getElementById('game').click(); });
-    } else if (m === 'card') break;
-    else if (m === 'choice') await page.locator('.choice-btn').first().click();
+    } else if (m === 'card') {
+      if (/정산/.test(await page.evaluate(() => document.getElementById('card-title').textContent))) { sawWeekCard = true; await page.evaluate(() => { document.getElementById('game').click(); }); } else break;
+    } else if (m === 'choice') await page.locator('.choice-btn').first().click();
     else await page.evaluate(() => { document.getElementById('game').click(); });
     await page.waitForTimeout(20);
   }
   const hd = await vars(page);
   ok(!sawTavern && !sawLodge, `휴일에는 영업/숙박이 없음 (영업 ${sawTavern}, 숙박 ${sawLodge})`);
+  ok(sawWeekCard, '일요일 밤에 주간 정산 카드가 나옴');
   ok(hd.day === 8 && hd.aff.lia - hv.aff.lia >= 3, `산책으로 리아 호감도 +${hd.aff.lia - hv.aff.lia}, 다음 날 8일차 (day ${hd.day})`);
   ok(hd.evdone.wk1_picnic !== true, '주간 이벤트를 고르지 않았으니 기록 없음');
 

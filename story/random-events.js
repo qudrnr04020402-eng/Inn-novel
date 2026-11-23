@@ -3,6 +3,7 @@
 //  - 확률(chance)로 하루 최대 1개. 같은 회차에서 같은 사건은 두 번 나오지 않습니다.
 //  - 난수는 세이브에 저장된 시드로 정해지므로 저장/불러오기로 다시 뽑을 수 없습니다. (js/event-core.js)
 //  - 사건 장면은 STORY.scenes 의 'rev_<id>' 씬입니다. 마지막은 {randret:true} (아침 장면으로 복귀).
+//  - 연작(2부 이상)은 사건 장면 첫머리에서 {set:{'ser.<이름>':1}} 로 "본 부 수"를 올리고, 다음 부는 if:'ser.<이름>==N' + minDay 로 엽니다.
 //  - 영업 보정(오늘 하루만 적용, 새 일차가 시작되면 초기화): set 으로 더합니다.
 //      'today.cust'  : 일반 손님 수 증감 (-1 = 한 명 줄어듦(히로인/특별 주문/레시피 전수 손님은 안 줄음), +1 = 단골 한 명 더)
 //      'today.price' : 장보기 재료 값 증감 % (-25 = 25% 할인)
@@ -28,7 +29,43 @@ window.RANDOM_EVENTS = {
     hungry_traveler: { title: '배고픈 나그네',      weeks: [1, 2, 3, 4], weight: 1 },
     leaky_roof:      { title: '새는 지붕',          weeks: [2, 3, 4],       weight: 1 },
     kind_neighbor:   { title: '인심 좋은 이웃',     weeks: [1, 2, 3, 4], weight: 1 },
-    tax_collector:   { title: '세금 징수관',        weeks: [2, 3],    weight: 0.8 }
+    tax_collector:   { title: '세금 징수관',        weeks: [2, 3],    weight: 0.8 },
+
+    // ----- 연작 (ser.<이름> = 지금까지 본 부 수. 앞 부를 봐야 다음 부가 열립니다. 장면은 story/random-events-more.js) -----
+    //  떠돌이 음유시인 3부작 (1부는 위의 bard)
+    bard_2:          { title: '음유시인의 새 노래',     weeks: [2, 3, 4], minDay: 9,  weight: 1.6, if: 'ser.bard==1' },
+    bard_3:          { title: '음유시인의 마지막 노래', weeks: [3, 4],    minDay: 17, weight: 1.8, if: 'ser.bard==2' },
+    //  꼬마 견습 요리사 콩이 3부작
+    cookkid_1:       { title: '꼬마 견습 요리사',       weeks: [1, 2],    weight: 1.2 },
+    cookkid_2:       { title: '콩이의 레시피 공책',     weeks: [2, 3],    minDay: 9,  weight: 1.6, if: 'ser.cookkid==1' },
+    cookkid_3:       { title: '콩이의 첫 접시',         weeks: [3, 4],    minDay: 16, weight: 1.8, if: 'ser.cookkid==2' },
+    //  길 잃은 새끼 여우 3부작
+    fox_1:           { title: '마당의 새끼 여우',       weeks: [1, 2],    weight: 1.2 },
+    fox_2:           { title: '새끼 여우의 소동',       weeks: [2, 3],    minDay: 9,  weight: 1.6, if: 'ser.fox==1' },
+    fox_3:           { title: '여우의 가족',           weeks: [3, 4],    minDay: 16, weight: 1.8, if: 'ser.fox==2' },
+
+    // ----- 단발 사건 -----
+    stray_dog:       { title: '떠돌이 개',             weeks: [1, 2, 3],    weight: 1 },
+    old_map:         { title: '낡은 지도 조각',         weeks: [1, 2],       weight: 0.9 },
+    festival_vendor: { title: '등불 장수',             weeks: [2],          weight: 1.2 },
+    chimney_fire:    { title: '굴뚝 불똥',             weeks: [2, 3, 4],    weight: 0.9 },
+    wedding_guests:  { title: '피로연 문의',           weeks: [2, 3],       weight: 1 },
+    royal_rumor:     { title: '왕도의 소문',           weeks: [3],          weight: 1.2, if: 'inn.rank>=2' },
+    scholar_visit:   { title: '학자의 질문',           weeks: [3, 4],       weight: 1 },
+    wolf_howl:       { title: '밤새 울던 늑대',         weeks: [3, 4],       weight: 1 },
+    blue_light:      { title: '푸른 빛 목격담',         weeks: [3, 4],       minDay: 16, weight: 1.2 },
+    sick_traveler:   { title: '아픈 나그네',           weeks: [2, 3],       weight: 1 },
+    lost_goat:       { title: '촌장네 염소',           weeks: [1, 2, 3],    weight: 1 },
+    cold_wind:       { title: '갑자기 찾아온 추위',     weeks: [3, 4],       weight: 1 },
+    children_play:   { title: '아이들의 여관 놀이',     weeks: [1, 2],       weight: 1 },
+    kaela_dummy:     { title: '카엘라의 허수아비',      weeks: [1, 2, 3],    weight: 1.3, if: 'aff.kaela>=2' },
+    erion_teapot:    { title: '에리온의 찻주전자',      weeks: [2, 3, 4],    weight: 1.3, if: 'aff.erion>=2' },
+    miho_invoice:    { title: '미호의 청구서',         weeks: [2, 3, 4],    weight: 1.3, if: 'aff.miho>=2' },
+    lia_laundry:     { title: '리아의 빨래 산',         weeks: [1, 2, 3],    weight: 1.3, if: 'aff.lia>=2' },
+    crow_thief:      { title: '은수저 도둑 까마귀',     weeks: [1, 2, 3],    weight: 1 },
+    envoy_scout:     { title: '선발대의 방문',         weeks: [3],          maxDay: 17,   weight: 3 },
+    storm_wood:      { title: '장작 장수',             weeks: [4],          weight: 1.5 },
+    old_soldier:     { title: '옛 병사의 전설',         weeks: [3, 4],       weight: 1 }
   }
 };
 
@@ -121,7 +158,7 @@ Object.assign(STORY.scenes, {
 
   // ---------- 떠돌이 음유시인 ----------
   rev_bard: [
-    { bg: 'inn_day' }, { hide: 'all' },
+    { bg: 'inn_day' }, { hide: 'all' }, { set: { 'ser.bard': 1 } },
     { narr: '문간에서 류트 소리가 들렸다. 낡은 외투를 걸친 떠돌이 음유시인이 모자를 벗어 들고 서 있다. "노래 한 곡에 따뜻한 아침 한 끼, 어떻습니까?"' },
     { choice: [
       { text: '저녁 식당에서 공연해 달라고 부탁한다 (5G 사례)', cost: 5, set: { rep: 1, 'today.cust': 1, 'today.note': '음유시인의 소문을 듣고 단골이 한 명 더 찾아온다' }, goto: 'rev_bard_stage' },

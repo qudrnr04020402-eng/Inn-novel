@@ -79,6 +79,15 @@
   C.routine = function (T, vars, day, evalCond) {
     var RT = root.TAVERN_ROUTINE, CC = root.CalCore, wk = CC.weekOf(day), key = C.routineKey(day);
     var has = function (arr, x) { return !arr || arr.indexOf(x) >= 0; };
+    var gcd = function (a, b) { return b ? gcd(b, a % b) : a; };
+    var cop = function (len, pref) { var s = pref; while (gcd(s, len) !== 1) s++; return s; };
+    // 날짜로 돌려 쓰기: 같은 목록에서 며칠 안에는 같은 항목이 다시 나오지 않는다 (세이브 시드로 시작 위치만 달라짐)
+    var cyc = function (arr, k, extra) {
+      var len = arr.length; if (len <= 1) return arr[0];
+      return arr[(Math.floor(rr(vars, 0, 200 + k) * len) + day * cop(len, 3) + (extra || 0)) % len];
+    };
+    // 주차(w)와 조건(if)에 맞는 항목만
+    var okLine = function (l) { return has(l.w, wk) && (!l.if || !evalCond || evalCond(l.if, vars)); };
     var rank = (vars.inn && vars.inn.rank) || 1, n = RT.count[Math.min(wk, RT.count.length) - 1] || 3;
     Object.keys(RT.rankBonus || {}).forEach(function (r) { if (rank >= Number(r)) n += RT.rankBonus[r]; });
     var list = [], used = {};
@@ -87,24 +96,25 @@
     hs.sort(function (a, b) { return rr(vars, day, 20 + root.HEROINES.indexOf(a)) - rr(vars, day, 20 + root.HEROINES.indexOf(b)); });
     hs.slice(0, 2).forEach(function (h) {
       var hd = RT.heroines[h]; if (!hd) return;
-      var pick = function (arr, k) { return arr[Math.floor(rr(vars, day, k) * arr.length) % arr.length]; };
-      list.push({ who: h, say: [pick(hd.lines, 30 + root.HEROINES.indexOf(h))], order: pick(hd.orders, 40 + root.HEROINES.indexOf(h)), __h: true });
+      var hi = root.HEROINES.indexOf(h);
+      var hl = hd.lines.filter(okLine), ho = hd.orders.filter(okLine);
+      list.push({ who: h, say: [cyc(hl.length ? hl : hd.lines, 30 + hi)], order: cyc(ho.length ? ho : hd.orders, 40 + hi), __h: true });
       used[h] = true;
     });
     // 일반 손님: 시드 순으로 섞어서 앞에서부터
-    var pool = RT.customers.filter(function (c) { return has(c.w, wk); }).map(function (c, i) { return { c: c, r: rr(vars, day, 60 + i) }; });
+    var pool = RT.customers.filter(function (c) { return has(c.w, wk); }).map(function (c, i) { return { c: c, r: rr(vars, day, 60 + i), k: RT.customers.indexOf(c) }; });
     pool.sort(function (a, b) { return a.r - b.r; });
-    var oi = Math.floor(rr(vars, day, 90) * RT.orders.length);
+    var ords = RT.orders.filter(okLine), olen = ords.length, ostep = cop(olen, 11), ostride = cop(olen, 7);
+    var oi = (Math.floor(rr(vars, 0, 190) * olen) + day * ostep) % olen;
+    var lineOf = function (c, k, alt) { var ls = c.lines.filter(okLine); return cyc(ls.length ? ls : c.lines, k, alt || 0); };
     for (var i = 0; i < pool.length && list.length < n + hs.slice(0, 2).length; i++) {
       var c = pool[i].c; if (used[c.who]) continue; used[c.who] = true;
-      var line = c.lines[Math.floor(rr(vars, day, 100 + i) * c.lines.length) % c.lines.length];
-      var od = RT.orders[(oi + i * 7) % RT.orders.length];
-      list.push({ who: c.who, say: [line], order: od });
+      list.push({ who: c.who, say: [lineOf(c, pool[i].k)], order: ords[(oi + i * ostride) % olen] });
     }
     // 업그레이드 간판: 단골 한 명씩 더 (조건식이라 간판이 없으면 건너뜀)
-    var extra = pool.map(function (x) { return x.c; }).filter(function (c) { return !used[c.who]; });
-    if (extra.length) { var c2 = extra[0]; list.push({ who: c2.who, if: 'tavern.upg.sign', say: [c2.lines[0]], order: RT.orders[(oi + 3) % RT.orders.length] }); }
-    if (extra.length > 1) { var c3 = extra[1]; list.push({ who: c3.who, if: 'tavern.upg.sign2', say: [c3.lines[1 % c3.lines.length]], order: RT.orders[(oi + 11) % RT.orders.length] }); }
+    var extra = pool.filter(function (x) { return !used[x.c.who]; });
+    if (extra.length) { var c2 = extra[0]; list.push({ who: c2.c.who, if: 'tavern.upg.sign', say: [lineOf(c2.c, c2.k, 1)], order: ords[(oi + 3) % olen] }); }
+    if (extra.length > 1) { var c3 = extra[1]; list.push({ who: c3.c.who, if: 'tavern.upg.sign2', say: [lineOf(c3.c, c3.k, 2)], order: ords[(oi + 11) % olen] }); }
     T.days[key] = { bg: 'inn_evening', customers: list, routine: true };
     // 특별 주문 (그 주의 특별 주문 날짜에 해당하면)
     delete T.specials[key];

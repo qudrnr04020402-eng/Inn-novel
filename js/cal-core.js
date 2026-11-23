@@ -127,11 +127,17 @@
     var list = (root.HEROINE_EVENTS[h] || []).filter(function (e) { return e.kind !== 'extra'; });
     return list[(vars.ev || {})[h] || 0] || null;
   };
-  C.plainFor = function (vars, h) {
+  // 평범한 하루: PLAIN_DAYS.<id> 목록에서 지금 조건(minWeek/maxWeek/minDay/maxDay/minAff/if)에 맞고 아직 안 본 장면을 순서대로 고른다.
+  //  본 기록은 장면이 남기는 evdone.<장면 id> 입니다. 다 봤으면 조건에 맞는 장면을 돌려 가며 다시 보여 줍니다.
+  C.plainFor = function (vars, h, evalCond) {
     var list = (root.PLAIN_DAYS || {})[h] || [];
     if (!list.length) return null;
     C.ensure(vars);
-    return list[(vars.pl[h] || 0) % list.length];
+    var ok = list.filter(function (e) { return C.eventReady(vars, e, h, evalCond || function () { return true; }); });
+    if (!ok.length) ok = list.filter(function (e) { return !e.minWeek && !e.minAff && !e.minDay && !e['if']; });
+    if (!ok.length) ok = list;
+    var fresh = ok.filter(function (e) { return !vars.evdone[e.scene]; });
+    return fresh.length ? fresh[0] : ok[(vars.pl[h] || 0) % ok.length];
   };
   // 낮 행동 선택지 전체: 히로인별 (순서 이벤트 또는 평범한 하루) + 호감도 조건 이벤트들 + 행동(DAY_ACTIONS)
   C.pickOptions = function (vars, evalCond) {
@@ -141,7 +147,7 @@
       var nx = C.nextSeq(vars, h);
       if (nx && C.eventReady(vars, nx, h, evalCond)) opts.push({ who: h, text: nx.text, tag: nx.tag || '', goto: nx.scene, ev: nx.id });
       else {
-        var pl = C.plainFor(vars, h);
+        var pl = C.plainFor(vars, h, evalCond);
         if (pl) opts.push({ who: h, text: pl.text, tag: '평범한 하루', goto: pl.scene, ev: 'plain' });
       }
       (root.HEROINE_EVENTS[h] || []).forEach(function (e) {

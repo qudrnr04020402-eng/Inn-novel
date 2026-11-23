@@ -46,7 +46,8 @@ window.LODGING = {
     satPoints: 1         // 요청을 만족시킨 팀 하나당 여관 등급 점수 (story/inn-rank.js 의 satWeight 와 곱해짐)
   },
 
-  // ---------- 손님 12팀 ----------
+  // ---------- 손님 22팀 (일반 22 + 사절단 3) ----------
+  //  w: (선택) 이 주차들에만 나온다. 예) w: [3, 4]
   //  kind: 한 줄 소개, req: 요청 키, bonus: 만족 보너스 G, cap: (선택) 이 금액까지만 낼 수 있음(싼 방 손님이 비싼 방에 들어가도 더 안 냄)
   //  say: 접수 때 하는 한 줄 요청,  ok: 만족했을 때 아침 한마디,  meh: 요청이 안 맞았을 때 아침 한마디
   guests: [
@@ -74,6 +75,27 @@ window.LODGING = {
       say: '허리가 옛날 같지 않아서 말이오. 푹신한 침대로 부탁하오.',   ok: '허허, 오랜만에 기사 시절 막사보다 편했소.',          meh: '…바닥에서 자는 것과 별 차이 없더군. 허허.' },
     { id: 'doctor',    name: '순회 의사 엘름', kind: '순회 의사',   glyph: '의', color: '#a8c0e8', req: 'quiet',  bonus: 6,
       say: '밤에 환자 생각을 정리해야 해서요. 조용한 방이 필요합니다.', ok: '덕분에 푹 쉬었습니다. 건강하세요!',                meh: '옆방 소리가 좀… 그래도 감사합니다.' },
+    // ---- 2단계 추가 손님 (w: 나올 수 있는 주차) ----
+    { id: 'tinker',    name: '땜장이 보리스', kind: '떠돌이 땜장이', glyph: '땜', color: '#e0a878', req: 'cheap',  bonus: 4, cap: 6,
+      say: '냄비 몇 개만 고쳐 주고 하룻밤 자면 되오. 싼 방이면 족하오.', ok: '아침에 국자 손잡이 하나 공짜로 고쳐 놨소!',         meh: '비싼 방은 쇠 냄새가 안 나서 잠이 안 오더군.' },
+    { id: 'dancer',    name: '유랑 무희 루나', kind: '유랑 무희',    glyph: '무', color: '#ff8fb8', req: 'window', bonus: 8, w: [1, 2, 3],
+      say: '달빛 아래서 연습해야 춤이 늘어요. 창가 방 있나요?',      ok: '달빛이 딱 좋았어요! 광장에서 한 곡 보여 드릴게요.', meh: '창이 작아서 팔을 쭉 못 폈지 뭐예요.' },
+    { id: 'fisher',    name: '호수 낚시꾼 가르', kind: '낚시꾼',     glyph: '낚', color: '#7fc4e8', req: 'quiet',  bonus: 6, w: [1, 2, 3],
+      say: '새벽 입질에 집중하려면 조용해야 하오. 조용한 방이오.',    ok: '새벽 잉어가 물었소! 오늘 생선은 내가 쏘겠소.',      meh: '옆방 소리 때문에 입질을 놓쳤소…' },
+    { id: 'saltgirl',  name: '소금 상인 딸 오리', kind: '소금 상인', glyph: '염', color: '#e8e0f0', req: 'soft',   bonus: 7, w: [2, 3, 4],
+      say: '아버지 대신 짐 싣고 왔어요. 푹신한 침대에서 자고 싶어요!', ok: '소금 포대 베개보다 백 배 좋았어요! 소금 한 봉지 선물!', meh: '침대가 딱딱해서 소금 포대가 그립네요…' },
+    { id: 'acolyte',   name: '신전 수련 사제 마르코', kind: '신전 사제', glyph: '사', color: '#c8d8ff', req: 'quiet', bonus: 7, w: [2, 3, 4],
+      say: '리아 수련생을 찾아왔습니다. 기도할 수 있게 조용한 방을요.', ok: '평안한 밤이었습니다. 리아 수련생의 소식도 잘 전하겠습니다.', meh: '소란했지만… 이것도 수련이겠지요.' },
+    { id: 'courier',   name: '급행 배달부 핀',  kind: '우편 배달부', glyph: '편', color: '#ffd27f', req: 'any',    bonus: 3, w: [2, 3, 4],
+      say: '새벽 첫 닭이 울면 바로 떠나야 해요! 아무 방이나요!',      ok: '번개처럼 잤어요! 편지는 내일 아침 도착해요!',        meh: '번개처럼 잤어요! 편지는 내일 아침 도착해요!' },
+    { id: 'mercs',     name: '용병 삼형제',    kind: '용병단',       glyph: '용', color: '#d8a0a0', req: 'wide',   bonus: 9, w: [3, 4],
+      say: '셋이 한 방을 쓰기로 했소. 넓은 방이 있다면 좋겠군.',       ok: '발 뻗고 잔 게 몇 달 만이오! 마을 경비는 맡겨 두시오.', meh: '좁아서 형제끼리 발로 차며 잤소…' },
+    { id: 'refugee',   name: '산 너머 피난 가족', kind: '피난 가족',  glyph: '가', color: '#b8c0c8', req: 'cheap',  bonus: 3, cap: 6, w: [4],
+      say: '산 너머가 소란스러워서 내려왔어요. 가진 게 많지 않은데… 싼 방이면.', ok: '따뜻한 곳에서 아이들이 푹 잤어요. 정말 고맙습니다.',   meh: '방값이 부담이었지만… 아이들이 잘 자서 다행이에요.' },
+    { id: 'mapmaker',  name: '지도 제작자 아델', kind: '지도 제작자', glyph: '도', color: '#c8e0a0', req: 'window', bonus: 8, w: [2, 3, 4],
+      say: '이 마을 근처 지형을 그려야 해요. 창가 방이면 멀리까지 보이겠죠?', ok: '언덕 너머까지 한눈에 그렸어요! 이 여관도 지도에 넣어 둘게요.', meh: '창이 작아서 반쪽만 그렸어요…' },
+    { id: 'cookwander', name: '떠돌이 요리사 오트', kind: '요리사',   glyph: '요', color: '#f0c890', req: 'soft',   bonus: 6, w: [1, 2, 3, 4],
+      say: '하루 종일 서서 일해서 말이오. 푹신한 침대에서 자 보고 싶소.', ok: '덕분에 푹 잤소! 아침 주방 구경 좀 해도 되겠소?',      meh: '침대가 딱딱했지만, 이 집 수프 향이 위로가 됐소.' },
     // 19일차 사절단 일행 (only:true = 평소 무작위 손님에는 안 나옴, special.19 로 그날 고정 배정). 특실 수요가 높다.
     { id: 'env_chief',  only: true, name: '사절단장 이졸데', kind: '왕립 학술원',  glyph: '단', color: '#b3a8e8', req: 'wide',   bonus: 12,
       say: '문서를 펼칠 넓은 방이 필요합니다. 특실이 있다면 그쪽으로.',    ok: '충분했습니다. 보고서에 이 여관을 좋게 적겠습니다.', meh: '좁았지만 불평은 하지 않겠습니다. 기록은 하겠지만요.' },
@@ -98,6 +120,17 @@ window.LODGING = {
       cat:       { title: '몰래 들어온 고양이', weight: 1 },
       cloak:     { title: '수상한 손님의 정체', weight: 3, if: 'lodge.hosted.cloak' },
       drunk:     { title: '술 취한 손님',     weight: 1 },
+      rain_guest: { title: '비 오는 밤의 나그네', weight: 1 },
+      snorer:    { title: '코 고는 손님',     weight: 1 },
+      fox_fire:  { title: '마당의 여우불',     weight: 1, if: 'aff.miho>=' + HEART(1) },
+      midnight_snack: { title: '한밤의 주방',  weight: 1, if: 'aff.erion>=' + HEART(1) },
+      night_watch: { title: '카엘라의 야간 순찰', weight: 1, if: 'aff.kaela>=' + HEART(1) },
+      lullaby:   { title: '복도의 자장가',     weight: 1, if: 'aff.lia>=' + HEART(1) },
+      tremor:    { title: '흔들리는 밤',       weight: 1, if: 'cal.week>=2' },
+      scribe_night: { title: '밤새 필사하는 서기', weight: 1, if: 'cal.week>=3' },
+      firefly:   { title: '반딧불이의 마당',   weight: 1, if: 'cal.week<=2' },
+      cold_night: { title: '꺼져 가는 불씨',   weight: 1, if: 'cal.week>=3' },
+      calm_before: { title: '폭풍 전의 고요',  weight: 1, if: 'cal.week>=4' },
       stars:     { title: '별똥별의 밤',      weight: 1, if: 'aff.erion>=' + HEART(1) + ' || aff.kaela>=' + HEART(1) + ' || aff.miho>=' + HEART(1) + ' || aff.lia>=' + HEART(1) }
     }
   }

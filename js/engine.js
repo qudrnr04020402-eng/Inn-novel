@@ -726,6 +726,7 @@
       takeSnap(nd + '일차 아침');
       if (nd > 1 && ninf.chapterStart && !snapLocked && snap) { var ws = clone(snap); ws.label = ninf.week + '주차 시작 (' + nd + '일차)'; writeSlot('wk', ws); }
       S.vars.time = c.time || '아침';
+      if (ninf.chapterStart) S.vars.wk = { day: nd, gold: S.vars.gold || 0, rep: S.vars.rep || 0, aff: clone(S.vars.aff || {}), rank: (S.vars.inn && S.vars.inn.rank) || 1 };   // 주간 정산 카드의 비교 기준
       CalCore.setDay(S.vars, nd);
       if (nd > 1) CalCore.sleep(S.vars, ninf.holiday);       // 자고 일어나면 피로 회복 (휴일은 더 많이)
       CalCore.flavorDay(S.vars, nd);
@@ -747,6 +748,7 @@
       } else showCard(nd + '일차', dsub, dtip);
       return true;
     }
+    if ('weekcard' in c) { showWeekCard(); return true; }   // 주간 정산 카드: {weekcard:true} (이번 주 영업/평판/등급/호감도 변화 요약)
     if ('cal' in c) { // 달력으로 다음 장면 정하기: {cal:'next'} 다음 날 아침 / {cal:'evening'} 오늘 저녁 (story/calendar.js)
       var cd = S.vars.day || 1, cs;
       if (c.cal === 'next') { cs = CalCore.entry(cd + 1); if (cd + 1 > CALENDAR.total) warn('마지막 날 이후로 넘어감: ' + cd); }
@@ -1015,6 +1017,46 @@
     E.cardBody.innerHTML = chap ? '' : h;
     E.card.classList.remove('hidden');
     E.card.classList.remove('in'); void E.card.offsetWidth; E.card.classList.add('in');
+    mode = 'card';
+  }
+
+  // ---------- 주간 정산 카드 (일요일 밤 / 폭풍의 밤 끝: {weekcard:true}) ----------
+  function showWeekCard() {
+    var T = CALENDAR, d = S.vars.day || 1, wk = CalCore.weekOf(d), d0 = (wk - 1) * 7 + 1, d1 = Math.min(wk * 7, T.total);
+    var W = S.vars.wk || { day: d0, gold: (STORY.init && STORY.init.gold) || 0, rep: 0, aff: {}, rank: 1 };
+    var lg = (S.vars.cal && S.vars.cal.log) || {}, net = 0, strip = '';
+    for (var x = d0; x <= d1; x++) {
+      var inf = CalCore.info(x), r = lg[x], q = r ? r.q : (inf.holiday ? '休' : '·');
+      if (r) net += r.g || 0;
+      strip += '<span class="wd' + (inf.holiday ? ' hol' : '') + '"><small>' + inf.dowName + '</small>' + q + '</span>';
+    }
+    InnCore.ensure(S.vars);
+    var rk = S.vars.inn.rank || 1, drep = (S.vars.rep || 0) - (W.rep || 0), dgold = (S.vars.gold || 0) - (W.gold || 0);
+    var sgn = function (n) { return (n > 0 ? '+' : '') + n; };
+    var h = '<div class="card-days">' + strip + '</div>';
+    h += '<div class="card-aff"><span>영업 순이익</span><em>' + sgn(net) + ' G</em></div>';
+    h += '<div class="card-aff"><span>금고 (이번 주)</span><em>' + (S.vars.gold || 0) + ' G (' + sgn(dgold) + ')</em></div>';
+    h += '<div class="card-aff"><span>평판</span><em>' + (S.vars.rep || 0) + ' (' + sgn(drep) + ')</em></div>';
+    h += '<div class="card-aff"><span>여관 등급</span><em>' + InnCore.starStr(rk) + (rk > (W.rank || 1) ? ' (오름!)' : '') + '</em></div>';
+    var best = null, bd = 0;
+    Object.keys(CHARACTERS).forEach(function (id) {
+      var c = CHARACTERS[id];
+      if (!c.affinity) return;
+      var v = (S.vars.aff && S.vars.aff[id]) || 0, dv = v - ((W.aff && W.aff[id]) || 0);
+      if (dv > bd) { bd = dv; best = c.name; }
+      h += '<div class="card-aff"><span style="color:' + c.color + '">' + c.name + '</span><em><b class="hearts">' + heartsHtml(v) + '</b> ' + sgn(dv) + '</em></div>';
+    });
+    var tip = (net > 0 ? '이번 주도 영업으로 ' + net + '골드를 남겼어요.' : '이번 주 영업은 적자였어요.') + (best ? ' 가장 가까워진 사람은 ' + best + '예요.' : ' 이번 주는 누구와도 가까워지지 못했어요.');
+    stopFast(); stopTyping(); clearCg();
+    E.card.classList.remove('chapter');
+    E.dialog.classList.add('hidden'); E.choices.classList.add('hidden');
+    E.cardTitle.textContent = wk + '주차 정산';
+    E.cardSub.textContent = '마감 · ' + d + '일차 밤';
+    E.cardTip.textContent = tip;
+    E.cardBody.innerHTML = h;
+    E.card.classList.remove('hidden');
+    E.card.classList.remove('in'); void E.card.offsetWidth; E.card.classList.add('in');
+    sfx('discover');
     mode = 'card';
   }
 

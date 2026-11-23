@@ -17,6 +17,7 @@ window.STORY = {
     fat: 0,                                          // 주인의 피로 0~100 (영업/숙박으로 쌓이고 휴식/휴일/잠으로 회복. js/cal-core.js)
     cal: { week: 1, dow: 0, roll: 0, log: {}, act: {}, fl: {} },   // 달력 상태: 주차/요일/오늘의 난수(0~99)/일차별 결과 기록/한 일/문구 중복 방지
     pl: { erion: 0, kaela: 0, miho: 0, lia: 0 },     // 각 히로인의 "평범한 하루" 본 횟수 (장면 돌려쓰기)
+    ser: {},                                         // 아침 랜덤 사건 연작의 진행(본 부 수): ser.bard / ser.cookkid / ser.fox
     evdone: {},                                      // 본 조건 이벤트(kind:'extra') / 주간 이벤트 id
     today: { cust: 0, price: 0, tip: 0, note: '' },   // 오늘의 영업 보정 (아침 랜덤 사건: story/random-events.js, 새 일차마다 초기화)
     llm: { day: 0, used: {}, gain: {}, loss: {}, last: '', met: [] }   // 자유 대화(로컬 LLM) 하루 사용량 (story/llm-persona.js)
@@ -41,7 +42,7 @@ window.WIN = function (id, min) {
 
 // 진 엔딩 조건(모두 하트 4칸 이상 + 여관 5성) / 명가 엔딩 조건(여관 5성, 또는 4성에 골드 넉넉) — endings.js, day7.js 가 사용
 window.TRUE_COND = HEROINES.map(function (h) { return 'aff.' + h + '>=' + HEART(4); }).join(' && ') + ' && inn.rank>=5';
-window.MASTER_COND = 'inn.rank>=5 && rep>=50';
+window.MASTER_COND = 'inn.rank>=5 && rep>=50 && inn.sat>=40'; // 명가: 5성 + 평판 50 + 숙박 만족 40 (객실 개조와 손님 응대까지 숙련된 경영만 해당)
 
 Object.assign(STORY.scenes, {
 
@@ -58,7 +59,7 @@ Object.assign(STORY.scenes, {
   //  {lodging:true}  숙박 접수 화면 (story/lodging.js)         {nightev:true}  확률로 밤 사건 장면 (끝나면 {nightret:true} 로 여기 다음 줄로 복귀)
   //  {rankcheck:true} 여관 등급이 올랐으면 축하 화면 (story/inn-rank.js)   {upgrades:true} 여관 손보기 (업그레이드 + 객실 개조)
   //  {cal:'next'}    다음 날 아침 장면으로 (story/calendar.js 의 일정표)
-  night_close: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { goto: 'cal_next' }],
+  night_close: [{ time: '밤' }, { lodging: true }, { nightev: true }, { rankcheck: true }, { upgrades: true }, { if: 'cal.dow==6', goto: 'wk_card_close' }, { goto: 'cal_next' }],
   cal_next: [{ cal: 'next' }],
 
   // 낮 이벤트가 끝나면: CG 걷기 -> (자유 대화 제안) -> (선물 제안) -> (히로인 신경전) -> 그날의 저녁으로

@@ -1055,10 +1055,10 @@ async function main() {
     page.on('request', (r) => { if (/\/assets\/cg\//.test(r.url())) cgReq.push(r.url()); });
     const vis = (id) => page.evaluate((i) => !document.getElementById(i).classList.contains('hidden'), id);
     await page.goto(URL); await page.waitForSelector('#btn-new');
-    chk((await page.locator('#btn-gallery').innerText()).includes('0/22'), '타이틀 갤러리 버튼에 0/22 표시가 없음');
+    chk((await page.locator('#btn-gallery').innerText()).includes('0/30'), '타이틀 갤러리 버튼에 0/30 표시가 없음');
     await page.tap('#btn-gallery'); await page.waitForTimeout(300);
     const e0 = { all: await page.locator('.gal-item').count(), got: await page.locator('.gal-item.got').count(), lock: await page.locator('.gal-item.lock').count() };
-    chk(e0.all === 22 && e0.got === 0 && e0.lock === 22, `빈 갤러리 이상 ${JSON.stringify(e0)}`);
+    chk(e0.all === 30 && e0.got === 0 && e0.lock === 30, `빈 갤러리 이상 ${JSON.stringify(e0)}`);
     chk((await page.locator('.gal-item.lock').first().innerText()).includes('???') && (await page.locator('.gal-item.lock').first().innerText()).includes('에리온'), '미획득 칸에 ??? 와 힌트가 없음');
     await page.screenshot({ path: `${SHOTS}/cg_00_gallery_empty.png` });
     await page.locator('.gal-item.lock').first().tap(); await page.waitForTimeout(100);
@@ -1094,10 +1094,10 @@ async function main() {
     // 갤러리: 1장 획득
     await page.tap('#menu-btn'); await page.tap('#menu-title'); await page.waitForTimeout(300);
     chk(!(await vis('cg')), '타이틀로 나갔는데 CG 가 남음');
-    chk((await page.locator('#btn-gallery').innerText()).includes('1/22'), '갤러리 버튼이 1/22 가 아님');
+    chk((await page.locator('#btn-gallery').innerText()).includes('1/30'), '갤러리 버튼이 1/30 가 아님');
     await page.tap('#btn-gallery'); await page.waitForTimeout(300);
     const e1 = { got: await page.locator('.gal-item.got').count(), lock: await page.locator('.gal-item.lock').count() };
-    chk(e1.got === 1 && e1.lock === 21 && (await page.locator('#gallery-count').innerText()).includes('1 / 22'), `갤러리 1/22 이상 ${JSON.stringify(e1)}`);
+    chk(e1.got === 1 && e1.lock === 29 && (await page.locator('#gallery-count').innerText()).includes('1 / 30'), `갤러리 1/30 이상 ${JSON.stringify(e1)}`);
     chk(await page.locator('.gal-item.got .cg-ph .cg-fig').count() === 1, '갤러리 썸네일에 임시 CG 가 안 보임');
     await page.screenshot({ path: `${SHOTS}/cg_02_gallery_1.png` });
     await page.locator('.gal-item.got').first().tap(); await page.waitForTimeout(400);
@@ -1135,7 +1135,7 @@ async function main() {
     chk(await page.locator('.gal-item[data-cg="erion_end"] img.cg-img').count() === 1 && !(await page.locator('.gal-item[data-cg="erion_end"] .cg-ph').count()), '파일이 있는 CG 가 <img> 로 표시되지 않음');
     chk(await page.locator('.gal-item[data-cg="miho_end"] .cg-ph').count() === 1, '깨진 CG 파일이 임시 CG 로 폴백되지 않음');
     await page.tap('#gallery-close');
-    report.push(`CG: 임시 CG(파일 요청 0, 대사창이 CG 위), 본 CG 기록(localStorage), 세이브/로드 복원, 갤러리 22칸(미획득 ??? + 힌트), 전체 화면 보기/좌우 버튼·스와이프·순환, 파일 CG <img> / 깨진 파일 폴백`);
+    report.push(`CG: 임시 CG(파일 요청 0, 대사창이 CG 위), 본 CG 기록(localStorage), 세이브/로드 복원, 갤러리 30칸(미획득 ??? + 힌트), 전체 화면 보기/좌우 버튼·스와이프·순환, 파일 CG <img> / 깨진 파일 폴백`);
     await ctx.close();
   }
 
@@ -1171,7 +1171,7 @@ async function main() {
       return out;
     });
     chk(lg.dup === 0 && lg.badWeek === 0 && lg.badCond === 0 && lg.badGap === 0 && lg.nondet === 0, `랜덤 사건 로직 이상 ${JSON.stringify(lg)}`);
-    chk(lg.hits / lg.total > 0.25 && lg.hits / lg.total < 0.5 && lg.kinds === 13, `발생률/종류 이상: ${(lg.hits / lg.total).toFixed(3)}, ${lg.kinds}종`);
+    chk(lg.hits / lg.total > 0.25 && lg.hits / lg.total < 0.5 && lg.kinds >= 25, `발생률/종류 이상 (42종 중 25종 이상 나와야 함): ${(lg.hits / lg.total).toFixed(3)}, ${lg.kinds}종`);
     // 2) 실제 게임: 9일차 아침(rt_open 의 랜덤 사건 줄 직전), 사건이 일어나는 시드를 골라 세이브를 만든다 -> 몇 번을 불러와도 같은 사건
     const pickSeed = await page.evaluate(() => {
       for (let seed = 11; seed < 5000; seed++) {
@@ -1267,7 +1267,7 @@ async function main() {
       return page.evaluate(() => ({ pct: document.getElementById('collect-pct').textContent, rows: [...document.querySelectorAll('.col-row .col-n')].map((e) => e.textContent), ok: [...document.querySelectorAll('.col-reward')].map((e) => e.classList.contains('ok')), api: VN.collect.pct })); };
     await setRec(2, 5, 7, 4);
     let c = await col();
-    chk(JSON.stringify(c.rows) === JSON.stringify(['2 / 8', '5 / 22', '7 / 17', '4 / 11']) && c.pct === '31%' && c.api === 31, `수집 수치 이상 ${JSON.stringify(c)} (18/58 = 31%)`);
+    chk(JSON.stringify(c.rows) === JSON.stringify(['2 / 8', '5 / 30', '7 / 17', '4 / 11']) && c.pct === '27%' && c.api === 27, `수집 수치 이상 ${JSON.stringify(c)} (18/66 = 27%)`);
     chk(JSON.stringify(c.ok) === '[false,false,false]', `보상이 잘못 해금됨 ${JSON.stringify(c.ok)}`);
     await page.screenshot({ path: `${SHOTS}/col_01_partial.png` });
     await page.tap('#collect-close');
@@ -1312,7 +1312,7 @@ async function main() {
     await toTitle(page); await page.waitForTimeout(300);
     // 전부 100% -> 타이틀 특별 연출
     chk(!(await page.evaluate(() => document.getElementById('title').classList.contains('perfect'))), '100% 전인데 타이틀 연출이 켜짐');
-    await setRec(8, 22, 17, 11);
+    await setRec(8, 30, 17, 11);
     c = await col();
     chk(c.pct === '100%' && c.ok.every(Boolean), `100% 수집 화면 이상 ${JSON.stringify(c)}`);
     await page.screenshot({ path: `${SHOTS}/col_04_complete.png` });
@@ -1321,7 +1321,7 @@ async function main() {
     chk(pf.cls && pf.stars === 'block' && pf.n >= 20 && pf.cast.length === 4 && pf.cast.every((x) => x === 'smile.webp'), `타이틀 특별 연출 이상 ${JSON.stringify(pf)}`);
     await page.screenshot({ path: `${SHOTS}/col_05_title_perfect.png` });
     chk((await stNow(page)).shift === 0, '수집 화면 가로 스크롤');
-    report.push('수집: 수치 2/8, 5/22, 7/17, 4/11 -> 31% 일치, 보상 잠김/해금(엔딩 3개 -> 시작 골드 +30 적용, 2개면 없음 / 도감 완성 -> 옵션 해금 + 새 게임 시작 때 17개 공개, 16개면 잠김 / 100% -> 타이틀 별빛 연출 + 4명 smile)');
+    report.push('수집: 수치 2/8, 5/30, 7/17, 4/11 -> 27% 일치, 보상 잠김/해금(엔딩 3개 -> 시작 골드 +30 적용, 2개면 없음 / 도감 완성 -> 옵션 해금 + 새 게임 시작 때 17개 공개, 16개면 잠김 / 100% -> 타이틀 별빛 연출 + 4명 smile)');
     await ctx.close();
   }
 

@@ -101,7 +101,9 @@
       return L.roster.ids.map(I.guestDef);
     }
     var n = rnd(vars, day, 41) < Lg.settings.threeChance ? 3 : 2;
-    var regular = Lg.guests.filter(function (g) { return !g.only; });
+    // 주차별 손님: g.w = [나올 수 있는 주차들] (없으면 언제든)
+    var wk = root.CalCore ? root.CalCore.weekOf(day) : Math.ceil(day / 7);
+    var regular = Lg.guests.filter(function (g) { return !g.only && (!g.w || g.w.indexOf(wk) >= 0); });
     var pool = regular.filter(function (g) { return !has(L.seen, g.id); });
     if (pool.length < n) pool = regular.slice();
     pool = pool.map(function (g, i) { return { g: g, k: rnd(vars, day * 31 + i, 42) }; }).sort(function (a, b) { return a.k - b.k; }).map(function (x) { return x.g; });

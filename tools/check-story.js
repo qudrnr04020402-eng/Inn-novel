@@ -20,8 +20,8 @@ const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
 const scenes = STORY.scenes;
 const edges = {};
-const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx', 'cg', 'rand', 'randret', 'lodging', 'nightev', 'nightret', 'rankcheck', 'giftoffer', 'rivalry', 'rivret', 'cal'];
-const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending', 'rand', 'randret', 'nightret', 'rivret', 'cal'];
+const KNOWN = ['say', 'narr', 'choice', 'summary', 'end', 'ending', 'if', 'goto', 'show', 'hide', 'bg', 'day', 'time', 'fx', 'set', 'put', 'tavern', 'learn', 'upgrades', 'talkoffer', 'bgm', 'sfx', 'cg', 'rand', 'randret', 'lodging', 'nightev', 'nightret', 'rankcheck', 'giftoffer', 'rivalry', 'rivret', 'cal', 'weekcard'];
+const TERMINAL = ['goto', 'choice', 'summary', 'end', 'ending', 'rand', 'randret', 'nightret', 'rivret', 'cal', 'weekcard'];
 const files = new Set();
 let lines = 0, choices = 0;
 
@@ -114,7 +114,7 @@ for (const [id, cmds] of Object.entries(scenes)) {
   const sets = [];
   cmds.forEach((c) => { if (c.set) sets.push(c.set); if (c.put) sets.push(c.put); (c.choice || []).forEach((o) => { if (o.set) sets.push(o.set); if (o.put) sets.push(o.put); }); });
   sets.forEach((s) => Object.keys(s).forEach((k) => {
-    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^fat$|^evdone\.\w+$|^pl\.\w+$|^cal\.\w+$|^today\.(cust|price|tip|note)$|^lodge\.(note)$|^gift\.given\.\w+$/);
+    const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^fat$|^evdone\.\w+$|^ser\.\w+$|^pl\.\w+$|^cal\.\w+$|^today\.(cust|price|tip|note)$|^lodge\.(note)$|^gift\.given\.\w+$/);
     if (!m) wn(`[${id}] 변수 이름 확인: ${k}`);
     else if (m[2] && !CHARACTERS[m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
   }));
@@ -130,8 +130,8 @@ const reachedEndings = new Set();
 seen.forEach((id) => scenes[id].forEach((c) => { if ('ending' in c) reachedEndings.add(c.ending); }));
 (ENDINGS || []).forEach((e) => { if (!reachedEndings.has(e.id)) err(`엔딩에 도달할 수 없음: ${e.id}`); });
 (HEROINES || []).forEach((h) => {
-  for (let n = 1; n <= 5; n++) if (!scenes[`${h}_${n}`]) err(`히로인 이벤트 없음: ${h}_${n} (5번째는 깊은 이벤트)`);
-  [1, 2].forEach((n) => { const sc = scenes[`${h}_plain${n}`]; if (!sc) err(`평범한 하루 씬 없음: ${h}_plain${n}`); else { if (!sc.some((c) => c.set && c.set[`aff.${h}`] === 1)) err(`${h}_plain${n}: 호감도 +1 이 없음`); if (!sc.some((c) => c.goto === 'after_pick')) err(`${h}_plain${n}: after_pick 으로 돌아가지 않음`); } });
+  for (let n = 1; n <= 10; n++) if (!scenes[`${h}_${n}`]) err(`히로인 이벤트 없음: ${h}_${n} (5번째는 깊은 이벤트, 6~10은 2단계)`);
+  ((ctx.PLAIN_DAYS || {})[h] || []).map((p, i) => i + 1).forEach((n) => { const sc = scenes[`${h}_plain${n}`]; if (!sc) err(`평범한 하루 씬 없음: ${h}_plain${n}`); else { if (!sc.some((c) => c.set && c.set[`aff.${h}`] === 1)) err(`${h}_plain${n}: 호감도 +1 이 없음`); if (!sc.some((c) => c.goto === 'after_pick')) err(`${h}_plain${n}: after_pick 으로 돌아가지 않음`); } });
   if (!CHARACTERS[h]) err(`HEROINES 의 캐릭터 정의 없음: ${h}`);
 });
 (ENDINGS || []).forEach((e) => { if (e.heroine && !CHARACTERS[e.heroine]) err(`ENDINGS ${e.id}: 없는 heroine ${e.heroine}`); });
@@ -369,7 +369,7 @@ const cgStats = { n: 0, temp: 0, file: 0 };
 if (CG_DEFS) {
   const ids = Object.keys(CG_DEFS);
   cgStats.n = ids.length;
-  if (ids.length !== 22) wn(`CG 는 22장이 목표 (현재 ${ids.length}장: 히로인별 4장 x 4 (깊은 이벤트 1장 포함) + 공용 4장 + 진/명가 엔딩 2장)`);
+  if (ids.length !== 30) wn(`CG 는 30장이 목표 (현재 ${ids.length}장: 히로인별 6장 x 4 + 공용 4장 + 진/명가 엔딩 2장)`);
   ids.forEach((id) => {
     const d = CG_DEFS[id], w = `CG ${id}`;
     if (id === 'hide') err(`${w}: 'hide' 는 예약어`);
@@ -430,6 +430,7 @@ if (RANDOM_EVENTS && EventCore) {
           if (k === 'today.cust' && !(Math.abs(v) <= 1)) err(`${w} ${where}: today.cust 는 ±1`);
           if (k === 'today.price' && !(Math.abs(v) <= 50)) err(`${w} ${where}: today.price 는 ±50%`);
           if (k === 'today.tip' && !(v >= 0 && v <= 100)) err(`${w} ${where}: today.tip 은 0~100%`);
+          if (/^ser\./.test(k) && !(Number.isInteger(v) && v >= 0 && v <= 3)) err(`${w} ${where}: ser 시리즈 카운터는 0~3 정수`);
           if (k === 'today.note' && !(typeof v === 'string' && v)) err(`${w} ${where}: today.note 는 문자열`);
           if (/^(flag|ev|tavern|llm)\./.test(k)) err(`${w} ${where}: 사건에서 ${k} 를 바꾸지 않음 (스토리/영업 진행 보호)`);
         });
@@ -542,7 +543,8 @@ if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
     if (TAVERN.upgrades.some((x) => x.id === u.id)) err(`객실 업그레이드 ${u.id}: 영업 업그레이드 id 와 겹침`);
   });
   const gs = LODGING.guests;
-  if (gs.length < 10) wn(`숙박 손님 10팀 이상 권장 (현재 ${gs.length})`);
+  if (gs.filter((g) => !g.only).length < 20) wn(`일반 숙박 손님은 20팀 이상이 목표 (현재 ${gs.filter((g) => !g.only).length})`);
+  for (let wk = 1; wk <= CALENDAR.weeks; wk++) if (gs.filter((g) => !g.only && (!g.w || g.w.includes(wk))).length < 8) wn(`${wk}주차에 나올 수 있는 숙박 손님이 8팀 미만`);
   if (new Set(gs.map((g) => g.id)).size !== gs.length) err('숙박 손님 id 중복');
   const reqCount = {};
   gs.forEach((g) => {
@@ -550,6 +552,7 @@ if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
     if (!g.name || !g.kind || !g.glyph || !g.color || !g.say || !g.ok || !g.meh) err(`${w}: name/kind/glyph/color/say/ok/meh 확인`);
     if (!req.includes(g.req)) err(`${w}: 없는 요청 ${g.req}`);
     if (!(g.bonus > 0 && g.bonus <= 12)) err(`${w}: bonus 는 1~12G`);
+    if (g.w && (!Array.isArray(g.w) || g.w.some((x) => !(x >= 1 && x <= CALENDAR.weeks)))) err(`${w}: w 는 1~${CALENDAR.weeks} 주차 배열`);
     reqCount[g.req] = (reqCount[g.req] || 0) + 1;
   });
   req.forEach((k) => { if (!reqCount[k]) err(`요청 ${k}: 이 요청을 하는 손님이 없음`); });
@@ -574,7 +577,7 @@ if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
   // ---- 밤 사건 ----
   const NE = LODGING.nightEvents, nIds = Object.keys(NE.events);
   innStats.nev = nIds.length;
-  if (nIds.length < 5 || nIds.length > 6) wn(`밤 사건은 5~6개가 목표 (현재 ${nIds.length}개)`);
+  if (nIds.length < 15) wn(`밤 사건은 15개 이상이 목표 (현재 ${nIds.length}개)`);
   if (!(NE.chance > 0 && NE.chance <= 0.5)) err('LODGING.nightEvents.chance 는 0 초과 0.5 이하 (약 25% 권장)');
   if (!Array.isArray(NE.range) || NE.range.length !== 2 || NE.range[0] < 1 || NE.range[1] > CALENDAR.total - 2) err('LODGING.nightEvents.range 는 [처음, 끝] (1일차 이후, 종장 전까지)');
   if (!scenes.nev_end) err('공용 씬 nev_end 없음');
@@ -610,7 +613,7 @@ if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
     innStats.nevRate = (hit / N).toFixed(3); }
   // 명령 배치: 밤마다(night_close) time -> lodging -> nightev -> rankcheck -> upgrades -> 다음 날 순서
   { const cm = scenes.night_close || [], keys = cm.map((c) => Object.keys(c)[0]).join('>');
-    if (!/lodging>nightev>rankcheck>upgrades>goto$/.test(keys)) err(`night_close: lodging > nightev > rankcheck > upgrades 순서여야 함 (현재 ${keys})`); }
+    if (!/lodging>nightev>rankcheck>upgrades(>if)?>goto$/.test(keys)) err(`night_close: lodging > nightev > rankcheck > upgrades 순서여야 함 (현재 ${keys})`); }
   // ---- 여관 등급 ----
   const st = INN_RANK.stars;
   if (st.length !== 5 || st.some((s2, i) => s2.n !== i + 1 || !s2.name)) err('INN_RANK.stars 는 1~5 등급 5개 (n/name)');
@@ -708,12 +711,13 @@ const calStats = { daily: {}, routine: {} };
   for (let w = 1; w <= 5; w++) ['morning'].forEach((k) => { if (ctx.DAILY[k].filter((e) => !e.w || e.w.includes(w)).length < 6) wn(`DAILY.${k}: ${w}주차에 나올 수 있는 문구가 6줄 미만`); });
   // 낮 행동 3~5개
   const acts = ctx.DAY_ACTIONS; calStats.acts = acts.length;
-  if (acts.length < 3 || acts.length > 5) err(`DAY_ACTIONS 는 3~5개 (현재 ${acts.length})`);
+  const baseActs = acts.filter((a) => !/^sat\d/.test(a.id)); // 토요일 한정 행동(sat1~4)은 주차 조건부 추가 행동
+  if (baseActs.length < 3 || baseActs.length > 5) err(`DAY_ACTIONS(토요일 한정 제외)는 3~5개 (현재 ${baseActs.length})`);
   acts.forEach((a) => { if (!scenes[a.scene]) err(`DAY_ACTIONS.${a.id}: 없는 씬 ${a.scene}`); if (a.if) { try { VN.checkCond(a.if); } catch (e) { err(`DAY_ACTIONS.${a.id}: ${e.message}`); } } });
   // 히로인 이벤트
   HEROINES.forEach((h) => {
     const list = HEROINE_EVENTS[h] || [];
-    if (list.length < 5) err(`HEROINE_EVENTS.${h} 가 ${list.length}개 (5개 이상)`);
+    if (list.length < 10) err(`HEROINE_EVENTS.${h} 가 ${list.length}개 (10개 이상: 순서 9개 + 깊은 이벤트 1)`);
     const ids = new Set();
     list.forEach((e) => {
       if (ids.has(e.id)) err(`HEROINE_EVENTS.${h}: 중복 id ${e.id}`); ids.add(e.id);
@@ -722,7 +726,8 @@ const calStats = { daily: {}, routine: {} };
       if (e.if) { try { VN.checkCond(e.if); } catch (x) { err(`HEROINE_EVENTS.${h}.${e.id}: ${x.message}`); } }
     });
     const plain = (ctx.PLAIN_DAYS || {})[h] || [];
-    if (plain.length < 3) err(`PLAIN_DAYS.${h} 가 ${plain.length}개 (평범한 하루 3개 이상)`);
+    if (plain.length < 6) err(`PLAIN_DAYS.${h} 가 ${plain.length}개 (평범한 하루 6개 이상)`);
+    plain.forEach((p) => { if (p.if) { try { VN.checkCond(p.if); } catch (x) { err(`PLAIN_DAYS.${h} ${p.scene}: ${x.message}`); } } });
     plain.forEach((p) => { if (!scenes[p.scene]) err(`PLAIN_DAYS.${h}: 없는 씬 ${p.scene}`); });
   });
   // 주간 이벤트 / 산책
@@ -771,6 +776,26 @@ const calStats = { daily: {}, routine: {} };
         if (q.length < 3 || q.length > 11) err(`일상 영업 ${d}일차: 손님 ${q.length}명 (3~11명)`);
       }
     }
+    // 반복 체감: 같은 손님이 가까운 날(3일 안)에 같은 대사/같은 주문 문장을 또 하는 비율, 30일 동안 쓰인 서로 다른 대사/주문 수
+    { let near = 0, tot = 0, nearO = 0, totO = 0; const lineSet = new Set(), ordSet = new Set(), perWho = {}; let uniqL = 0, uniqO = 0, totL = 0;
+      for (let sd = 1; sd <= 12; sd++) {
+        const v = { rev: { seed: sd * 7919, used: [] }, aff: {}, inn: { rank: 3 }, tavern: { upg: {} } }, last = {}, lastO = {}, sdL = new Set(), sdO = new Set();
+        for (let d = 1; d <= C.total; d++) {
+          const inf = CalCore.info(d); if (inf.main || inf.holiday) continue;
+          v.day = d; const key = TavernCore.routine(T, v, d, VN.evalCond);
+          (T.days[key].customers || []).filter((c) => !c.if).forEach((c) => {
+            const lt = c.say[0].text, ot = c.order.text; lineSet.add(c.who + '|' + lt); ordSet.add(ot); sdL.add(c.who + '|' + lt); sdO.add(ot); totL++;
+            if (!c.__h) { perWho[c.who] = perWho[c.who] || new Set(); perWho[c.who].add(lt); }
+            if (last[c.who] && d - last[c.who].d <= 3) { tot++; if (last[c.who].t === lt) near++; }
+            last[c.who] = { d, t: lt };
+            if (lastO[ot] && d - lastO[ot] <= 1) nearO++; totO++; lastO[ot] = d;
+          });
+        }
+        uniqL += sdL.size; uniqO += sdO.size;
+      }
+      calStats.routine.repeat = `대사 근접 반복 ${(100 * near / tot).toFixed(1)}% / 주문 하루 간격 반복 ${(100 * nearO / totO).toFixed(1)}% / 한 회차 일상 영업에 나오는 대사 ${(totL / 12).toFixed(0)}번 중 서로 다른 대사 ${(uniqL / 12).toFixed(0)}개 / 서로 다른 주문 문장 ${(uniqO / 12).toFixed(0)}개 (전체 대사 ${lineSet.size}개, 주문 ${ordSet.size}종)`;
+      if (near / tot > 0.03) wn(`일상 영업: 같은 손님이 3일 안에 같은 대사를 반복함 (${(100 * near / tot).toFixed(1)}%)`);
+      if (nearO / totO > 0.03) wn(`일상 영업: 같은 주문 문장이 연속 이틀 나옴 (${(100 * nearO / totO).toFixed(1)}%)`); }
     calStats.routine.queue = `${Math.min(...cnt)}~${Math.max(...cnt)} (평균 ${(cnt.reduce((a, b) => a + b, 0) / cnt.length).toFixed(1)}명)`;
   }
   // 낮 선택지가 어떤 상태에서도 비지 않는가 (평범한 하루 / 행동은 조건 없음)
@@ -1111,12 +1136,28 @@ if (innStats.gift) {
   console.log(`선물: 8종, 반응 ${innStats.giftReact}개 (4x8), 가격 ${Object.values(GIFTS.items).map((d) => d.price).join('/')}G`);
   HEROINES.forEach((h) => console.log(`  - ${h}: ` + Object.entries(innStats.gift[h]).map(([k, v2]) => `${k}[${v2}]`).join(' ')));
   console.log(`숙박: 객실 3 (시작 2), 손님 ${LODGING.guests.length}팀, 요청 ${Object.keys(LODGING.requests).length}종, 객실 개조 ${LODGING.upgrades.length}종, 3팀 비율 ${innStats.three}; 밤 사건 ${innStats.nev}개 (발생률 ${innStats.nevRate}); 여관 등급 기준 ${INN_RANK.stars.map((x) => x.n + '★:' + x.min).join(' ')}; 신경전 ${RIVALRY.pairs.length}쌍 (최대 ${RIVALRY.max}회, 호감도 ${RIVALRY.need} 이상)`);
+  { const WV = ctx.WEEKLY_EVENTS || {}, acts = (ctx.DAY_ACTIONS || []).filter((a) => /^sat\d/.test(a.id)).length;
+    console.log(`콘텐츠 규모: 히로인 이벤트 ${HEROINES.map((h) => (HEROINE_EVENTS[h] || []).length).join('/')}개 (순서 9 + 깊은 1), 평범한 하루 ${HEROINES.map((h) => ((ctx.PLAIN_DAYS || {})[h] || []).length).join('/')}개, 랜덤 아침 사건 ${Object.keys(RANDOM_EVENTS.events).length}개, 밤 사건 ${Object.keys(LODGING.nightEvents.events).length}개, 일반 숙박 손님 ${LODGING.guests.filter((g) => !g.only).length}팀, 주간/마을 이벤트 ${(WV.events || []).length + acts}개 (휴일 ${(WV.events || []).length} + 토요일 ${acts}), CG ${Object.keys(CG_DEFS).length}장`);
+    console.log(`일상 영업 반복도: ${calStats.routine.repeat}`); }
 }
 if (tvStats.taste) console.log('단골 숨은 취향:', JSON.stringify(tvStats.taste));
 if (tvStats.specials) Object.entries(tvStats.specials).forEach(([d, t]) => console.log(`특별 주문 ${d}: ${t}`));
 const per = {}; HEROINES.forEach((h) => { per[h] = Object.keys(scenes).filter((s2) => new RegExp('^' + h + '_').test(s2)).length; });
 stat.read.sort((a, b) => a - b);
 console.log(`한 회차에 읽는 대사/나레이션: 중앙값 ${stat.read[stat.read.length >> 1]}줄 (최소 ${stat.read[0]} ~ 최대 ${stat.read[stat.read.length - 1]}) -> 줄당 3~4초 가정 시 약 ${Math.round(stat.read[stat.read.length >> 1] * 3 / 60)}~${Math.round(stat.read[stat.read.length >> 1] * 4 / 60)}분 + 선택/영업 시간`);
+// 경영 올인 전략 (히로인은 거의 안 만나고 영업/손보기만 -> 명가 엔딩이 숙련자만의 길인지 확인)
+{ const res = {}, N = 40, q = (arr, p) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(p * a.length))]; };
+  console.log('경영 올인 전략 (낮에는 영업/장보기/손보기만, 각 ' + N + '회):');
+  ['expert', 'decent', 'novice', 'lazy'].forEach((pn) => {
+    const rs = []; for (let i = 0; i < N; i++) { const r = simulate(masterPick, POL[pn]); if (!r.error) rs.push(r); }
+    const end = {}; rs.forEach((r) => { end[r.ending] = (end[r.ending] || 0) + 1; });
+    const g = rs.map((r) => r.v.gold || 0), sat = rs.map((r) => (r.v.inn && r.v.inn.sat) || 0), rp = rs.map((r) => r.v.rep || 0), rk = rs.map((r) => (r.v.inn && r.v.inn.rank) || 1);
+    res[pn] = { n: rs.length, master: end.master || 0 };
+    console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(end)} / 명가 ${(100 * (end.master || 0) / rs.length).toFixed(0)}% / 최종 골드 ${q(g, 0.1)}~${q(g, 0.9)} (중앙 ${q(g, 0.5)}) / 만족 ${q(sat, 0.1)}~${q(sat, 0.9)} (중앙 ${q(sat, 0.5)}) / 평판 ${q(rp, 0.1)}~${q(rp, 0.9)} / 5성 ${(100 * rk.filter((x) => x >= 5).length / rs.length).toFixed(0)}%`);
+  });
+  if (res.decent.master / res.decent.n > 0.5) wn(`경영 올인 + decent 영업이 명가 엔딩 ${(100 * res.decent.master / res.decent.n).toFixed(0)}% (숙련자만 노릴 수 있게 50% 이하 권장)`);
+  if (res.expert.master / res.expert.n < 0.6) wn(`경영 올인 + expert 영업의 명가 엔딩이 ${(100 * res.expert.master / res.expert.n).toFixed(0)}% (60% 이상 권장)`);
+  if (res.lazy.master) wn('경영 올인 + lazy 영업인데 명가 엔딩이 나옴'); }
 if (process.argv.includes('--weeks')) {
   const rep = (label, fn, pn, N) => {
     const rs = []; for (let i = 0; i < N; i++) { const r = simulate(fn, POL[pn]); if (!r.error) rs.push(r); }

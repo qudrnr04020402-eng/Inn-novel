@@ -3,15 +3,30 @@
 //  - 휴일 낮 선택 화면(story/routine.js 의 hol_menu)은 이 표로 자동 만들어집니다 (js/cal-core.js 의 holidayOptions).
 //  - events : 주간 이벤트. 조건에 맞고 아직 안 본 것이 휴일 선택지 맨 위에 나옵니다. 한 번 보면 사라집니다(evdone.<id>).
 //      { id, week(주차 하나 또는 배열, 생략하면 모든 주), text(버튼 글), tag, scene(장면 id), minAff(아무 히로인이나 이 호감도 이상일 때만), if(조건식) }
-//      장면의 마지막은 {goto:'hol_end'} 입니다. 주차별 휴일은 1~3주차(7, 14, 21일). 4주차 일요일(28일)은 폭풍의 밤이 대신합니다.
+//      장면의 마지막은 {goto:'hol_end'} 입니다. 주차별 휴일은 1~3주차(7, 14, 21일). 4주차 일요일(28일)은 폭풍의 밤(메인 고정일)이 대신하므로 휴일 메뉴가 없고,
+//      그날 밤 끝(night_close)에서 주간 정산 카드가 나옵니다. 휴일 장면은 story/weekly-scenes.js (소풍만 이 파일 아래) 에 있습니다.
+//  - 토요일 행사(장날 / 사냥 대회 / 수확제 준비)는 낮 행동(story/routine.js 의 DAY_ACTIONS, cal.dow==5 조건)으로 들어 있습니다.
+//  - 주간 정산 카드({weekcard:true})는 일요일 밤(hol_close)과 28일 밤 끝에 나옵니다. (이번 주 영업/평판/등급/호감도 변화)
 //  - walks  : 기본 휴일의 "히로인과 산책"(항상 나옴). 새 산책을 늘리려면 장면을 더 만들고 scene 에 연결하세요.
 //  - extras : 항상 있는 기본 선택지(푹 쉬기 등). 장면 마지막은 {goto:'hol_end'}.
 //  - 2단계 작업자: events 에 한 줄 + 장면만 추가하면 됩니다. (README "주간 이벤트 추가법")
 // ============================================================
 window.WEEKLY_EVENTS = {
   events: [
-    // 예시 1개 (1주차 휴일). 2단계에서 주차별 내용으로 교체/추가하세요.
-    { id: 'wk1_picnic', week: 1, text: '일요일이다. 모두를 불러 마당에서 작은 소풍을 열어 볼까?', tag: '1주차 휴일', scene: 'wk1_picnic' }
+    // ----- 1주차 휴일 (7일) -----
+    { id: 'wk1_picnic', week: 1, text: '일요일이다. 모두를 불러 마당에서 작은 소풍을 열어 볼까?', tag: '1주차 휴일', scene: 'wk1_picnic' },
+    { id: 'wk1_lake_erion', week: [1, 2], text: '에리온이 낚싯대를 두 개 들고 서 있다. "혼자 쓰기엔 하나가 남아서."', tag: '에리온 · 호수 낚시', scene: 'wk1_lake_erion' },
+    { id: 'wk1_herb_lia', week: [1, 2], text: '리아가 바구니를 들고 기다리고 있다. "숲에 약초 캐러 갈래? 월광초가 필 때야."', tag: '리아 · 약초 채집', scene: 'wk1_herb_lia' },
+    // ----- 2주차 휴일 (14일, 달맞이 다음 날) -----
+    { id: 'wk2_market_miho', week: [2, 3], text: '미호가 시장 쪽을 가리킨다. "오늘은 제 장사 감각 수업이에요, 사장님!"', tag: '미호 · 시장 구경', scene: 'wk2_market_miho' },
+    { id: 'wk2_hunt_kaela', week: [2, 3], text: '카엘라가 이마에 "필승" 머리띠를 둘렀다. "숲 열매 따기 승부다, 주인장!"', tag: '카엘라 · 열매 따기', scene: 'wk2_hunt_kaela' },
+    { id: 'wk2_cleanup', week: 2, text: '달맞이 장터 다음 날, 광장이 엉망이다. 촌장님이 일손을 모으고 있다.', tag: '마을 행사 · 뒷정리', scene: 'wk2_cleanup' },
+    // ----- 3주차 휴일 (21일, 사절단이 다녀간 뒤) -----
+    { id: 'wk3_stars_erion', week: 3, if: 'aff.erion>=' + HEART(3), text: '에리온이 담요 두 장을 안고 문 앞에서 기다린다. "…언덕에서 별이 잘 보일 거야."', tag: '에리온 · 언덕 별 보기', scene: 'wk3_stars_erion' },
+    { id: 'wk3_flower_lia', week: 3, if: 'aff.lia>=' + HEART(3), text: '리아가 호숫가 풀밭에 앉아 손짓한다. "꽃반지 만드는 법, 기억나?"', tag: '리아 · 호숫가', scene: 'wk3_flower_lia' },
+    { id: 'wk3_miho_stall', week: [3], text: '미호가 빈 좌판을 가리키며 씩 웃는다. "해 질 때까지 누가 더 파는지 대결해요!"', tag: '미호 · 장사 대결', scene: 'wk3_miho_stall' },
+    { id: 'wk3_kaela_race', week: 3, text: '카엘라가 준비 운동을 하고 있다. "달리기 시합이다! 분수에서 여관까지!"', tag: '카엘라 · 달리기', scene: 'wk3_kaela_race' },
+    { id: 'wk3_cookoff', week: 3, text: '광장에서 마을 추수 국물 경연이 열린다. 은빛 여우관도 나가 볼까?', tag: '마을 행사 · 음식 경연', scene: 'wk3_cookoff' }
   ],
   walks: {
     erion: { text: '에리온에게 산책을 청한다. 집 뒤편 숲길이 조용하다.', scene: 'hol_walk_erion' },
