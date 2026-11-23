@@ -38,6 +38,13 @@ window.CALENDAR = {
     30: { title: '새벽 (엔딩)',                                              mark: '✦', show: 10 }   // 결전(29일)의 다음 날 새벽 카드 -> 엔딩 판정 (scene 없음: day7.js 의 d7_win 이 이어 줌)
   },
 
+  // ---------- 표시 전용 달력 표식 ----------
+  //  main 과 달리 그날의 흐름(휴일 등)은 바꾸지 않고 달력 칸에만 mark/title 을 보여 줍니다. (show: 이 일차부터 미리 보임)
+  //  21일(3주차 일요일)은 휴일 그대로, 밤에 story/route-core.js 의 cf_open(고백의 밤)이 끼어듭니다. (story/routine.js hol_night)
+  marks: {
+    21: { title: '고백의 밤', mark: '♥', show: 14 }
+  },
+
   // 일상일 / 휴일 아침 씬 (story/routine.js)
   routineScene: 'rt_open',
   holidayScene: 'hol_open',

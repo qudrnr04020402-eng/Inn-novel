@@ -116,7 +116,7 @@ for (const [id, cmds] of Object.entries(scenes)) {
   sets.forEach((s) => Object.keys(s).forEach((k) => {
     const m = k.match(/^(gold|rep)$|^(?:aff|ev)\.(\w+)$|^flag\.\w+$|^tavern\.[\w.]+$|^llm\.\w+$|^fat$|^evdone\.\w+$|^ser\.\w+$|^pl\.\w+$|^cal\.\w+$|^today\.(cust|price|tip|note)$|^lodge\.(note)$|^gift\.given\.\w+$/);
     if (!m) wn(`[${id}] 변수 이름 확인: ${k}`);
-    else if (m[2] && !CHARACTERS[m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
+    else if (m[2] && !CHARACTERS[k.startsWith('ev.r_') ? m[2].slice(2) : m[2]]) err(`[${id}] 없는 캐릭터의 변수: ${k}`);
   }));
   const last = cmds[cmds.length - 1];
   if (!TERMINAL.some((k) => k in last)) err(`[${id}] 마지막 명령이 ${TERMINAL.join('/')} 가 아님 (끊긴 흐름)`);
@@ -668,12 +668,12 @@ if (LODGING && INN_RANK && GIFTS && RIVALRY && InnCore) {
     if (!sc5.some((c) => c.set && c.set[`flag.deep_${h}`])) err(`${w}: flag.deep_${h} 를 켜지 않음`);
     if (!sc5.some((c) => c.cg === `${h}_deep`)) err(`${w}: CG ${h}_deep 를 띄우지 않음`);
     if (!CG_DEFS[`${h}_deep`]) err(`${w}: CG_DEFS.${h}_deep 없음`);
-    // 들어가는 곳: HEROINE_EVENTS 의 kind:'extra' (호감도 하트 4칸 조건, 한 번만)
+    // 들어가는 곳: HEROINE_EVENTS 의 kind:'extra' (호감도 하트 3칸 조건, 한 번만)
     const ex = (HEROINE_EVENTS[h] || []).filter((e) => e.scene === `${h}_5`);
     if (ex.length !== 1) err(`${w}: HEROINE_EVENTS.${h} 에 scene:'${h}_5' 항목이 정확히 하나여야 함`);
     else {
       if (ex[0].kind !== 'extra') err(`${w}: kind:'extra' (호감도 조건 이벤트) 여야 함`);
-      if (!(ex[0].minAff >= HEART(4))) err(`${w}: minAff 는 하트 4칸(${HEART(4)}) 이상`);
+      if (!(ex[0].minAff >= HEART(3))) err(`${w}: minAff 는 하트 3칸(${HEART(3)}) 이상`);   // 일정 변경(21일 고백의 밤 준비)으로 4칸 -> 3칸
     }
     Object.entries(scenes).forEach(([sid, cm]) => cm.forEach((c) => (c.choice || []).forEach((o) => { if (o.goto === `${h}_5`) err(`${w}: 선택지로 직접 들어가면 안 됨 [${sid}] (HEROINE_EVENTS 로만)`); })));
   });
@@ -992,7 +992,7 @@ function simulate(pickFn, pol) {
     if ('goto' in c) { sc = c.goto; pc = 0; continue; }
     if ('day' in c) {
       const nd = c.day === 'next' ? v.day + 1 : c.day, inf = CalCore.info(nd);
-      (acc.snap = acc.snap || {})[nd] = { rank: v.inn.rank, rep: v.rep, gold: v.gold, aff: Object.assign({}, v.aff), fat: v.fat, score: InnCore.score(v) };
+      (acc.snap = acc.snap || {})[nd] = { rank: v.inn.rank, rep: v.rep, gold: v.gold, aff: Object.assign({}, v.aff), ev: Object.assign({}, v.ev), fat: v.fat, score: InnCore.score(v) };
       v.time = c.time || '아침'; CalCore.setDay(v, nd); if (nd > 1) CalCore.sleep(v, inf.holiday); EventCore.newDay(v); pc++; continue;
     }
     if ('cal' in c) { sc = c.cal === 'next' ? CalCore.entry(v.day + 1) : CalCore.evening(v.day); pc = 0; continue; }
@@ -1057,7 +1057,7 @@ const badPick = (opts) => opts.reduce((a, b) => ((((b.set && b.set.rep) || 0) - 
 // 평균 집계 도우미
 const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {}, rank: {}, lodge: [], sat: [], gifts: [], giftAff: [], giftSpent: [], deep: [], riv: [], nev: [], score: [], noble: 0, roomUpg: [] });
 const addAgg = (g, r) => {
-  g.n++; g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length); g.taste.push(r.acc.taste); g.spWin.push(r.acc.spWin); g.fail.push(r.v.tavern.fail);
+  g.n++; g.route = (g.route || 0) + (HEROINES.some((h) => r.v.flag['route_' + h]) ? 1 : 0); g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length); g.taste.push(r.acc.taste); g.spWin.push(r.acc.spWin); g.fail.push(r.v.tavern.fail);
   g.end[r.ending] = (g.end[r.ending] || 0) + 1;
   g.rank[r.v.inn.rank] = (g.rank[r.v.inn.rank] || 0) + 1; g.lodge.push(r.acc.lodgeGold); g.sat.push(r.acc.sat); g.gifts.push(r.acc.gifts); g.giftAff.push(r.acc.giftAff); g.giftSpent.push(r.acc.giftSpent);
   g.deep.push(HEROINES.filter((h) => r.v.flag['deep_' + h]).length); g.riv.push(r.acc.riv.length); g.nev.push(r.acc.nev.length); g.score.push(InnCore.score(r.v)); g.noble += r.acc.noble; g.roomUpg.push(r.acc.roomUpg.length);
@@ -1080,7 +1080,7 @@ for (let i = 0; i < 6000; i++) {
   addAgg(stat.byPol[pn], r);
 }
 // (2) 전략: 특정 히로인 집중 / 균등 분배 x 영업 모델 각각
-const focusRes = {}, evenRes = {}, badRes = {}, allRes = {};
+const focusRes = {}, evenRes = {}, badRes = {}, allRes = {}, cfRes = {};
 polNames.forEach((pn) => {
   focusRes[pn] = {}; HEROINES.forEach((h) => { focusRes[pn][h] = agg(); });
   evenRes[pn] = agg(); badRes[pn] = agg(); allRes[pn] = agg();
@@ -1089,6 +1089,10 @@ polNames.forEach((pn) => {
       const r = simulate(focusPick(h, i ? 6 : 0), POL[pn]);
       if (r.error) { err('전략 시뮬레이션: ' + r.error); break; }
       addAgg(focusRes[pn][h], r);
+      // 21일 아침 시점의 집중 히로인 순서 이벤트 수/호감도 -> 고백 자격(ev>=9, 하트 5칸) 달성 비율, 그리고 실제 루트 확정 여부
+      { const s21 = (r.acc.snap || {})[21], rec = (cfRes[pn] = cfRes[pn] || {})[h] = (cfRes[pn][h] || { n: 0, ok: 0, route: 0, ev: [], aff: [], r: [] });
+        rec.n++; if (s21) { rec.ev.push(s21.ev[h] || 0); rec.aff.push(s21.aff[h] || 0); if ((s21.ev[h] || 0) >= 9 && s21.aff[h] >= HEART(5)) rec.ok++; }
+        if (r.v.flag['route_' + h]) rec.route++; rec.r.push((r.v.ev || {})['r_' + h] || 0); }
     }
   });
   for (let i = 0; i < 40; i++) { const r = simulate(i ? (opts, v) => (rnd() < 0.15 ? pickRand(opts) : evenPick(opts, v)) : evenPick, POL[pn]); if (!r.error) addAgg(evenRes[pn], r); }
@@ -1180,6 +1184,10 @@ polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${p
 console.log('히로인 집중 전략(각 40회) 최종 호감도 범위 (loveLine ' + STORY.loveLine + '):');
 polNames.forEach((pn) => { const g = Object.values(focusRes[pn]).reduce((a, b) => { Object.keys(b).forEach((k) => { if (Array.isArray(b[k])) a[k] = (a[k] || []).concat(b[k]); else if (typeof b[k] === 'number') a[k] = (a[k] || 0) + b[k]; else if (k === 'rank') Object.keys(b.rank).forEach((r) => { a.rank[r] = (a.rank[r] || 0) + b.rank[r]; }); }); return a; }, { rank: {}, n: 0 }); console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => console.log(`  - 영업 ${pn}: ` + HEROINES.map((h) => { const a = focusRes[pn][h].aff[h]; return `${h} ${Math.min(...a)}~${Math.max(...a)}`; }).join(' / ') + ` | 엔딩 일치 ` + HEROINES.map((h) => `${focusRes[pn][h].end[h] || 0}/${focusRes[pn][h].n}`).join(' ') + ` | 골드 ${fmt(focusRes[pn][HEROINES[0]].gold)}`));
+console.log(`21일 고백 자격 (집중 전략, 21일 아침 기준 순서 이벤트 ev>=9 && 호감도>=${HEART(5)}) / 실제 루트 확정 / 루트 이벤트 본 수:`);
+polNames.forEach((pn) => console.log(`  - 영업 ${pn}: ` + HEROINES.map((h) => { const c = cfRes[pn][h]; return `${h} 자격 ${c.ok}/${c.n} 확정 ${c.route} (ev ${fmt(c.ev)}, 호감 ${fmt(c.aff)}, 루트이벤트 평균 ${avg(c.r)})`; }).join(' / ')));
+console.log('루트 확정 비율 (21일 고백의 밤 또는 늦은 고백) — 균등/모두챙기기/팬(55%집중):');
+polNames.forEach((pn) => console.log(`  - 영업 ${pn}: 균등 ${evenRes[pn].route || 0}/${evenRes[pn].n} / 모두챙기기 ${allRes[pn].route || 0}/${allRes[pn].n} / 팬 ${fanRes[pn].route || 0}/${fanRes[pn].n}`));
 console.log('균등 분배 전략 (여러 사람에게 고르게):');
 polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`  - 영업 ${pn}: 엔딩 ${JSON.stringify(g.end)} / ` + HEROINES.map((h) => `${h} ${fmt(g.aff[h])}`).join(' ') + ` / 평판 ${fmt(g.rep)}`); });

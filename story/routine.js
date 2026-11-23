@@ -382,7 +382,12 @@ Object.assign(STORY.scenes, {
     { talkoffer: true }, { giftoffer: true }, { rivalry: true },
     { goto: 'hol_night' }
   ],
+  // 21일(3주차 일요일) 밤은 "고백의 밤"(story/route-core.js)이 먼저 끼어들고, 끝나면 cf_after 가 hol_night_rest 로 돌려보낸다
   hol_night: [
+    { if: 'day==21', goto: 'cf_open' },
+    { goto: 'hol_night_rest' }
+  ],
+  hol_night_rest: [
     { bgm: 'inn_night' },
     { time: '밤' }, { bg: 'inn_night' }, { hide: 'all' },
     { narr: '휴일의 밤은 조용하다. 손님 없는 식당에 난로 소리만 남았다.' },

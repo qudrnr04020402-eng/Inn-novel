@@ -127,6 +127,13 @@
     var list = (root.HEROINE_EVENTS[h] || []).filter(function (e) { return e.kind !== 'extra'; });
     return list[(vars.ev || {})[h] || 0] || null;
   };
+  // 루트 확정 히로인의 "다음 루트 이벤트"(story/route-<id>.js 의 ROUTE_EVENTS.<id>) — flag.route_<id> 일 때만, 배열 순서대로. 본 개수는 ev.r_<id>
+  //  ROUTE_EVENTS 가 없거나 루트 미확정이면 null
+  C.nextRoute = function (vars, h) {
+    var list = (root.ROUTE_EVENTS || {})[h];
+    if (!list || !list.length || !((vars.flag || {})['route_' + h])) return null;
+    return list[(vars.ev || {})['r_' + h] || 0] || null;
+  };
   // 평범한 하루: PLAIN_DAYS.<id> 목록에서 지금 조건(minWeek/maxWeek/minDay/maxDay/minAff/if)에 맞고 아직 안 본 장면을 순서대로 고른다.
   //  본 기록은 장면이 남기는 evdone.<장면 id> 입니다. 다 봤으면 조건에 맞는 장면을 돌려 가며 다시 보여 줍니다.
   C.plainFor = function (vars, h, evalCond) {
@@ -144,8 +151,9 @@
     C.ensure(vars);
     var opts = [];
     root.HEROINES.forEach(function (h) {
-      var nx = C.nextSeq(vars, h);
-      if (nx && C.eventReady(vars, nx, h, evalCond)) opts.push({ who: h, text: nx.text, tag: nx.tag || '', goto: nx.scene, ev: nx.id });
+      var nx = C.nextSeq(vars, h), rt = C.nextRoute(vars, h);
+      if (rt && C.eventReady(vars, rt, h, evalCond)) opts.push({ who: h, text: rt.text, tag: rt.tag || '연인', goto: rt.scene, ev: rt.id });   // 루트 확정: 루트 이벤트가 우선
+      else if (nx && C.eventReady(vars, nx, h, evalCond)) opts.push({ who: h, text: nx.text, tag: nx.tag || '', goto: nx.scene, ev: nx.id });
       else {
         var pl = C.plainFor(vars, h, evalCond);
         if (pl) opts.push({ who: h, text: pl.text, tag: '평범한 하루', goto: pl.scene, ev: 'plain' });
@@ -195,6 +203,7 @@
   C.allPickScenes = function () {
     var out = [];
     root.HEROINES.forEach(function (h) { (root.HEROINE_EVENTS[h] || []).forEach(function (e) { out.push(e.scene); }); ((root.PLAIN_DAYS || {})[h] || []).forEach(function (p) { out.push(p.scene); }); });
+    Object.keys(root.ROUTE_EVENTS || {}).forEach(function (h) { (root.ROUTE_EVENTS[h] || []).forEach(function (e) { out.push(e.scene); }); });
     (root.DAY_ACTIONS || []).forEach(function (a) { out.push(a.scene); });
     var W = root.WEEKLY_EVENTS || {};
     (W.events || []).forEach(function (e) { out.push(e.scene); });
@@ -212,6 +221,9 @@
     for (var d = 1; d <= T.total; d++) {
       var inf = C.info(d), m = inf.main, past = d < cur, today = d === cur;
       var showMain = m && (past || today || (m.show && cur >= m.show));
+      // 표시 전용 표식(CALENDAR.marks): 메인 고정일이 아니라서 휴일/일상 흐름은 그대로 두고 달력에만 이름을 붙인다 (예: 21일 고백의 밤)
+      var mk = !m && (T.marks || {})[d], showMk = mk && (past || today || (mk.show && cur >= mk.show));
+      if (showMk) { m = mk; showMain = true; }
       cells.push({
         day: d, week: inf.week, dow: inf.dow, holiday: inf.holiday, ch: inf.chapter.id,
         state: past ? 'past' : today ? 'today' : 'future',
