@@ -174,6 +174,78 @@
     };
   }
 
+  // ---------- 회차(2회차 보너스) / 업적 (js/meta-core.js, story/achievements.js) ----------
+  // 회차 공통 기록: 'runs' 마친 회차 수(없으면 0), 'ach' { 업적 id: 시각 }. 세이브(SAVE_VER)는 그대로이고 vars.run / vars.ng 는 새 게임을 시작할 때 만들어진다.
+  function metaRec() { return { runs: Number(store.get('runs')) || 0, endings: readEndings(), recipes: readRec('recipes') }; }
+  function metaCheck(ending) {   // 업적 확인: 엔딩 / 하루 시작 / 여관 등급 상승 때 부른다. 새로 달성한 업적은 알림으로 알려 준다
+    if (!globalThis.MetaCore || !S || !S.vars) return;
+    var done = readRec('ach'), nw = MetaCore.check({ vars: S.vars, ending: ending || '', endings: readEndings(), recipes: readRec('recipes'), notes: readRec('notes'), cg: readRec('cg'), runs: Number(store.get('runs')) || 0 }, done);
+    if (!nw.length) return;
+    nw.forEach(function (a) { done[a.id] = Date.now(); });
+    store.set('ach', JSON.stringify(done));
+    nw.forEach(function (a, i) {
+      setTimeout(function () { toast('★ 업적 달성: ' + a.name, 'up'); sfx('discover'); }, i * 900);
+      pushLog({ name: '', color: '', text: '★ 업적 달성: ' + a.name });
+    });
+  }
+  function metaEnding(id) {      // 엔딩에 도달: 이번 회차를 한 번만 "마친 회차"로 센다
+    if (!S.vars.runDone) { S.vars.runDone = true; store.set('runs', String(Math.max((Number(store.get('runs')) || 0) + 1, S.vars.run || 1))); }
+    metaCheck(id);
+  }
+  function renderAchievements(box) {   // 수집 화면의 업적 목록: 달성은 이름/설명, 잠긴 것은 힌트
+    var done = readRec('ach'), list = globalThis.ACHIEVEMENTS || [], n = 0;
+    box.innerHTML = '';
+    list.forEach(function (a) {
+      var ok = !!done[a.id]; if (ok) n++;
+      var row = document.createElement('div');
+      row.className = 'col-reward ach' + (ok ? ' ok' : ''); row.setAttribute('data-ach', a.id);
+      row.innerHTML = '<span class="col-lock"></span><span class="col-rtx"><b></b><small></small></span><em></em>';
+      row.querySelector('.col-lock').textContent = ok ? '★' : '잠김';
+      row.querySelector('b').textContent = ok ? a.name : '???';
+      row.querySelector('small').textContent = ok ? a.desc : '힌트: ' + a.hint;
+      row.querySelector('em').textContent = a.cat;
+      box.appendChild(row);
+    });
+    return n + ' / ' + list.length;
+  }
+  var NG = { picks: [] };
+  function newGameClick() {      // 새 게임: 엔딩을 본 적이 있으면 2회차 보너스를 먼저 고른다 (고르지 않고 시작해도 됨)
+    var opts = globalThis.MetaCore ? MetaCore.bonusOptions(metaRec()) : [];
+    if (!opts.length) { startNew(); return; }
+    if (!E.ngplus) {
+      var el = document.createElement('section');
+      el.id = 'ngplus'; el.className = 'overlay hidden';
+      el.innerHTML = '<div class="panel tall"><h2 id="ng-run"></h2><p>지난 이야기의 기억이 조금 남아 있어요.\n보너스를 최대 ' + MetaCore.MAX_PICK + '개까지 골라 주세요. (고르지 않아도 돼요)</p><div id="ng-list"></div><div class="row"><button id="ng-cancel" class="btn" type="button">취소</button><button id="ng-go" class="btn primary" type="button"></button></div></div>';
+      E.title.parentNode.appendChild(el);
+      E.ngplus = el;
+      $('ng-cancel').addEventListener('click', function () { closeOverlay(E.ngplus); });
+      $('ng-go').addEventListener('click', function () { var p = NG.picks.slice(); closeOverlay(E.ngplus); startNew(p); });
+    }
+    NG.picks = [];
+    $('ng-run').textContent = (MetaCore.doneRuns(metaRec().runs, metaRec().endings) + 1) + '회차 보너스';
+    var list = $('ng-list'); list.innerHTML = '';
+    var sync = function () {
+      Array.prototype.forEach.call(list.children, function (b) { b.classList.toggle('on', NG.picks.indexOf(b.getAttribute('data-id')) >= 0); });
+      $('ng-go').textContent = NG.picks.length ? '시작하기 (' + NG.picks.length + '/' + MetaCore.MAX_PICK + ')' : '보너스 없이 시작';
+    };
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'ng-opt'; b.setAttribute('data-id', o.id);
+      b.innerHTML = '<b></b><small></small>';
+      b.querySelector('b').textContent = o.name; b.querySelector('small').textContent = o.desc;
+      b.addEventListener('click', function () {
+        var i = NG.picks.indexOf(o.id);
+        if (i >= 0) NG.picks.splice(i, 1);
+        else if (NG.picks.length < MetaCore.MAX_PICK) NG.picks.push(o.id);
+        else { toast('보너스는 최대 ' + MetaCore.MAX_PICK + '개까지예요', 'down'); return; }
+        sfx('select'); sync();
+      });
+      list.appendChild(b);
+    });
+    sync();
+    openOverlay(E.ngplus);
+  }
+
   // ---------- 설정 (옵션 화면) ----------
   // localStorage 'inn_vn_v5_opt' 에 저장. 회차/세이브와 무관하게 유지된다.
   var OPT_DEF = { textSpeed: 3, autoSpeed: 3, bgm: 60, sfx: 70, mute: false, skipUnread: false, easy: false, allRecipes: false, fastTv: false, autoSkipUpg: false };
@@ -356,6 +428,8 @@
     var st = collectStats();
     E.btnGallery.textContent = '갤러리 (' + st.cats[1].n + '/' + st.cats[1].total + ')';
     E.btnCollect.textContent = '수집 (' + st.pct + '%)';
+    var nrun = globalThis.MetaCore ? MetaCore.doneRuns(store.get('runs'), readEndings()) : 0;
+    $('btn-new').textContent = nrun ? '새 게임 (' + (nrun + 1) + '회차)' : '새 게임';
     E.title.classList.toggle('perfect', st.rewards.perfect);   // 수집 100% 보상: 별빛 연출
   }
 
@@ -491,6 +565,12 @@
       }
       E.collectRewards.appendChild(row);
     });
+    var ab = $('collect-ach');   // 업적 목록 (없으면 만든다)
+    if (!ab) {
+      var h3 = document.createElement('h3'); h3.id = 'collect-ach-h'; ab = document.createElement('div'); ab.id = 'collect-ach';
+      $('collect-body').appendChild(h3); $('collect-body').appendChild(ab);
+    }
+    $('collect-ach-h').textContent = '업적 ' + renderAchievements(ab);
     openOverlay(E.collect);
   }
 
@@ -555,6 +635,7 @@
     var d = document.createElement('div');
     d.className = 'toast ' + (cls || '');
     d.textContent = msg;
+    while (E.toasts.children.length >= 2) E.toasts.removeChild(E.toasts.firstChild);   // 동시에 최대 2개, 새 토스트가 가장 오래된 것을 밀어냄
     E.toasts.appendChild(d);
     setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2200);
   }
@@ -730,6 +811,7 @@
       CalCore.setDay(S.vars, nd);
       if (nd > 1) CalCore.sleep(S.vars, ninf.holiday);       // 자고 일어나면 피로 회복 (휴일은 더 많이)
       CalCore.flavorDay(S.vars, nd);
+      if (globalThis.MetaCore) { MetaCore.onDay(S.vars, nd); metaCheck(''); }   // 2회차 첫 주 피로 보너스 / 업적 확인
       EventCore.newDay(S.vars);   // 오늘의 영업 보정(랜덤 사건)을 새로 시작
       updateHud();
       refreshLlm();
@@ -788,6 +870,7 @@
     }
     if ('ending' in c) { // 엔딩 도달: {ending:'erion'} (endings.js 의 ENDINGS 에 정의된 id)
       var isNew = markEnding(c.ending);
+      metaEnding(c.ending);   // 회차 +1 / 업적 (story/achievements.js)
       takeSnap('엔딩');
       showEnding(c.ending, isNew);
       return true;
@@ -1156,12 +1239,14 @@
   }
 
   // ---------- 세이브 / 로드 ----------
-  function startNew() {
+  function startNew(picks) {
     stopFast();
     S = freshState();
     EventCore.ensure(S.vars, function () { return Math.floor(Math.random() * 4294967296); });   // 이번 회차의 랜덤 사건 시드 (세이브에 저장됨)
     InnCore.ensure(S.vars);
-    var rw = collectStats().rewards, bonus = 0;
+    var rw = collectStats().rewards, bonus = 0, ngLines = [], mr = metaRec();
+    if (globalThis.MetaCore && MetaCore.doneRuns(mr.runs, mr.endings)) ngLines = MetaCore.apply(S.vars, picks, mr);   // 2회차 보너스 (js/meta-core.js)
+    else S.vars.run = 1;
     if (rw.gold) { bonus = REWARD_GOLD; S.vars.gold = (S.vars.gold || 0) + bonus; }   // 수집 보상: 엔딩 3개 이상이면 시작 골드 +30
     if (rw.allRecipes && OPT.allRecipes) {                                            // 수집 보상: 레시피 도감 완성 -> 메뉴판 전부 공개 (설정에서 켠 경우)
       TavernCore.ensure(TAVERN, S.vars);
@@ -1181,6 +1266,7 @@
     renderBg(null);
     run();
     if (bonus && mode === 'card') E.cardTip.textContent = (E.cardTip.textContent ? E.cardTip.textContent + '\n' : '') + '★ 수집 보상: 시작 골드 +' + bonus + 'G';
+    if (ngLines.length && mode === 'card') E.cardTip.textContent = (E.cardTip.textContent ? E.cardTip.textContent + '\n' : '') + '★ ' + S.vars.run + '회차 보너스: ' + ngLines.join(' / ');
   }
   function loadSnap(sn) {
     if (!sn || !STORY.scenes[sn.scene]) { toTitle(); return; }
@@ -1401,6 +1487,30 @@
     TVE.prog.textContent = progText(); TVE.prog.classList.remove('hidden');
     renderShop();
   }
+  // ----- 오늘 시세 (story/management.js market): 재료 옆 ▲▼ 표시 + 시세판 한두 줄 + (장부 담당이 있으면) 내일 예보 -----
+  function mkBadge(mb, pr, ref) {
+    if (!mb) return '';
+    var p = ref ? Math.round(Math.abs(pr - ref) * 100 / ref) : 0;
+    if (mb.sale) return ' <i class="mk sale">특가' + (pr < ref ? ' ▼' + p + '%' : '') + '</i>';
+    if (pr > ref) return ' <i class="mk up">▲' + p + '%</i>';
+    if (pr < ref) return ' <i class="mk down">▼' + p + '%</i>';
+    return '';
+  }
+  function mkWord(x) { return TAVERN.ingredients[x.id].name + ' ' + (x.eff > 0 ? '▲' : x.eff < 0 ? '▼' : '') + (x.eff ? Math.abs(x.eff) + '%' : '보합'); }
+  function mkForecast(V) { return MgmtCore.quote(V, 1).filter(function (x) { return x.sale || x.now !== x.ref; }).sort(function (a, b) { return (b.sale ? 99 : 0) + Math.abs(b.eff) - (a.sale ? 99 : 0) - Math.abs(a.eff); }).slice(0, 4); }
+  function renderMarket() {
+    var el = $('tv-market'), V = S.vars;
+    if (!el) { el = tvEl('div', 'tv-market'); el.id = 'tv-market'; TVE.shopList.parentNode.insertBefore(el, TVE.shopList); }
+    if (!MgmtCore.marketOn(V.day)) { el.classList.add('hidden'); return; }
+    var news = MgmtCore.news(V), h = '<b>오늘 시세</b> <small>평소가보다 오른 건 ▲, 내린 건 ▼</small>';
+    news.forEach(function (n) { h += '<p class="' + (n.sale ? 'sale' : '') + '">' + (n.sale ? '★ 특가 · ' + TAVERN.ingredients[n.id].name + ' — ' : '') + n.text + '</p>'; });
+    if (!news.length) h += '<p>오늘은 시세가 잔잔해요.</p>';
+    if (MgmtCore.fx(V, 'forecast')) {
+      var fc = mkForecast(V);
+      h += '<p class="fc">내일 예보 (베른 영감) — ' + (fc.length ? fc.map(function (x) { return (x.sale ? '특가 ' : '') + mkWord(x); }).join(', ') : '큰 변동 없음') + '</p>';
+    }
+    el.innerHTML = h; el.classList.remove('hidden');
+  }
   function renderShop() {
     var st = S.vars.tavern.stock;
     TVE.shopGold.textContent = tvGold();
@@ -1413,12 +1523,14 @@
     TVE.shopLast.disabled = !lbN; TVE.shopLast.title = lbN ? '지난 장보기: ' + Object.keys(lb).map(function (k) { return TAVERN.ingredients[k].name + '×' + lb[k]; }).join(', ') : '지난 장보기 기록이 없어요';
     TVE.shopList.innerHTML = '';
     cartClamp();
+    var MB = {}; MgmtCore.board(S.vars).forEach(function (x) { MB[x.id] = x; });
+    renderMarket();
     Object.keys(TAVERN.ingredients).forEach(function (id) {
       var g = TAVERN.ingredients[id], pr = TavernCore.price(TAVERN, S.vars, id), q = TV.cart[id] || 0, have = shopRefundable(id);
       var row = tvEl('div', 'tv-row');
       row.dataset.id = id;
       row.appendChild(tvIcon(id, 'tv-icon'));
-      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + '</b><small>' + (pr !== g.price ? '<s>' + g.price + '</s> <em class="tv-sale' + (pr > g.price ? ' up' : '') + '">' + pr + 'G</em>' : pr + 'G') + ' · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span>' + (have ? ' · <span class="tv-have">오늘 산 물건 ' + have + '</span>' : '') + '</small>');
+      var mid = tvEl('div', 'tv-row-mid', '<b>' + g.name + mkBadge(MB[id], pr, TavernCore.price(TAVERN, S.vars, id, true)) + '</b><small>' + (pr !== g.price ? '<s>' + g.price + '</s> <em class="tv-sale' + (pr > g.price ? ' up' : '') + '">' + pr + 'G</em>' : pr + 'G') + ' · 재고 <span class="tv-stk">' + (st[id] || 0) + '</span>' + (have ? ' · <span class="tv-have">오늘 산 물건 ' + have + '</span>' : '') + '</small>');
       row.appendChild(mid);
       row.appendChild(stepper(q, q > -have, tvGold() - cartNet() >= pr,
         function () { shopStep(id, -1); }, function () { shopStep(id, 1); }));
@@ -1760,6 +1872,19 @@
     TVE.found.classList.remove('hidden');
   }
 
+  // 레시피 해금 트리: 조건을 채웠거나(무료) 연구비를 내고 해금 (story/management.js nodes)
+  function unlockRecipe(id, fillable) {
+    var r = MgmtCore.unlock(S.vars, id), def = TAVERN.recipes[id];
+    if (!r.ok) { toast(r.reason === 'gold' ? '연구비가 모자라요' : '아직 해금할 수 없어요', 'down'); return; }
+    sfx('coin');
+    toast('레시피 ' + (r.how === 'free' ? '해금' : '연구 완료') + ': ' + def.name + (r.paid ? ' (-' + r.paid + 'G)' : ''), 'up');
+    pushLog({ name: '', color: '', text: '★ 레시피 ' + (r.how === 'free' ? '해금' : '연구 완료') + ': ' + def.name + (r.paid ? ' (연구비 -' + r.paid + 'G)' : '') });
+    recordKnown(); updateHud();
+    if (TVE.upg && !TVE.upg.classList.contains('hidden')) takeSnap('레시피 해금');
+    var sc = TVE.boardList.parentNode.scrollTop; openBoard(fillable); TVE.boardList.parentNode.scrollTop = sc;
+    if (TVE.upg && !TVE.upg.classList.contains('hidden')) renderUpgrades();
+    if (TVE.shop && !TVE.shop.classList.contains('hidden')) renderShop();
+  }
   // ----- 메뉴판 (알게 된 레시피) -----
   function openBoard(fillable) {
     sfx('page');
@@ -1773,16 +1898,22 @@
       var g = TAVERN.tags[t];
       TVE.boardTags.appendChild(tvEl('div', 'tv-gloss', '<em class="tv-tag" style="border-color:' + g.color + ';color:' + g.color + '">' + t + '</em><span>' + g.words + '</span>'));
     });
-    ids.sort(function (a, b) { return (known[b] ? 1 : 0) - (known[a] ? 1 : 0); }); // 아는 것 먼저 (같으면 정의 순서 유지)
+    ids.sort(function (a, b) { return MgmtCore.tierOf(a) - MgmtCore.tierOf(b); });   // 레시피 해금 트리: 단계별로 묶는다 (같은 단계 안에서는 정의 순서 유지)
+    var lastTier = 0;
     ids.forEach(function (id) {
-      var r = TAVERN.recipes[id], isKnown = !!known[id];
-      var row = tvEl('div', 'tv-recipe' + (isKnown ? '' : ' unk'));
+      var r = TAVERN.recipes[id], isKnown = !!known[id], tr = MgmtCore.tierOf(id);
+      if (tr !== lastTier) {
+        lastTier = tr;
+        var td = MGMT.tiers.filter(function (x) { return x.n === tr; })[0] || { name: '' }, inTier = ids.filter(function (x) { return MgmtCore.tierOf(x) === tr; });
+        TVE.boardList.appendChild(tvEl('div', 'tv-tier', '<span>' + tr + '단계 · ' + td.name + '</span><small>' + inTier.filter(function (x) { return known[x]; }).length + ' / ' + inTier.length + '</small>'));
+      }
+      var row = tvEl('div', 'tv-recipe' + (isKnown ? '' : ' unk lock'));
       row.dataset.id = id;
       if (isKnown) {
         var ic = tvEl('div', 'tv-recipe-ing');
         r.ing.forEach(function (i) { ic.appendChild(tvIcon(i, 'tv-icon sm')); });
         row.appendChild(ic);
-        row.appendChild(tvEl('div', 'tv-recipe-tx', '<b>' + r.name + '</b><span>' + tagChips(r.tags) + '</span>'));
+        row.appendChild(tvEl('div', 'tv-recipe-tx', '<b>' + r.name + '</b><span>' + tagChips(r.tags) + '</span>' + (MgmtCore.mastery(S.vars, id) ? '<span class="tv-cond">대성공 ' + MgmtCore.mastery(S.vars, id) + '회</span>' : '')));
         row.appendChild(tvEl('div', 'tv-recipe-price', r.price + 'G'));
         if (fillable) {
           row.classList.add('use');
@@ -1793,8 +1924,20 @@
           });
         }
       } else {
+        var inf = MgmtCore.info(S.vars, id);
         row.appendChild(tvEl('div', 'tv-recipe-ing', '<span class="tv-q">?</span>'.repeat(r.ing.length)));
-        row.appendChild(tvEl('div', 'tv-recipe-tx', '<b>???</b><span class="hint">' + (r.hint || '아직 모르는 레시피.') + '</span>'));
+        var tx = tvEl('div', 'tv-recipe-tx', '<b>???</b><span class="hint">' + (r.hint || '아직 모르는 레시피.') + '</span>');
+        if (inf.how) tx.appendChild(tvEl('span', 'tv-cond', '🔒 ' + inf.how));
+        else if (inf.blocked.length) tx.appendChild(tvEl('span', 'tv-cond no', '🔒 먼저 알아야 해요: ' + inf.blocked.join(', ')));
+        if (!inf.how) inf.conds.forEach(function (c, i) { tx.appendChild(tvEl('span', 'tv-cond ' + (c.ok ? 'ok' : 'no'), (i ? '또는 ' : '') + (c.ok ? '✓ ' : '· ') + c.text)); });
+        if (inf.canResearch) tx.appendChild(tvEl('span', 'tv-cond', '또는 연구비 ' + inf.cost + 'G'));
+        row.appendChild(tx);
+        if (!inf.how && !inf.blocked.length && (inf.free || inf.canResearch)) {
+          var ub = tvEl('button', 'tv-unlock' + (inf.free ? ' free' : ''), inf.free ? '해금' : '연구<br>' + inf.cost + 'G'); ub.type = 'button';
+          if (!inf.free && tvGold() < inf.cost) ub.disabled = true;
+          ub.addEventListener('click', function () { unlockRecipe(id, fillable); });
+          row.appendChild(ub);
+        }
       }
       TVE.boardList.appendChild(row);
     });
@@ -1854,7 +1997,9 @@
     tvPanel('sum');
     E.toasts.innerHTML = ''; // 마지막 손님의 알림이 결산 위에 남지 않게 정리
     TVE.prog.classList.add('hidden');
-    var net = TV.sold + TV.tips + TV.spGold - TV.spent, repNow = TV.repSum + (TV.reward ? TV.reward.rep : 0);
+    var wg = MgmtCore.settle(S.vars, false);   // 직원 급여 미리보기 (실제 지급은 "영업 종료" 때)
+    TV.wage = wg;
+    var net = TV.sold + TV.tips + TV.spGold - TV.spent - wg.total, repNow = TV.repSum + (TV.reward ? TV.reward.rep : 0);
     var aff = {};
     TV.results.forEach(function (r) { if (r.aff) aff[r.who] = (aff[r.who] || 0) + r.aff; });
     var h = '';
@@ -1866,6 +2011,14 @@
     }
     if (TV.reward) h += '<div class="sum-row sp ok"><span>★ ' + ((CHARACTERS[TV.reward.who] || {}).name || '귀한 손님') + '의 사례</span><b class="plus">+' + TV.reward.gold + ' G / 평판 +' + TV.reward.rep + '</b></div>';
     h += '<div class="sum-row"><span>장보기</span><b>-' + TV.spent + ' G</b></div>';
+    if (wg.rows.length) {
+      if (wg.total) h += '<div class="sum-row"><span>직원 급여 (' + wg.rows.filter(function (r) { return r.paid; }).map(function (r) { return r.name; }).join(', ') + ')</span><b class="minus">-' + wg.total + ' G</b></div>';
+      wg.quit.forEach(function (d) { h += '<div class="sum-row bad"><span>⚠ ' + MgmtCore.quitText(d) + '</span></div>'; });
+      var qp = MgmtCore.quip(S.vars, wg.rows);
+      if (qp) h += '<div class="sum-row"><span>' + qp.name + ' <small>(' + qp.role + ')</small> ' + qp.text + '</span></div>';
+    }
+    var fr = MgmtCore.freeReady(S.vars);
+    if (fr.length) h += '<div class="sum-row"><span>📖 메뉴판에서 무료로 해금할 수 있는 레시피 ' + fr.length + '개</span></div>';
     h += '<div class="sum-row total"><span>손익</span><b class="' + (net >= 0 ? 'plus' : 'minus') + '">' + (net >= 0 ? '+' : '') + net + ' G</b></div>';
     h += '<div class="sum-row"><span>평판</span><b class="' + (repNow >= 0 ? 'plus' : 'minus') + '">' + (repNow > 0 ? '+' : '') + repNow + '</b></div>';
     Object.keys(aff).forEach(function (id) {
@@ -1894,7 +2047,10 @@
     var ts = t.t, tot = ts.perfect + ts.good + ts.fail + ts.mystery;   // 달력에 남기는 그날의 영업 결과 기호
     CalCore.ensure(S.vars);
     S.vars.cal.log[S.vars.day || 1] = { q: !tot ? '×' : ts.perfect / tot >= 0.6 ? '◎' : ts.perfect / tot >= 0.34 ? '○' : '△', g: TV.sold + TV.tips - TV.spent, r: TV.repSum };
-    CalCore.addFat(S.vars, CALENDAR.fatigue.business);   // 영업을 마치면 피로가 쌓인다
+    CalCore.addFat(S.vars, MgmtCore.bizFat(S.vars, CALENDAR.fatigue.business));   // 영업을 마치면 피로가 쌓인다 (직원 '주방 보조'가 덜어 줌)
+    var wgp = MgmtCore.settle(S.vars, true);   // 직원 급여 지급 (골드가 모자라면 그만둠)
+    wgp.quit.forEach(function (d) { toast(MgmtCore.quitText(d), 'down'); pushLog({ name: '', color: '', text: '⚠ ' + MgmtCore.quitText(d) }); });
+    if (wgp.total) { updateHud(); pushLog({ name: '', color: '', text: '— 직원 급여 -' + wgp.total + 'G —' }); }
     pushLog({ name: '', color: '', text: '— 영업 결산: 매출 ' + TV.sold + 'G, 팁 ' + TV.tips + 'G' + (TV.spGold ? ', 특별 주문 +' + TV.spGold + 'G' : '') + ', 장보기 ' + TV.spent + 'G —' });
     tvReset();
     S.scene = ret.scene; S.pc = ret.pc + 1;
@@ -1907,13 +2063,15 @@
   function anyBuyable() {
     InnCore.ensure(S.vars);
     var have = S.vars.tavern.upg, g = tvGold();
+    // 무료로 해금할 수 있는 레시피가 있으면 손보기 화면을 건너뛰지 않는다 (직원 고용은 구매가 아니라서 건너뛰기 판단에 넣지 않음)
     return TAVERN.upgrades.some(function (u) { return !have[u.id] && g >= u.price && (!u.needs || have[u.needs]); }) ||
-      LODGING.upgrades.some(function (u) { return InnCore.buyRoomUpg(S.vars, u) === 'ok'; });
+      LODGING.upgrades.some(function (u) { return InnCore.buyRoomUpg(S.vars, u) === 'ok'; }) || MgmtCore.freeReady(S.vars).length > 0;
   }
   // 이 밤 화면에서 산 것 (화면을 떠나기 전까지 취소 가능): { tav:{id:{learned:[새로 배운 레시피]}}, room:{id:true} }
   var UPB = { tav: {}, room: {} };
+  var UPTAB = 'upg';   // 손보기 화면의 탭: 'upg' 개조 / 'staff' 직원
   function openUpgrades() {
-    UPB = { tav: {}, room: {} };
+    UPB = { tav: {}, room: {} }; UPTAB = 'upg';
     stopFast();
     TavernCore.ensure(TAVERN, S.vars);
     if (OPT.autoSkipUpg && !anyBuyable()) {   // 설정: 살 게 없으면 손보기 화면을 건너뛴다
@@ -1929,10 +2087,67 @@
     mode = 'tavern';
     renderUpgrades();
   }
+  // 손보기 화면 위쪽 탭: 개조 / 직원 / 레시피(메뉴판 열기)
+  function upgTabs() {
+    var w = tvEl('div', 'tv-upg-tabs'), n = MgmtCore.hiredList(S.vars).length;
+    [['upg', '개조'], ['staff', '직원 ' + n + '/' + MGMT.staffMax], ['recipe', '레시피 연구']].forEach(function (d) {
+      var b = tvEl('button', 'btn' + (d[0] === UPTAB ? ' on' : ''), d[1]); b.type = 'button'; b.dataset.tab = d[0];
+      b.addEventListener('click', function () {
+        sfx('tap');
+        if (d[0] === 'recipe') { openBoard(false); return; }
+        UPTAB = d[0]; renderUpgrades();
+      });
+      w.appendChild(b);
+    });
+    return w;
+  }
+  // 직원 탭: 고용 / 해고 (급여는 영업을 마칠 때 하루 한 번)
+  function renderStaff() {
+    var V = S.vars, st = MgmtCore.ensure(V), hired = MgmtCore.hiredList(V), total = MgmtCore.wageTotal(V);
+    TVE.upgList.appendChild(tvEl('p', 'tv-staff-note' + (total > tvGold() ? ' warn' : ''),
+      '직원 급여는 영업을 마칠 때마다 나가요. 지금 급여 <b>하루 ' + total + 'G</b>' + (total > tvGold() ? ' — 골드가 모자라면 직원이 그만둬요!' : ' · 고용 ' + hired.length + '/' + MGMT.staffMax)));
+    MGMT.staff.forEach(function (d) {
+      var on = !!st.hired[d.id], ui = MgmtCore.unlockInfo(V, d), full = !on && hired.length >= MGMT.staffMax;
+      var card = tvEl('div', 'tv-upg-card staff' + (on ? ' on' : '') + (!ui.ok ? ' locked' : '')); card.dataset.id = d.id;
+      var qt = '';
+      if (on) { var qs = d.quips || []; qt = qs.length ? qs[((V.day || 1) + d.id.length) % qs.length] : ''; }
+      else if (ui.ok) qt = (d.hire || [])[0] || '';
+      card.appendChild(tvEl('div', 'tv-upg-tx', '<b>' + d.name + ' <small>' + d.role + '</small></b><span>' + d.effect + ' · <em class="wage">일급 ' + d.wage + 'G</em></span>' +
+        (ui.ok ? (qt ? '<span class="qt">' + qt + '</span>' : '') : '<span>' + ui.text + '에 고용할 수 있어요</span>')));
+      var b = tvEl('button', 'tv-upg-buy' + (on ? ' cancel' : ''), on ? '해고' : !ui.ok ? '잠김' : full ? '자리 없음' : '고용');
+      b.type = 'button';
+      if (!on && (!ui.ok || full)) b.disabled = true;
+      b.addEventListener('click', function () { if (on) fireStaff(d); else hireStaff(d); });
+      card.appendChild(b);
+      TVE.upgList.appendChild(card);
+    });
+    var nxt = MgmtCore.fx(V, 'forecast') ? mkForecast(V) : null;
+    if (nxt) TVE.upgList.appendChild(tvEl('p', 'tv-staff-note', '내일 시세 예보 (베른 영감) — ' + (nxt.length ? nxt.map(mkWord).join(', ') : '큰 변동 없음')));
+  }
+  function hireStaff(d) {
+    var r = MgmtCore.hire(S.vars, d.id);
+    if (r !== 'ok') { toast(r === 'max' ? '직원 자리가 가득 찼어요' : '아직 고용할 수 없어요', 'down'); return; }
+    sfx('coin');
+    var hl = d.hire || [];
+    toast(d.name + '(' + d.role + ') 고용 · ' + (hl[0] || ''), 'up');
+    if (hl[1]) setTimeout(function () { toast(d.name + ': ' + hl[1], 'up'); }, 900);
+    pushLog({ name: '', color: '', text: '★ 직원 고용: ' + d.name + ' (' + d.role + ', 일급 ' + d.wage + 'G) ' + hl.join(' ') });
+    takeSnap('직원 고용');
+    renderUpgrades();
+  }
+  function fireStaff(d) {
+    if (!MgmtCore.fire(S.vars, d.id)) return;
+    sfx('tap');
+    toast(d.name + ' 해고 · ' + (d.fire || ''), 'down');
+    takeSnap('직원 해고');
+    renderUpgrades();
+  }
   function renderUpgrades() {
     var have = S.vars.tavern.upg;
     TVE.upgGold.textContent = tvGold();
     TVE.upgList.innerHTML = '';
+    TVE.upgList.appendChild(upgTabs());
+    if (UPTAB === 'staff') { renderStaff(); return; }
     TAVERN.upgrades.forEach(function (u) {
       var owned = !!have[u.id], lockedBy = u.needs && !have[u.needs] ? u.needs : '';
       var card = tvEl('div', 'tv-upg-card' + (owned ? ' owned' : '') + (lockedBy ? ' locked' : ''));
@@ -2151,6 +2366,7 @@
     var r = InnCore.checkRank(S.vars);
     updateHud();
     if (!r) return false;
+    metaCheck('');   // 여관 등급 업적
     var to = r.to, texts = [];
     r.levels.forEach(function (n) {
       var u = INN_RANK.unlocks[n];
@@ -2824,7 +3040,7 @@
     Object.keys(BACKGROUNDS).forEach(function (k) { new Image().src = BACKGROUNDS[k]; });
 
     // 타이틀
-    $('btn-new').addEventListener('click', startNew);
+    $('btn-new').addEventListener('click', newGameClick);
     E.btnContinue.addEventListener('click', function () {
       var d = readSlot('auto');
       if (d) loadSnap(d.snap);
@@ -2851,7 +3067,7 @@
     $('menu-log').addEventListener('click', function () { closeOverlay(E.menu); openBacklog(); });
     $('menu-restart').addEventListener('click', function () {
       closeOverlay(E.menu);
-      ask('처음부터 다시 시작할까요?\n(저장하지 않은 진행은 사라져요)', startNew);
+      ask('처음부터 다시 시작할까요?\n(저장하지 않은 진행은 사라져요)', newGameClick);
     });
     $('menu-title').addEventListener('click', function () { closeOverlay(E.menu); toTitle(); });
     $('slots-close').addEventListener('click', function () { closeOverlay(E.slots); });

@@ -129,12 +129,23 @@
   };
 
   // 장보기 재료 값 (아침 랜덤 사건의 오늘 가격 보정 vars.today.price % 반영, 최소 1G)
-  C.price = function (T, vars, id) {
-    var base = T.ingredients[id].price, pct = ((vars && vars.today && vars.today.price) | 0);
+  //  noMarket=true 면 그날의 시세 변동(MgmtCore)과 장부 담당 할인을 빼고 "평소가"를 돌려준다 (장보기 화면의 ▲▼ 비교용)
+  C.price = function (T, vars, id, noMarket) {
+    var base = T.ingredients[id].price, pct = ((vars && vars.today && vars.today.price) | 0), mk = 0;
     var CAL = root.CALENDAR, wk = root.CalCore && vars ? root.CalCore.weekOf(vars.day || 1) : 1;
     if (CAL && CAL.price) pct += CAL.price[wk] || 0;                 // 주차별 재료 물가 (story/calendar.js 의 price)
     if (vars && vars.tavern && vars.tavern.upg && vars.tavern.upg.cellar && T.rules.cellarPct) pct -= T.rules.cellarPct;   // '저장고' 업그레이드: 재료 값 할인
-    return pct ? Math.max(1, Math.round(base * (100 + pct) / 100)) : base;
+    // 직원 '장부 담당' 재료 할인은 평소가에 포함, 재료 시세 변동(story/management.js market)은 그 위에 곱한다
+    if (vars && root.MgmtCore) {
+      pct += root.MgmtCore.fx(vars, 'ingPct') || 0;
+      if (!noMarket) mk = root.MgmtCore.marketPct(vars, id);
+    }
+    var ref = pct ? Math.max(1, Math.round(base * (100 + pct) / 100)) : base;
+    if (!mk) return ref;
+    var p = Math.max(1, Math.round(base * (100 + pct) / 100 * (100 + mk) / 100));
+    // 값이 싼 재료는 반올림에 묻혀 시세가 안 보이므로, 변동이 큰 날(15%+)은 최소 1G 는 오르내리게 한다
+    if (p === ref && Math.abs(mk) >= 15) p = Math.max(1, ref + (mk > 0 ? 1 : -1));
+    return p;
   };
   // 특별 주문 판정: 모든 손님이 대성공(재료 조건 포함)이어야 성공. results = 그 특별 주문의 serve/skip 결과들
   C.specialVerdict = function (T, dayId, results) {
@@ -174,7 +185,7 @@
     var t = vars.tavern = vars.tavern || {};
     ['perfect', 'good', 'fail', 'mystery', 'served', 'skipped', 'sales', 'tips'].forEach(function (k) { if (typeof t[k] !== 'number') t[k] = 0; });
     ['spWin', 'spLose', 'tasteHits'].forEach(function (k) { if (typeof t[k] !== 'number') t[k] = 0; });
-    ['stock', 'known', 'upg', 'fav', 'days', 'notes', 'sp'].forEach(function (k) { if (!t[k] || typeof t[k] !== 'object') t[k] = {}; });
+    ['stock', 'known', 'upg', 'fav', 'days', 'notes', 'sp', 'mastery'].forEach(function (k) { if (!t[k] || typeof t[k] !== 'object') t[k] = {}; });
     if (!t.t || typeof t.t !== 'object') t.t = { perfect: 0, good: 0, fail: 0, mystery: 0 };
     return t;
   };
@@ -226,6 +237,7 @@
     else if (tip && t.upg.barrel) tip = Math.ceil(tip * R.barrelTip);
     var tipPct = ((vars.today && vars.today.tip) | 0);   // 아침 랜덤 사건: 오늘 팁 보정 % (예: 비 오는 날 +50)
     if (tip && tipPct) tip = Math.ceil(tip * (100 + tipPct) / 100);
+    if (tip && root.MgmtCore) tip = root.MgmtCore.tip(vars, tip);   // 직원 '서빙': 팁 +%
     if (t.upg.stove && (order.want || []).indexOf('따뜻함') >= 0 && (result === 'perfect' || result === 'good')) { tip += (t.upg.stove2 ? (R.stoveBonus2 || R.stoveBonus) : R.stoveBonus); out.stove = true; }
     // 단골 보너스: 주문을 (대성공/보통으로) 맞히면서 숨은 취향까지 맞췄을 때 팁과 평판이 조금 더
     var note = C.note(vars, who);
@@ -255,6 +267,7 @@
     if (out.fav) note.fav = true;
     if (out.hate && note.hate.indexOf(recipe.id) < 0) note.hate.push(recipe.id);
     t.served++; t[result]++; t.t[result]++;
+    if (recipe && result === 'perfect') t.mastery[recipe.id] = (t.mastery[recipe.id] || 0) + 1;   // 레시피 해금 트리: 대성공 횟수
     t.sales += out.sale; t.tips += out.tip;
     return out;
   };

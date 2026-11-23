@@ -390,7 +390,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
 .tv-actions .btn.primary { flex: 1.4; }
 
 /* 전체 화면형 패널 (장보기 / 결산 / 업그레이드 / 메뉴판) */
-.tv-full { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(56px + var(--safe-t)) 16px calc(16px + var(--safe-b));
+.tv-full { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(88px + var(--safe-t)) 16px calc(16px + var(--safe-b));   /* 상단 HUD(2줄) 칩 아래에서 시작 */
   background: radial-gradient(circle at 50% 20%, rgba(40, 30, 90, .97), rgba(6, 6, 22, .98)); }
 .tv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .tv-head h2 { margin: 0; font-size: 24px; color: #fff3d8; }
@@ -763,3 +763,37 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
 .cart-btns .btn:disabled { opacity: .35; }
 .tv-upg-buy.cancel { background: rgba(255, 255, 255, .14); color: #fff3d8; border: 1px solid rgba(255, 190, 110, .8); font-size: 14px; line-height: 1.2; }
 .tv-upg-buy.cancel small { display: block; font-size: 11px; font-weight: 400; opacity: .85; }
+
+/* ---- 경영 심화: 재료 시세 / 직원 / 레시피 트리 (story/management.js) ---- */
+.tv-market { margin: 0 0 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 1px solid var(--line); font-size: 12px; line-height: 1.5; word-break: keep-all; }
+.tv-market b { font-size: 13px; color: #fff3d8; } .tv-market small { opacity: .65; margin-left: 4px; }
+.tv-market p { margin: 3px 0 0; opacity: .9; } .tv-market p.sale { color: #9bf0b0; } .tv-market p.fc { color: #ffe08a; opacity: 1; }
+.mk { font-style: normal; font-size: 11px; font-weight: 700; margin-left: 5px; padding: 1px 5px; border-radius: 8px; vertical-align: 1px; }
+.mk.up { color: #ff9b9b; background: rgba(255, 120, 120, .15); } .mk.down { color: #9bd0ff; background: rgba(120, 180, 255, .15); }
+.mk.sale { color: #1c1a10; background: #ffe08a; }
+.tv-staff-head { margin: 14px 2px 4px; }
+.tv-staff-note { margin: 0 2px 8px; font-size: 12px; line-height: 1.5; opacity: .8; word-break: keep-all; }
+.tv-staff-note.warn { color: #ffb4a0; opacity: 1; }
+.tv-upg-card.staff .tv-upg-tx span { display: block; margin-top: 2px; }
+.tv-upg-card.staff .qt { color: #ffe08a; font-style: italic; opacity: .9; }
+.tv-upg-card.staff .wage { color: #ffe08a; }
+.tv-upg-card.staff.on { border-color: rgba(255, 224, 138, .6); }
+.tv-upg-card.staff.locked { opacity: .5; }
+.tv-recipes-btn { width: 100%; margin: 4px 0 10px; }
+.tv-tier { margin: 12px 2px 4px; font-size: 14px; color: #fff3d8; display: flex; justify-content: space-between; gap: 8px; } .tv-tier small { font-size: 11px; opacity: .65; font-weight: 400; }
+.tv-recipe.lock { align-items: flex-start; flex-wrap: wrap; }
+.tv-recipe.lock .tv-recipe-tx { flex: 1 1 140px; }
+.tv-cond { font-size: 11px; line-height: 1.5; opacity: .85; } .tv-cond.ok { color: #9bf0b0; opacity: 1; } .tv-cond.no { opacity: .7; }
+.tv-unlock { flex: 0 0 auto; align-self: center; padding: 6px 10px; border-radius: 12px; border: 1px solid rgba(255, 224, 138, .7); background: rgba(255, 224, 138, .15); color: #ffe08a; font-size: 12px; font-weight: 700; }
+.tv-unlock:disabled { opacity: .4; }
+.tv-unlock.free { color: #9bf0b0; border-color: rgba(155, 240, 176, .7); background: rgba(155, 240, 176, .15); }
+.tv-upg-tabs { display: flex; gap: 6px; margin: 0 0 10px; }
+.tv-upg-tabs .btn { flex: 1; margin-top: 0; min-height: 40px; font-size: 14px; padding: 0 6px; }
+.tv-upg-tabs .btn.on { background: rgba(255, 180, 84, .3); border-color: var(--accent); }
+
+/* HUD 칩을 항상 컴팩트하게: 칩 줄(2번째 줄)이 최대 310px 이라 340px 이상 화면(데스크톱의 9:16 프레임 포함)에서
+   HUD가 2줄을 넘지 않음. 3줄이 되면 영업 화면 패널 제목("장보기" 등)과 겹치므로 미디어 쿼리 없이 기본 적용.
+   날짜 칩 줄만 메뉴 버튼 옆에 있으므로 HUD 오른쪽 여백을 줄여도 메뉴와 겹치지 않음. */
+#hud { gap: 5px 4px; right: 8px; left: 8px; }
+#hud .hud-item:not(.day) { padding: 4px 7px; font-size: 12px; gap: 4px; }
+.fatbar { width: 26px; }

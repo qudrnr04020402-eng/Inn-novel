@@ -1,13 +1,13 @@
 // 서비스 워커: 오프라인 캐시 (네트워크 우선, 실패하면 캐시)
 // 파일을 추가/수정한 뒤 배포할 때는 아래 VERSION 숫자를 올리면 예전 캐시가 정리됩니다.
-const VERSION = 'v13-route'; // 2단계 콘텐츠(이벤트 6~10/주간/랜덤 확장) 30일 구성(달력/주차/피로/일상일) 버전 (이전: v10-cart) (배포 때마다 올려서 폰의 옛 캐시를 정리)
+const VERSION = 'v14-mgmt-meta'; // 2단계 콘텐츠(이벤트 6~10/주간/랜덤 확장) 30일 구성(달력/주차/피로/일상일) 버전 (이전: v10-cart) (배포 때마다 올려서 폰의 옛 캐시를 정리)
 const CACHE = 'inn-vn-' + VERSION;
 // 미리 캐시할 파일 (tools/check-story.js 가 이 목록과 실제 파일을 비교해 줍니다)
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/style.css', 'js/cal-core.js', 'js/tavern-core.js', 'js/event-core.js', 'js/inn-core.js', 'js/llm-core.js', 'js/sfx.js', 'js/bgm.js', 'js/engine.js',
+  'css/style.css', 'css/meta.css', 'js/meta-core.js', 'js/cal-core.js', 'js/tavern-core.js', 'js/mgmt-core.js', 'js/event-core.js', 'js/inn-core.js', 'js/llm-core.js', 'js/sfx.js', 'js/bgm.js', 'js/engine.js',
   'story/characters.js', 'story/backgrounds.js', 'story/cg.js', 'story/audio.js', 'story/common.js', 'story/tavern.js',
-  'story/gifts.js', 'story/lodging.js', 'story/inn-rank.js', 'story/day1.js', 'story/day2.js', 'story/day3.js', 'story/day4.js', 'story/day5.js', 'story/day6.js', 'story/day7.js', 'story/heroine-events.js', 'story/plain-days.js', 'story/calendar.js', 'story/routine.js', 'story/weekly-events.js', 'story/week-main.js', 'story/tavern-routine.js', 'story/endings.js', 'story/deep-events.js', 'story/night-events.js', 'story/rivalry.js', 'story/random-events.js', 'story/random-events-more.js', 'story/night-events-more.js', 'story/weekly-scenes.js', 'story/hev-erion.js', 'story/hev-kaela.js', 'story/hev-miho.js', 'story/hev-lia.js', 'story/route-core.js', 'story/route-erion.js', 'story/route-kaela.js', 'story/route-miho.js', 'story/route-lia.js', 'story/llm-persona.js',
+  'story/gifts.js', 'story/lodging.js', 'story/inn-rank.js', 'story/management.js', 'story/day1.js', 'story/day2.js', 'story/day3.js', 'story/day4.js', 'story/day5.js', 'story/day6.js', 'story/day7.js', 'story/heroine-events.js', 'story/plain-days.js', 'story/calendar.js', 'story/routine.js', 'story/weekly-events.js', 'story/week-main.js', 'story/tavern-routine.js', 'story/endings.js', 'story/deep-events.js', 'story/night-events.js', 'story/rivalry.js', 'story/random-events.js', 'story/random-events-more.js', 'story/night-events-more.js', 'story/weekly-scenes.js', 'story/hev-erion.js', 'story/hev-kaela.js', 'story/hev-miho.js', 'story/hev-lia.js', 'story/route-core.js', 'story/route-erion.js', 'story/route-kaela.js', 'story/route-miho.js', 'story/route-lia.js', 'story/week2-crisis.js', 'story/ngplus.js', 'story/achievements.js', 'story/llm-persona.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'assets/bg/cave_front.svg', 'assets/bg/cave_inside.svg', 'assets/bg/inn_dawn.svg', 'assets/bg/inn_day.svg', 'assets/bg/inn_evening.svg', 'assets/bg/inn_front.svg', 'assets/bg/inn_night.svg', 'assets/bg/roof_night.svg', 'assets/bg/square_day.svg', 'assets/bg/square_festival.svg',
   'assets/char/erion/normal.webp', 'assets/char/erion/smile.webp', 'assets/char/erion/angry.webp', 'assets/char/erion/shy.webp', 'assets/char/erion/surprised.webp', 'assets/char/erion/sad.webp', 'assets/char/erion/face.webp',

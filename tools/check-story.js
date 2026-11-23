@@ -14,7 +14,7 @@ const load = (f) => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'),
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 scripts.forEach(load);
-const { HEROINE_EVENTS, CALENDAR, CalCore, STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX, CG_DEFS, RANDOM_EVENTS, EventCore, LODGING, INN_RANK, GIFTS, RIVALRY, InnCore, HEART } = ctx;
+const { HEROINE_EVENTS, CALENDAR, CalCore, STORY, CHARACTERS, BACKGROUNDS, VN, ENDINGS, HEROINES, TAVERN, TavernCore, AUDIO, SFX, CG_DEFS, RANDOM_EVENTS, EventCore, LODGING, INN_RANK, GIFTS, RIVALRY, InnCore, HEART, MGMT, MgmtCore } = ctx;
 
 const errors = [], warns = [];
 const err = (m) => errors.push(m), wn = (m) => warns.push(m);
@@ -812,6 +812,66 @@ fs.readdirSync(path.join(root, 'story')).filter((f) => f.endsWith('.js')).forEac
 if (!/const VERSION = '[^']+'/.test(sw)) err('sw.js VERSION 형식 확인');
 
 // ---------- 시뮬레이션 (브라우저 없이 스토리 실행) ----------
+// ----- 경영 심화 데이터 검사: 시세 / 직원 / 레시피 해금 트리 (story/management.js, js/mgmt-core.js) -----
+if (!MGMT || !MgmtCore) err('story/management.js 또는 js/mgmt-core.js 가 index.html 에서 로드되지 않음');
+else {
+  const R = TAVERN.recipes, ings = Object.keys(TAVERN.ingredients);
+  // 시세: 평균 물가가 평소와 비슷해야 한다 (특가 포함, 1~4주차 / 여러 시드 / 모든 재료. 반올림까지 반영한 실제 가격 기준)
+  let sum = 0, cnt = 0, sales = 0, days = 0, big = 0;
+  for (let seed = 1; seed <= 40; seed++) for (let d = MGMT.market.from; d <= 30; d++) {
+    const v = { day: d, rev: { seed, used: [] }, today: { price: 0 }, tavern: { upg: {} } };
+    days++; if (MgmtCore.saleId(seed, d)) sales++;
+    ings.forEach((id) => { const a = TavernCore.price(TAVERN, v, id), b = TavernCore.price(TAVERN, v, id, true); sum += a / b; cnt++; if (a / b >= 1.4) big++; });
+  }
+  const avgMult = sum / cnt;
+  tvStats.market = `평균 시세 배수 ${avgMult.toFixed(3)} (특가 ${(100 * sales / days).toFixed(0)}% 확률, 큰 폭등(+40%↑) ${(100 * big / cnt).toFixed(1)}%)`;
+  if (avgMult < 0.97 || avgMult > 1.04) err(`시세 평균 배수가 ${avgMult.toFixed(3)} (0.97~1.04 이어야 함 — market.bias/swing 조정)`);
+  ings.forEach((id) => { if (!MGMT.market.why[id] || MGMT.market.why[id].length !== 2) err(`market.why.${id}: [오름, 내림] 두 줄이 필요`); });
+  // 같은 시드/일차면 같은 시세 (결정성)
+  { const v1 = { day: 9, rev: { seed: 5, used: [] } }, v2 = { day: 9, rev: { seed: 5, used: [] } }; if (JSON.stringify(MgmtCore.board(v1)) !== JSON.stringify(MgmtCore.board(v2))) err('시세가 결정적이지 않음'); }
+  // 직원
+  const sids = new Set();
+  if (MGMT.staff.length < 3 || MGMT.staff.length > 4) wn(`직원 ${MGMT.staff.length}명 (3~4명 권장)`);
+  MGMT.staff.forEach((d) => {
+    if (sids.has(d.id)) err(`직원 id 중복: ${d.id}`); sids.add(d.id);
+    if (!(d.wage > 0) || !d.name || !d.role || !d.effect) err(`직원 ${d.id}: wage/name/role/effect 누락`);
+    if (!d.unlock || !(d.unlock.week || d.unlock.rank)) err(`직원 ${d.id}: unlock({week|rank}) 필요`);
+    if (!d.fx || !Object.keys(d.fx).length) err(`직원 ${d.id}: fx(효과) 필요`);
+    if (!d.hire || d.hire.length < 1 || d.hire.length > 2 || !d.fire || !(d.quips || []).length) err(`직원 ${d.id}: hire(1~2줄)/fire/quips 필요`);
+    Object.keys(d.fx || {}).forEach((k) => { if (!['tipPct', 'fatBiz', 'ingPct', 'lodgeGold', 'lodgeSat', 'forecast'].includes(k)) err(`직원 ${d.id}: 알 수 없는 효과 ${k}`); });
+  });
+  // 급여 정산: 골드가 모자라면 그만둠 (미리보기는 상태를 바꾸지 않음, 적용하면 같은 결과)
+  { const v = { gold: 9, day: 12, rev: { seed: 1, used: [] }, inn: { rank: 5 } };
+    ['cook', 'waiter', 'maid', 'clerk'].forEach((id) => { if (MgmtCore.hire(v, id) !== 'ok') err(`직원 ${id} 고용 실패 (등급 5, 5일차)`); });
+    const pv = MgmtCore.settle(v, false), g0 = v.gold, n0 = MgmtCore.hiredList(v).length;
+    if (v.gold !== g0 || MgmtCore.hiredList(v).length !== n0) err('급여 미리보기가 상태를 바꿈');
+    const ap = MgmtCore.settle(v, true);
+    if (JSON.stringify(pv.rows) !== JSON.stringify(ap.rows) || pv.total !== ap.total) err('급여 미리보기와 실제 정산이 다름');
+    if (v.gold !== g0 - ap.total || v.gold < 0) err('급여 정산 후 골드가 음수/불일치');
+    if (!ap.quit.length || MgmtCore.hiredList(v).length !== n0 - ap.quit.length) err('골드 부족 시 직원이 그만두지 않음');
+    if (MgmtCore.hire({ day: 1, inn: { rank: 1 }, rev: { seed: 1, used: [] } }, 'clerk') !== 'locked') err('1주차 1성에서 장부 담당을 고용할 수 있음'); }
+  // 레시피 트리: 기본이 아닌 모든 레시피가 트리에 있어야 한다. 조건 대상/선행 레시피가 존재해야 한다.
+  Object.keys(R).forEach((id) => {
+    const n = MGMT.nodes[id];
+    if (R[id].basic) { if (n) err(`트리: 기본 레시피 ${id} 는 노드가 없어야 함`); return; }
+    if (!n) { err(`트리: 레시피 ${id} 의 해금 노드가 없음`); return; }
+    if (!MGMT.tiers.some((t) => t.n === n.tier)) err(`트리: ${id} 의 tier ${n.tier} 가 tiers 에 없음`);
+    if (!n.how && !n.cost && !n.need && !n.rank) err(`트리: ${id} 를 해금할 방법이 없음`);
+    Object.keys(n.need || {}).forEach((r2) => { if (!R[r2]) err(`트리: ${id}.need 의 없는 레시피 ${r2}`); });
+    (n.after || []).forEach((r2) => { if (!R[r2]) err(`트리: ${id}.after 의 없는 레시피 ${r2}`); });
+    // 필요 조건(need)이 같은/위 단계 레시피에 순환하지 않을 것
+    Object.keys(n.need || {}).forEach((r2) => { if (MgmtCore.tierOf(r2) > n.tier) err(`트리: ${id}(tier ${n.tier}) 가 더 높은 단계 ${r2} 를 요구함`); });
+  });
+  Object.keys(MGMT.nodes).forEach((id) => { if (!R[id]) err(`트리: 노드 ${id} 가 없는 레시피`); });
+  // 해금 동작: 연구비 / 무료 / 선행 레시피
+  { const v = { gold: 100, day: 8, inn: { rank: 1 }, rev: { seed: 1, used: [] }, tavern: { known: { meat_stew: true }, mastery: {}, stock: {}, upg: {} } };
+    let r1 = MgmtCore.unlock(v, 'herb_roast'); if (!r1.ok || r1.how !== 'research' || v.gold !== 70 || !v.tavern.known.herb_roast) err('레시피 연구(골드 지불) 해금이 동작하지 않음');
+    v.tavern.mastery.herb_tea = 2; r1 = MgmtCore.unlock(v, 'mushroom_soup'); if (!r1.ok || r1.how !== 'free' || v.gold !== 70) err('레시피 숙련(대성공 N회) 무료 해금이 동작하지 않음');
+    v.inn.rank = 2; v.tavern.known.honey_bread = false; r1 = MgmtCore.unlock(v, 'knight_feast'); if (r1.ok || r1.reason !== 'after') err('선행 레시피 없이 상위 레시피가 해금됨');
+    r1 = MgmtCore.unlock(v, 'moon_ale'); if (r1.ok) err('업그레이드 전용 레시피가 트리에서 해금됨'); }
+  tvStats.mgmt = `시세 + 직원 ${MGMT.staff.length}명(일급 ${MGMT.staff.map((d) => d.wage).join('/')}G) + 레시피 트리 ${Object.keys(MGMT.nodes).length}노드`;
+}
+
 function setPath(v, p, val, add) {
   const ks = p.split('.'); let o = v;
   for (let i = 0; i < ks.length - 1; i++) { if (typeof o[ks[i]] !== 'object' || o[ks[i]] === null) o[ks[i]] = {}; o = o[ks[i]]; }
@@ -828,10 +888,10 @@ const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 42949672
 //  숙련 = 메뉴판을 거의 완벽히 외움, 보통 = 가끔 헷갈림, 서툰 = 자주 헷갈림, 대충 = 메뉴판을 안 봄
 //  (옛 모델은 미리보기가 있어서 right 가 숙련 1 / 보통 0.7 / 서툰 0.35 였음. 이제는 "알게 된 레시피를 메뉴판대로 정확히 조합"하는 확률이라 숙련 0.97 / 보통 0.75 / 서툰 0.4. 미리보기가 없어서 헷갈린 만큼 실수가 남는다고 본 값)
 const POL = {
-  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'shelf', 'cellar', 'stove', 'sign2', 'barrel2', 'stove2'], right: 0.97, fav: 1, taste: 0.8, plan: 1,   lodge: 0.95, gift: 0.9, roomBuy: ['soundproof', 'bedding', 'windowbox', 'attic'] },
-  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove', 'cellar', 'sign2', 'barrel2'], right: 0.75, fav: 0.5, taste: 0.35, plan: 0.7, lodge: 0.7, gift: 0.5, roomBuy: ['bedding', 'soundproof'] },
-  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign', 'stove'], right: 0.4, fav: 0, taste: 0.1, plan: 0.3,                       lodge: 0.35, gift: 0.25, roomBuy: [] },
-  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, taste: 0, plan: 0,                                            lodge: 0.1, gift: 0.05, roomBuy: [] }
+  expert: { stock: 3, reserve: 5, keep: 12, buy: ['sign', 'barrel', 'shelf', 'cellar', 'stove', 'sign2', 'barrel2', 'stove2'], right: 0.97, fav: 1, taste: 0.8, plan: 1,   staff: ['waiter', 'cook', 'maid', 'clerk'], research: true, lodge: 0.95, gift: 0.9, roomBuy: ['soundproof', 'bedding', 'windowbox', 'attic'] },
+  decent: { stock: 3, reserve: 10, keep: 15, buy: ['sign', 'barrel', 'shelf', 'stove', 'cellar', 'sign2', 'barrel2'], right: 0.75, fav: 0.5, taste: 0.35, plan: 0.7, staff: ['waiter', 'cook'], research: true, lodge: 0.7, gift: 0.5, roomBuy: ['bedding', 'soundproof'] },
+  novice: { stock: 2, reserve: 10, keep: 15, buy: ['barrel', 'sign', 'stove'], right: 0.4, fav: 0, taste: 0.1, plan: 0.3,                       staff: ['cook'], research: false, lodge: 0.35, gift: 0.25, roomBuy: [] },
+  lazy:   { stock: 2, reserve: 20, keep: 20, buy: [], right: 0, fav: 0, taste: 0, plan: 0,                                            staff: [], research: false, lodge: 0.1, gift: 0.05, roomBuy: [] }
 };
 // 숙박/선물 플레이어 모델
 //  lodge   : 손님 요청을 읽고 방을 최적으로 배정할 확률 (아니면 무작위 배정, 가끔 거절)
@@ -897,8 +957,9 @@ function tavernService(v, dayId, pol, acc) {
       }
     }
   });
+  CalCore.addFat(v, MgmtCore.bizFat(v, CALENDAR.fatigue.business));
+  const wg = MgmtCore.settle(v, true); acc.wages += wg.total; acc.quit += wg.quit.length;   // 직원 급여 (영업 순수익에 포함)
   acc.net += v.gold - goldStart;
-  CalCore.addFat(v, CALENDAR.fatigue.business);
   (acc.perDay = acc.perDay || {})[v.day] = { net: v.gold - goldStart, fat: v.fat, rep: v.rep };
 }
 function buyUpgrades(v, pol, acc) {
@@ -908,6 +969,19 @@ function buyUpgrades(v, pol, acc) {
     if (!u || v.tavern.upg[id] || n >= 2 || v.gold - u.price < pol.keep || (u.needs && !v.tavern.upg[u.needs])) return;
     v.gold -= u.price; v.tavern.upg[id] = true; (u.learn || []).forEach((r) => TavernCore.learn(v, r)); acc.upgrades.push(id); n++;
   });
+  // 직원 고용: 우선순위대로, 고용 뒤에도 골드가 (급여 5일치 + keep) 남을 때만
+  (pol.staff || []).forEach((id) => {
+    const d = MgmtCore.def(id);
+    if (!d || MgmtCore.isHired(v, id) || !MgmtCore.unlockInfo(v, d).ok) return;
+    if (v.gold < pol.keep + (MgmtCore.wageTotal(v) + d.wage) * 5) return;
+    if (MgmtCore.hire(v, id) === 'ok') acc.hires.push(`${v.day}:${id}`);
+  });
+  // 레시피 트리: 조건을 채운 건 무료 해금, 돈이 넉넉하면 (pol.research) 연구비로 가장 싼 것부터
+  MgmtCore.freeReady(v).forEach((id) => { if (pol.right > 0 && MgmtCore.unlock(v, id).ok) acc.research++; });
+  if (pol.research) {
+    const c = Object.keys(TAVERN.recipes).map((id) => MgmtCore.info(v, id)).filter((i) => !i.known && i.canResearch && !i.blocked.length && i.cost && v.gold - i.cost >= pol.keep + 150).sort((a, b) => a.cost - b.cost)[0];
+    if (c && MgmtCore.unlock(v, c.id).ok) acc.research++;
+  }
 }
 
 // ----- 숙박: 그날 손님 배정 (최적 배정을 pol.lodge 확률로, 아니면 무작위) -----
@@ -965,7 +1039,7 @@ function simGift(v, who, pol, acc) {
 function simulate(pickFn, pol) {
   pol = pol || POL.decent;
   const v = JSON.parse(JSON.stringify(STORY.init));
-  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [], events: [], lodgeGold: 0, sat: 0, nights: 0, roomUpg: [], rankLog: [], gifts: 0, giftAff: 0, giftSpent: 0, nev: [], riv: [], noble: 0 };
+  const acc = { sold: 0, tips: 0, spent: 0, net: 0, skipped: 0, fav: 0, taste: 0, spWin: 0, spLose: 0, spGold: 0, upgrades: [], events: [], lodgeGold: 0, sat: 0, nights: 0, roomUpg: [], rankLog: [], gifts: 0, giftAff: 0, giftSpent: 0, nev: [], riv: [], noble: 0, wages: 0, quit: 0, hires: [], research: 0 };
   let sc = STORY.start, pc = 0, steps = 0, ending = null, read = 0;
   const visit = new Set(), snapRep = {};
   EventCore.ensure(v, () => Math.floor(rnd() * 4294967296));   // 이번 회차 랜덤 사건 시드
@@ -1055,12 +1129,12 @@ const allPick = (opts, v) => {
 const masterPick = (opts, v) => { const t = opts.find((o) => o.tag === '모두와 함께'); if (t && false) return t; let best = opts[0], bs = -1e9; opts.forEach((o) => { const s2 = (o.act ? mgmtScore(o) : 0) + restBias(o, v) + (o.who ? 0 : 0.5) + (o.set && o.set.rep || 0) * 3 - (o.cost || 0) * 0.02 + rnd() * 0.5; if (s2 > bs) { bs = s2; best = o; } }); return best; };
 const badPick = (opts) => opts.reduce((a, b) => ((((b.set && b.set.rep) || 0) - (b.act === 'rest' ? 2 : 0)) < (((a.set && a.set.rep) || 0) - (a.act === 'rest' ? 2 : 0)) ? b : a));
 // 평균 집계 도우미
-const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {}, rank: {}, lodge: [], sat: [], gifts: [], giftAff: [], giftSpent: [], deep: [], riv: [], nev: [], score: [], noble: 0, roomUpg: [] });
+const agg = () => ({ n: 0, gold: [], rep: [], net: [], perfect: [], fav: [], upg: [], taste: [], spWin: [], fail: [], end: {}, aff: {}, rank: {}, lodge: [], sat: [], gifts: [], giftAff: [], giftSpent: [], deep: [], riv: [], nev: [], score: [], noble: 0, roomUpg: [], wages: [], quit: [], research: [], hires: [] });
 const addAgg = (g, r) => {
   g.n++; g.route = (g.route || 0) + (HEROINES.some((h) => r.v.flag['route_' + h]) ? 1 : 0); g.gold.push(r.v.gold); g.rep.push(r.v.rep); g.net.push(r.acc.net); g.perfect.push(r.v.tavern.perfect); g.fav.push(r.acc.fav); g.upg.push(r.acc.upgrades.length); g.taste.push(r.acc.taste); g.spWin.push(r.acc.spWin); g.fail.push(r.v.tavern.fail);
   g.end[r.ending] = (g.end[r.ending] || 0) + 1;
   g.rank[r.v.inn.rank] = (g.rank[r.v.inn.rank] || 0) + 1; g.lodge.push(r.acc.lodgeGold); g.sat.push(r.acc.sat); g.gifts.push(r.acc.gifts); g.giftAff.push(r.acc.giftAff); g.giftSpent.push(r.acc.giftSpent);
-  g.deep.push(HEROINES.filter((h) => r.v.flag['deep_' + h]).length); g.riv.push(r.acc.riv.length); g.nev.push(r.acc.nev.length); g.score.push(InnCore.score(r.v)); g.noble += r.acc.noble; g.roomUpg.push(r.acc.roomUpg.length);
+  g.deep.push(HEROINES.filter((h) => r.v.flag['deep_' + h]).length); g.riv.push(r.acc.riv.length); g.nev.push(r.acc.nev.length); g.score.push(InnCore.score(r.v)); g.noble += r.acc.noble; g.roomUpg.push(r.acc.roomUpg.length); g.wages.push(r.acc.wages); g.quit.push(r.acc.quit); g.research.push(r.acc.research); g.hires.push(r.acc.hires.length);
   HEROINES.forEach((h) => { (g.aff[h] = g.aff[h] || []).push(r.v.aff[h]); });
 };
 const avg = (a) => (a.reduce((x, y) => x + y, 0) / (a.length || 1)).toFixed(1);
@@ -1129,6 +1203,7 @@ polNames.filter((pn) => pn === 'expert' || pn === 'decent').forEach((pn) => {
 console.log(`씬 ${Object.keys(scenes).length}개 (도달 가능 ${seen.size}), 대사/나레이션 ${lines}줄, 선택지 ${choices}개, 엔딩 ${ENDINGS.length}종 (도달 ${reachedEndings.size})`);
 if (TAVERN) {
   const nR = Object.keys(TAVERN.recipes).length, nI = Object.keys(TAVERN.ingredients).length, nB = Object.values(TAVERN.recipes).filter((r) => r.basic).length;
+  if (tvStats.mgmt) console.log('경영 심화: ' + tvStats.mgmt + ' / ' + tvStats.market);
   console.log(`저녁 영업: 재료 ${nI}종, 레시피 ${nR}개 (기본 ${nB}), 업그레이드 ${TAVERN.upgrades.length}개, 일차별 손님 ${Object.entries(TAVERN.days).map(([k, d]) => `${k}:${d.customers.filter((c) => !c.if).length}${d.customers.some((c) => c.if) ? '+' + d.customers.filter((c) => c.if).length : ''}`).join(' ')}, 주문 ${tvStats.orders}개 (낙관적 지식으로 대성공 가능 ${tvStats.perfectKnown}개)`);
   console.log('히로인 영업 기본 등장 횟수:', JSON.stringify(Object.fromEntries(HEROINES.map((h) => [h, (tvStats.appear || {})[h] || 0]))));
 }
@@ -1180,7 +1255,7 @@ if (process.argv.includes('--weeks')) {
 console.log('히로인별 이벤트 씬 수:', JSON.stringify(per));
 console.log('무작위 선택 x 영업 모델 섞기 6000회 엔딩 분포:', JSON.stringify(stat.random), stat.errors ? `(막힘 ${stat.errors})` : '(막힘 0)');
 polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  * ${pn} 여관: ${innLine(g)}`); });
-polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${pn} (${g.n}회): 엔딩 ${JSON.stringify(g.end)} / 최종 골드 ${fmt(g.gold)} / 평판 ${fmt(g.rep)} / 대성공 ${fmt(g.perfect)}회 / 실패 평균 ${avg(g.fail)}회 / 단골 보너스 평균 ${avg(g.taste)}회 / 특별 주문 성공 평균 ${avg(g.spWin)}/4 / 업그레이드 ${avg(g.upg)}개`); });
+polNames.forEach((pn) => { const g = stat.byPol[pn]; console.log(`  - 영업 ${pn} (${g.n}회): 엔딩 ${JSON.stringify(g.end)} / 최종 골드 ${fmt(g.gold)} / 평판 ${fmt(g.rep)} / 대성공 ${fmt(g.perfect)}회 / 실패 평균 ${avg(g.fail)}회 / 단골 보너스 평균 ${avg(g.taste)}회 / 특별 주문 성공 평균 ${avg(g.spWin)}/4 / 업그레이드 ${avg(g.upg)}개 / 직원 ${avg(g.hires)}명 고용 (급여 평균 ${avg(g.wages)}G, 퇴사 ${avg(g.quit)}회) / 레시피 해금·연구 ${avg(g.research)}개`); });
 console.log('히로인 집중 전략(각 40회) 최종 호감도 범위 (loveLine ' + STORY.loveLine + '):');
 polNames.forEach((pn) => { const g = Object.values(focusRes[pn]).reduce((a, b) => { Object.keys(b).forEach((k) => { if (Array.isArray(b[k])) a[k] = (a[k] || []).concat(b[k]); else if (typeof b[k] === 'number') a[k] = (a[k] || 0) + b[k]; else if (k === 'rank') Object.keys(b.rank).forEach((r) => { a.rank[r] = (a.rank[r] || 0) + b.rank[r]; }); }); return a; }, { rank: {}, n: 0 }); console.log(`  * ${pn} 여관: ${innLine(g)}`); });
 polNames.forEach((pn) => console.log(`  - 영업 ${pn}: ` + HEROINES.map((h) => { const a = focusRes[pn][h].aff[h]; return `${h} ${Math.min(...a)}~${Math.max(...a)}`; }).join(' / ') + ` | 엔딩 일치 ` + HEROINES.map((h) => `${focusRes[pn][h].end[h] || 0}/${focusRes[pn][h].n}`).join(' ') + ` | 골드 ${fmt(focusRes[pn][HEROINES[0]].gold)}`));
@@ -1205,5 +1280,42 @@ polNames.forEach((pn) => { const g = evenRes[pn]; console.log(`영업 ${pn} 7일
 console.log(`균등 분배 + 보통 영업 -> ${ref.ending} (호감도 ${JSON.stringify(ref.v.aff)}) / 평판 최저 + 서툰 영업 -> ${refBad.ending} (평판 ${refBad.v.rep})`);
 warns.forEach((m) => console.log('경고: ' + m));
 errors.forEach((m) => console.log('오류: ' + m));
+// ---------- 업적 / 회차 데이터 검사 (story/achievements.js, js/meta-core.js, story/ngplus.js) ----------
+{
+  const { ACHIEVEMENTS, MetaCore } = ctx;
+  if (!Array.isArray(ACHIEVEMENTS) || !MetaCore) err('story/achievements.js 또는 js/meta-core.js 가 index.html 에서 로드되지 않음');
+  else {
+    const ids = new Set();
+    ACHIEVEMENTS.forEach((a) => {
+      if (!a.id || ids.has(a.id)) err(`업적 id 없음/중복: ${a.id}`); ids.add(a.id);
+      ['name', 'hint', 'desc', 'cat'].forEach((k) => { if (!a[k]) err(`업적 ${a.id}: ${k} 없음`); });
+      if (typeof a.test !== 'function') err(`업적 ${a.id}: test 함수 없음`);
+    });
+    // 빈 상태 / 가득 찬 상태에서 판정이 던지지 않는가, 빈 상태에서는 아무것도 달성되지 않는가
+    const v0 = JSON.parse(JSON.stringify(STORY.init)); CalCore.ensure(v0);
+    const empty = MetaCore.check({ vars: v0, ending: '', endings: {}, recipes: {}, notes: {}, cg: {}, runs: 0 }, {});
+    if (empty.length) err(`시작 직후에 달성되는 업적이 있음: ${empty.map((a) => a.id).join(',')}`);
+    const all = (o) => Object.fromEntries(o.map((k) => [k, 1]));
+    const full = MetaCore.check({ vars: Object.assign(JSON.parse(JSON.stringify(v0)), { run: 2, rep: 60, gold: 600, flag: { route: true, w2_done: true }, aff: { erion: 60, kaela: 60, miho: 60, lia: 60 }, inn: { rank: 5 }, gift: { gave: 9, bought: 20 }, lodge: { nights: 30 }, tavern: Object.assign(v0.tavern || {}, { served: 200, perfect: 100, spWin: 7, tasteHits: 20, upg: { a: 1, b: 1, c: 1, d: 1, e: 1 } }) }), ending: 'true', endings: all(ENDINGS.map((e) => e.id)), recipes: all(Object.keys(TAVERN.recipes)), notes: all(Object.keys(TAVERN.customers)), cg: all(Object.keys(CG_DEFS)), runs: 2 }, {});
+    const miss = ACHIEVEMENTS.filter((a) => !full.includes(a)).map((a) => a.id).filter((i) => !/^staff/.test(i));
+    if (miss.length) err(`모든 조건을 채워도 달성되지 않는 업적: ${miss.join(',')} (도달 불가능한 조건?)`);
+    // 2회차 보너스: 엔딩 기록이 없으면 없음, 있으면 시작 자금 + 첫 주 + 히로인 + (레시피)
+    if (MetaCore.bonusOptions({ runs: 0, endings: {}, recipes: {} }).length) err('엔딩 기록이 없는데 2회차 보너스가 나옴');
+    const rec = { runs: 1, endings: { erion: 1 }, recipes: all(Object.keys(TAVERN.recipes)) }, ob = MetaCore.bonusOptions(rec);
+    if (ob.length < 3) err(`2회차 보너스가 3개 미만: ${ob.map((o) => o.id)}`);
+    const nv = JSON.parse(JSON.stringify(STORY.init)); MetaCore.apply(nv, ob.map((o) => o.id), rec);
+    if (nv.run !== 2 || nv.ng.picks.length !== MetaCore.MAX_PICK) err(`2회차 보너스 적용 결과 이상: run ${nv.run}, picks ${nv.ng && nv.ng.picks}`);
+  }
+  // 회차 한정 장면은 run>=2 조건이 있어야 하고, 1회차(run 없음)에는 낮 선택지에 나오면 안 된다
+  const ngp = []; HEROINES.forEach((h) => (HEROINE_EVENTS[h] || []).forEach((e) => { if (/^ngp_/.test(e.id)) ngp.push(e); }));
+  if (ngp.length < 3) err(`회차 한정 장면(ngp_)이 3개 미만 (${ngp.length})`);
+  ngp.forEach((e) => { if (!/run>=2/.test(e.if || '')) err(`${e.id}: if 에 run>=2 가 없음`); if (e.kind !== 'extra') err(`${e.id}: kind 는 extra`); });
+  const v1 = JSON.parse(JSON.stringify(STORY.init)); CalCore.ensure(v1); v1.day = 20; Object.keys(v1.aff).forEach((h) => { v1.aff[h] = 60; });
+  if (CalCore.pickOptions(v1, VN.evalCond).some((o) => /^ngp_/.test(o.goto))) err('1회차인데 회차 한정 장면이 낮 선택지에 나옴');
+  v1.run = 2; if (!CalCore.pickOptions(v1, VN.evalCond).some((o) => /^ngp_/.test(o.goto))) err('2회차인데 회차 한정 장면이 낮 선택지에 안 나옴');
+  // 2주차 중간 고비(12일)
+  if (!CALENDAR.main[12] || CALENDAR.main[12].scene !== 'w2c_open') err('CALENDAR.main[12] (2주차 중간 고비) 가 w2c_open 이 아님');
+}
+
 console.log(errors.length ? `검사 실패 (오류 ${errors.length})` : '검사 통과: 끊긴 goto 없음, 영업 데이터 정상, 모든 엔딩 도달 가능');
 process.exit(errors.length ? 1 : 0);

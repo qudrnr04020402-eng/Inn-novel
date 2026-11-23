@@ -529,18 +529,20 @@ async function run(browser, problems, report, SHOTS) {
     report.push('선물: 낮 선택 화면에서 구입(골드 차감/부족 시 잠금)·주기·반응(최애 +3/좋아함 +2/싫어함 -1, 대사=데이터)·하루 1명 1개 한도·다음 날 해금·낮 이벤트 뒤 제안·메뉴 "선물"·4일차 전야 선물과 한도 공유·메모에 취향 기록');
   }
 
-  // ================= 깊은 이벤트 (조건 이벤트: 3주차 이후 + 하트 4칸 이상 + 한 번만) =================
+  // ================= 깊은 이벤트 (조건 이벤트: 2주차 이후 + 하트 3칸 이상 + 한 번만) =================
   {
     const chk = mk('깊은 이벤트');
     const { ctx, page } = await open();
     const deepOpts = () => page.evaluate(() => VN.options.filter((o) => o.tag === '깊은 이야기').map((o) => o.who));
-    await seedAt(page, 'pick', `v.day = 16; v.time = '낮'; v.aff.erion = HEART(4) - 1; v.aff.kaela = HEART(4);`);
+    await seedAt(page, 'pick', `v.day = 16; v.time = '낮'; v.aff.erion = HEART(3) - 1; v.aff.kaela = HEART(3);`);
     let d = await deepOpts();
-    chk(d.length === 1 && d[0] === 'kaela', `하트 4칸 미만 에리온은 안 나오고 카엘라만 나와야 함 ${JSON.stringify(d)}`);
+    chk(d.length === 1 && d[0] === 'kaela', `하트 3칸 미만 에리온은 안 나오고 카엘라만 나와야 함 ${JSON.stringify(d)}`);
     await page.waitForTimeout(350);
     await shot(page, 'deep_00_pick_option');
-    await seedAt(page, 'pick', `v.day = 9; v.aff.erion = HEART(4); v.aff.kaela = HEART(4);`);
-    chk((await deepOpts()).length === 0, '2주차(9일차)에 깊은 이벤트 선택지가 나옴 (3주차 이후)');
+    await seedAt(page, 'pick', `v.day = 3; v.aff.erion = HEART(3); v.aff.kaela = HEART(3);`);
+    chk((await deepOpts()).length === 0, '1주차(3일차)에 깊은 이벤트 선택지가 나옴 (2주차 이후)');
+    await seedAt(page, 'pick', `v.day = 9; v.aff.erion = HEART(3); v.aff.kaela = HEART(3);`);
+    chk((await deepOpts()).length === 2, '2주차(9일차)에 하트 3칸이면 깊은 이벤트가 나와야 함');
     await seedAt(page, 'pick', `v.day = 16; v.aff.erion = HEART(4); v.evdone.erion_5 = true;`);
     chk((await deepOpts()).length === 0, '이미 본 깊은 이벤트가 또 나옴');
     await seedAt(page, 'pick', `v.day = 25; v.aff.erion = HEART(4); v.aff.lia = HEART(4);`);
@@ -760,9 +762,9 @@ async function run(browser, problems, report, SHOTS) {
       const v1 = await vars(r5.page);
       c5(v1.aff[h] >= a0 + 1 && v1.pl[h] === p0 + 1 && v1.ev[h] === 9, `${h} 평범한 하루: 호감도 +1 이상 / pl +1 / 순서 이벤트 수 그대로 (${a0}->${v1.aff[h]}, pl ${p0}->${v1.pl[h]}, ev ${v1.ev[h]})`);
     }
-    // 1주차에 2번째 이벤트(minWeek 2)는 아직 안 열려 평범한 하루로 대체된다
-    await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.lia = 1;`);
-    c5((await r5.page.evaluate(() => VN.options.filter((o) => o.tag === '평범한 하루' && o.who === 'lia').length)) === 1, '1주차에 리아 2번째 이벤트가 열려 있음 (평범한 하루여야 함)');
+    // 1주차에 3번째 이벤트(minWeek 2)는 아직 안 열려 평범한 하루로 대체된다 (1~4번째는 1~2주차 안에 열림)
+    await seedAt(r5.page, 'pick', `v.day = 3; v.time = '낮'; v.ev.lia = 2;`);
+    c5((await r5.page.evaluate(() => VN.options.filter((o) => o.tag === '평범한 하루' && o.who === 'lia').length)) === 1, '1주차에 리아 3번째 이벤트가 열려 있음 (평범한 하루여야 함)');
     await shot(r5.page, 'plain_01_pick');
     await r5.ctx.close();
     report.push('30일 주요 사건: 19일차 사절단(인사 3택/카엘라 3택/에리온 2택, 특실 15G·평판·플래그, 특별 손님 envoy*/examiner+, 숙박 사절단 3팀 고정) / 28일차 폭풍(무료 배식=매출·팁 0·평판 +2·호감도 +1, 정상 영업=수입, 정전 장면 4명 + CG) / 평범한 하루(주차 미충족/이벤트 소진 시 대체, 호감도 +1)');
@@ -943,6 +945,8 @@ async function run(browser, problems, report, SHOTS) {
     chk((await p2.locator('#btn-endings').innerText()).includes('1/8'), '이전된 엔딩이 타이틀에 안 보임');
     // 새 게임에 새 변수들이 들어 있다
     await p2.tap('#btn-new'); await p2.waitForTimeout(300);
+    // 엔딩 기록이 있으면 N회차 보너스 창이 먼저 열림 -> '보너스 없이 시작'
+    if (await p2.locator('#ngplus:not(.hidden)').count()) { await p2.tap('#ng-go'); await p2.waitForTimeout(300); }
     const nv = await p2.evaluate(() => { const v = VN.state.vars; return { lodge: !!v.lodge, inn: v.inn, nev: !!v.nev, gift: !!v.gift, riv: !!v.riv, key: Object.keys(localStorage).filter((k) => k.startsWith('inn_vn_v6_')).length > 0 }; });
     chk(nv.lodge && nv.inn.rank === 1 && nv.nev && nv.gift && nv.riv && nv.key, `새 게임 변수 이상 ${JSON.stringify(nv)}`);
     await c2.close();

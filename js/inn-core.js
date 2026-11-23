@@ -159,6 +159,7 @@
       if (room) { L.hosted[g.id] = (L.hosted[g.id] || 0) + 1; }
       if (!has(L.seen, g.id)) L.seen.push(g.id);
     });
+    if (root.MgmtCore) root.MgmtCore.lodgeBonus(vars, out);   // 직원 '객실 담당' 보너스 (숙박 수입 / 만족)
     vars.gold = (vars.gold || 0) + out.gold;
     vars.inn.sat = (vars.inn.sat || 0) + out.sat;
     L.gold += out.gold; L.nights++;

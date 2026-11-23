@@ -29,6 +29,7 @@ window.CALENDAR = {
     1:  { scene: 'd1_open', evening: 'd1_evening', title: '도착',           mark: '★' },
     6:  { scene: 'w1_open', evening: 'w1_evening', title: '첫 지진',        mark: '!' },
     10: { scene: 'd2_open', evening: 'd2_evening', title: '저장고 습격',    mark: '!', show: 10 },
+    12: { scene: 'w2c_open', evening: 'w2c_evening', title: '흔들리는 소문',  mark: '!', show: 10 },
     13: { scene: 'd3_open', evening: 'd3_evening', title: '달맞이 장터',    mark: '☾', show: 8 },
     18: { scene: 'd4_open', evening: 'd4_evening', title: '술렁이는 마을',  mark: '!' },
     19: { scene: 'd5_open', evening: 'd5_evening', title: '왕도 사절단',    mark: '✉', show: 18 },
